@@ -60,3 +60,9 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Fixed missing WBS values on Activity rows in the `main` worksheet.
 - Fixed `progress_table` weekly headers displaying Excel serial numbers instead of dates.
 - Added regression tests for both fixes.
+
+## V3 MS-2
+
+- Added cascading WBS-2/WBS-3 BOQ filters.
+- Kept paginated, memory-backed mapping tables.
+- Added golden Progress and BOQ workbooks for regression testing.
