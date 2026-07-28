@@ -31,6 +31,10 @@ class MappingStore:
         self.boq_page = 1
         self.activity_query = ""
         self.boq_query = ""
+        self.boq_wbs2 = ""
+        self.boq_wbs3 = ""
+        self._boq_ids_by_wbs2: dict[str, list[str]] = {}
+        self._boq_ids_by_wbs23: dict[tuple[str, str], list[str]] = {}
 
     def load_activities(self, rows: list[ActivityRow]) -> None:
         self.activities_by_id = {row.activity_id: row for row in rows}
@@ -41,6 +45,13 @@ class MappingStore:
     def load_boq(self, rows: list[BOQRow]) -> None:
         self.boq_by_id = {row.key: row for row in rows}
         self.boq_order = [row.key for row in rows]
+        self._boq_ids_by_wbs2 = {}
+        self._boq_ids_by_wbs23 = {}
+        for row in rows:
+            self._boq_ids_by_wbs2.setdefault(row.wbs2, []).append(row.key)
+            self._boq_ids_by_wbs23.setdefault((row.wbs2, row.wbs3), []).append(row.key)
+        self.boq_wbs2 = ""
+        self.boq_wbs3 = ""
         self.assignments.clear()
         self.selected_boq_ids.clear()
         self._undo_stack.clear()
@@ -56,11 +67,29 @@ class MappingStore:
             if query in self.activities_by_id[key].search_text
         ]
 
+    def boq_wbs2_values(self) -> tuple[str, ...]:
+        return tuple(sorted(value for value in self._boq_ids_by_wbs2 if value))
+
+    def boq_wbs3_values(self, wbs2: str = "") -> tuple[str, ...]:
+        if wbs2:
+            values = {wbs3 for (item_wbs2, wbs3) in self._boq_ids_by_wbs23 if item_wbs2 == wbs2 and wbs3}
+        else:
+            values = {row.wbs3 for row in self.boq_by_id.values() if row.wbs3}
+        return tuple(sorted(values))
+
     def _filtered_boq_ids(self) -> list[str]:
         query = self.boq_query.strip().lower()
+        if self.boq_wbs2 and self.boq_wbs3:
+            candidates = self._boq_ids_by_wbs23.get((self.boq_wbs2, self.boq_wbs3), [])
+        elif self.boq_wbs2:
+            candidates = self._boq_ids_by_wbs2.get(self.boq_wbs2, [])
+        elif self.boq_wbs3:
+            candidates = [key for key in self.boq_order if self.boq_by_id[key].wbs3 == self.boq_wbs3]
+        else:
+            candidates = self.boq_order
         if not query:
-            return self.boq_order
-        return [key for key in self.boq_order if query in self.boq_by_id[key].search_text]
+            return list(candidates)
+        return [key for key in candidates if query in self.boq_by_id[key].search_text]
 
     @staticmethod
     def _page(ids: list[str], page: int, page_size: int) -> Page:

@@ -25,6 +25,8 @@ class AmountMappingFrame(ttk.Frame):
         self.input_status_var = tk.StringVar(value="Load both workbooks to begin mapping.")
         self.activity_filter = tk.StringVar()
         self.boq_filter = tk.StringVar()
+        self.boq_wbs2_filter = tk.StringVar(value="All")
+        self.boq_wbs3_filter = tk.StringVar(value="All")
         self.summary_var = tk.StringVar(value="Mapped 0.00 / 0.00 | Remaining 0.00 | Items 0/0")
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
@@ -91,6 +93,16 @@ class AmountMappingFrame(ttk.Frame):
         self._build_pager(left, self.activity_page_var, self._activity_prev, self._activity_next)
 
         ttk.Label(right, text="BOQ Items", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        filter_row = ttk.Frame(right)
+        filter_row.pack(fill="x", pady=(4, 4))
+        ttk.Label(filter_row, text="WBS-2").pack(side="left")
+        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=20, values=("All",))
+        self.boq_wbs2_combo.pack(side="left", padx=(5, 10))
+        self.boq_wbs2_combo.bind("<<ComboboxSelected>>", self._on_wbs2_filter)
+        ttk.Label(filter_row, text="WBS-3").pack(side="left")
+        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=20, values=("All",))
+        self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
+        self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
         self.boq_tree = self._tree(
             right,
@@ -185,6 +197,7 @@ class AmountMappingFrame(ttk.Frame):
             self.boq_sheet_var.set(sheet_names[0])
             self.load_sheet_button.configure(state="normal")
             self.store.load_boq([])
+            self._refresh_boq_filter_values()
             self._render_boq()
             self._update_summary()
             self._update_input_status()
@@ -211,6 +224,7 @@ class AmountMappingFrame(ttk.Frame):
             rows = self.service.read_boq(self.boq_file, sheet_name)
             self.boq_sheet = sheet_name
             self.store.load_boq(rows)
+            self._refresh_boq_filter_values()
             self._render_boq()
             self._render_activities()
             self._update_summary()
@@ -236,6 +250,31 @@ class AmountMappingFrame(ttk.Frame):
         top = self.winfo_toplevel()
         top.configure(cursor="watch" if active else "")
         top.update_idletasks()
+
+
+    def _refresh_boq_filter_values(self) -> None:
+        wbs2_values = ("All",) + self.store.boq_wbs2_values()
+        self.boq_wbs2_combo.configure(values=wbs2_values)
+        self.boq_wbs2_filter.set("All")
+        wbs3_values = ("All",) + self.store.boq_wbs3_values()
+        self.boq_wbs3_combo.configure(values=wbs3_values)
+        self.boq_wbs3_filter.set("All")
+
+    def _on_wbs2_filter(self, _event=None) -> None:
+        selected = self.boq_wbs2_filter.get()
+        self.store.boq_wbs2 = "" if selected == "All" else selected
+        values = ("All",) + self.store.boq_wbs3_values(self.store.boq_wbs2)
+        self.boq_wbs3_combo.configure(values=values)
+        self.boq_wbs3_filter.set("All")
+        self.store.boq_wbs3 = ""
+        self.store.boq_page = 1
+        self._render_boq()
+
+    def _on_wbs3_filter(self, _event=None) -> None:
+        selected = self.boq_wbs3_filter.get()
+        self.store.boq_wbs3 = "" if selected == "All" else selected
+        self.store.boq_page = 1
+        self._render_boq()
 
     def _apply_activity_filter(self) -> None:
         self.store.activity_query = self.activity_filter.get()

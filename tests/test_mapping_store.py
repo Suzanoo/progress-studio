@@ -36,3 +36,25 @@ def test_map_and_undo_updates_store_only():
     assert store.undo() is True
     assert store.assignments == {}
     assert store.mapped_amount == 0.0
+
+
+def test_boq_wbs_filters_are_indexed_and_cascading():
+    store = MappingStore(boq_page_size=10)
+    rows = [
+        BOQRow("K1", "S", 2, "Structure", "Foundation", "", "Concrete", 100.0),
+        BOQRow("K2", "S", 3, "Structure", "Roof", "", "Steel", 50.0),
+        BOQRow("K3", "S", 4, "Architecture", "Wall", "", "Brick", 25.0),
+    ]
+    store.load_boq(rows)
+
+    assert store.boq_wbs2_values() == ("Architecture", "Structure")
+    assert store.boq_wbs3_values("Structure") == ("Foundation", "Roof")
+
+    store.boq_wbs2 = "Structure"
+    assert store.boq_page_data().ids == ("K1", "K2")
+
+    store.boq_wbs3 = "Roof"
+    assert store.boq_page_data().ids == ("K2",)
+
+    store.boq_query = "steel"
+    assert store.boq_page_data().ids == ("K2",)
