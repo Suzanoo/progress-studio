@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "default_distribution": "flat",
+  "priority": [
+    "activity_code",
+    "wbs",
+    "activity_name"
+  ],
+  "rules": {
+    "activity_code": [
+      {
+        "keywords": [
+          "COMM",
+          "T&C",
+          "TEST",
+          "PUNCH",
+          "CLOSE"
+        ],
+        "distribution": "back",
+        "match": "contains",
+        "reason": "Testing, commissioning, punch list or closeout activity code"
+      },
+      {
+        "keywords": [
+          "PROC",
+          "PO-",
+          "SUBMIT",
+          "SHOP"
+        ],
+        "distribution": "front",
+        "match": "contains",
+        "reason": "Procurement, submittal or shop drawing activity code"
+      }
+    ],
+    "wbs": [
+      {
+        "keywords": [
+          "earthwork",
+          "excavation",
+          "foundation",
+          "piling",
+          "bored pile",
+          "procurement",
+          "mobilization",
+          "temporary work",
+          "shop drawing",
+          "submittal"
+        ],
+        "distribution": "front",
+        "match": "contains",
+        "reason": "Early-production work identified from WBS"
+      },
+      {
+        "keywords": [
+          "testing",
+          "commissioning",
+          "t&c",
+          "punch list",
+          "closeout",
+          "handover",
+          "snag",
+          "inspection"
+        ],
+        "distribution": "back",
+        "match": "contains",
+        "reason": "Completion-heavy work identified from WBS"
+      },
+      {
+        "keywords": [
+          "concrete",
+          "structure",
+          "superstructure",
+          "architectural",
+          "mep",
+          "mechanical",
+          "electrical",
+          "plumbing",
+          "finishing",
+          "facade",
+          "curtain wall"
+        ],
+        "distribution": "bell",
+        "match": "contains",
+        "reason": "Construction work with a likely middle-period production peak"
+      }
+    ],
+    "activity_name": [
+      {
+        "keywords": [
+          "excavat",
+          "earthwork",
+          "backfill",
+          "pile",
+          "foundation",
+          "mobiliz",
+          "procure",
+          "purchase order",
+          "shop drawing",
+          "material submittal",
+          "submit",
+          "approval"
+        ],
+        "distribution": "front",
+        "match": "contains",
+        "reason": "Early-production work identified from activity name"
+      },
+      {
+        "keywords": [
+          "test",
+          "commission",
+          "punch",
+          "snag",
+          "handover",
+          "closeout",
+          "cleaning",
+          "final inspection",
+          "as-built",
+          "training"
+        ],
+        "distribution": "back",
+        "match": "contains",
+        "reason": "Completion-heavy work identified from activity name"
+      },
+      {
+        "keywords": [
+          "concrete",
+          "rebar",
+          "formwork",
+          "slab",
+          "beam",
+          "column",
+          "wall",
+          "masonry",
+          "plaster",
+          "ceiling",
+          "flooring",
+          "painting",
+          "installation",
+          "install",
+          "duct",
+          "pipe",
+          "cable",
+          "equipment",
+          "facade",
+          "curtain wall",
+          "waterproof"
+        ],
+        "distribution": "bell",
+        "match": "contains",
+        "reason": "Production work identified from activity name"
+      }
+    ]
+  }
+}

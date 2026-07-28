@@ -1,0 +1,154 @@
+Excel Toolkit for Primavera P6
+Command Examples for Windows PowerShell
+
+============================================================
+01. Import Primavera XML
+============================================================
+
+python 01_import_xml.py `
+  --input "C:\Users\Suzanoo\Desktop\003.xml" `
+  --output "C:\Users\Suzanoo\Desktop\01_output"
+
+Example output:
+C:\Users\Suzanoo\Desktop\01_output\003.xlsx
+
+
+============================================================
+02. Prepare Schedule
+============================================================
+
+python 02_prepare_schedule.py `
+  --input "C:\Users\Suzanoo\Desktop\01_output\003.xlsx" `
+  --output "C:\Users\Suzanoo\Desktop\02_output"
+
+Example output:
+C:\Users\Suzanoo\Desktop\02_output\003_organized_plan_actual.xlsx
+
+
+============================================================
+03. Build Weekly Timescale
+============================================================
+
+python 03_build_timescale.py `
+  --input "C:\Users\Suzanoo\Desktop\02_output\003_organized_plan_actual.xlsx" `
+  --output "C:\Users\Suzanoo\Desktop\03_output"
+
+The script will ask for the weekly cutoff day:
+
+1 = Monday
+2 = Tuesday
+3 = Wednesday
+4 = Thursday
+5 = Friday
+6 = Saturday
+7 = Sunday
+
+Example:
+Select : 5
+
+Example output:
+C:\Users\Suzanoo\Desktop\03_output\003_organized_plan_actual_weekly_timescale.xlsx
+
+
+============================================================
+04. Apply BOQ Amount
+============================================================
+
+Option A
+Fill the Amount column directly in the workbook created by Script 03.
+
+In this case, Script 04 is not required.
+
+
+Option B
+Fill the Amount Mapping sheet and run:
+
+python 04_apply_boq.py `
+  --input "C:\Users\Suzanoo\Desktop\03_output\003_organized_plan_actual_weekly_timescale.xlsx" `
+  --output "C:\Users\Suzanoo\Desktop\04_output\003_mapped.xlsx"
+
+
+Option C
+Map Amount from an external BOQ file:
+
+python 04_apply_boq.py `
+  --input "C:\Users\Suzanoo\Desktop\03_output\003_organized_plan_actual_weekly_timescale.xlsx" `
+  --boq "C:\Users\Suzanoo\Dev\progress-studio-v2\example_BOQ_full.xlsx" `
+  --output "C:\Users\Suzanoo\Desktop\04_output\003_mapped.xlsx" `
+  --debug
+
+
+============================================================
+05. Build Progress Workbook
+============================================================
+
+Use the file from Script 03 if Amount was filled manually.
+
+python 05_build_progress_workbook.py `
+  --input "C:\Users\Suzanoo\Desktop\03_output\003_organized_plan_actual_weekly_timescale.xlsx" `
+  --output "C:\Users\Suzanoo\Desktop\05_output\003_project_progress.xlsx" `
+  --debug
+
+
+Use the file from Script 04 if BOQ mapping was used.
+
+python 05_build_progress_workbook.py `
+  --input "C:\Users\Suzanoo\Desktop\04_output\003_mapped.xlsx" `
+  --output "C:\Users\Suzanoo\Desktop\05_output\003_project_progress.xlsx" `
+  --debug
+
+
+============================================================
+Recommended Project Structure
+============================================================
+
+progress-studio-v2/
+│
+├── 01_import_xml.py
+├── 02_prepare_schedule.py
+├── 03_build_timescale.py
+├── 04_apply_boq.py
+├── 05_build_progress_workbook.py
+├── requirements.txt
+├── README.md
+│
+├── examples/
+│   ├── run_examples.txt
+│   └── example_BOQ_full.xlsx
+│
+├── input/
+└── output/
+
+
+============================================================
+Before Running
+============================================================
+
+1. Install Python 3.11 or newer.
+
+2. Install dependencies:
+
+pip install -r requirements.txt
+
+3. Open PowerShell in the project folder:
+
+cd "C:\Users\Suzanoo\Dev\progress-studio-v2"
+
+4. Confirm Python:
+
+python --version
+
+5. Run scripts in order.
+
+
+============================================================
+Git Commands
+============================================================
+
+git status
+
+git add .
+
+git commit -m "feat: complete progress workbook generation pipeline"
+
+git push origin main
