@@ -34,3 +34,10 @@ Amount
 
 - S-Curve generation and preview are outside the current V3 roadmap and must not be presented as an available MS-7 feature.
 - Workbook relocation and session relinking are documented under the session workflow.
+
+## Export recalculation
+
+- Explain that the exported workbook must be opened in Microsoft Excel so formulas recalculate.
+- Explain that Activity weekly percentages are distribution inputs and do not change when Amount changes.
+- Explain that WBS, Project Summary, `progress`, and `progress_table` results recalculate from `main`.
+- Add troubleshooting steps for Excel Calculation Options if a workbook is opened in Manual mode.

@@ -146,3 +146,19 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Deferred S-Curve work outside the current V3 roadmap.
 - Replaced the former MS-7 S-Curve milestone with Mapping Workspace UX.
 - Added a user-manual TODO describing the Progress workbook contract.
+
+## [2.1.4] - 2026-07-29
+
+### Fixed
+
+- Force Microsoft Excel to rebuild formulas after mapped Activity Amount values are written to `main`.
+- Reset the calculation engine ID and remove reliance on stale formula caches.
+- Add OOXML regression checks for calculation properties and calculation-chain removal.
+
+### Removed
+
+- Remove the embedded S-Curve preview and its unused desktop service from the current V3 scope.
+
+### Documented
+
+- Clarify that Activity weekly percentages are manual distribution inputs, while WBS and Project Summary percentages are amount-weighted formulas.

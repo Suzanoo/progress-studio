@@ -90,3 +90,12 @@ Confirm the full suite passes and the working tree is clean.
 - A relink candidate must match the saved SHA-256 exactly.
 - Do not implement automatic reconciliation against edited workbooks without a separately approved milestone and explicit domain rules.
 - Loading a session clears Undo history by design because the restored allocations are the new baseline.
+
+## Excel recalculation contract
+
+- `main` is the source of truth for Activity Amount.
+- Activity weekly percentage cells are user-entered distribution values; do not rewrite them during mapping export.
+- WBS and Project Summary percentages are Excel formulas and must be recalculated after Amount changes.
+- Every mapped export must use Automatic calculation, Full Calculation on Load, Force Full Calculation, and `calcId = 0`.
+- Do not add hover tooltips, mouse-motion rendering, animation, or continuous Treeview repainting.
+- The embedded S-Curve preview is outside the current V3 scope.

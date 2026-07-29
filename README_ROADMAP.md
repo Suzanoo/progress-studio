@@ -150,6 +150,22 @@ Completed:
 
 Branch: `fix/ms6.2-main-amount-contract`
 
+### MS-6.3 — Excel Recalculation Contract
+
+**Goal:** Ensure all formulas that depend on mapped Activity Amount are recalculated by Microsoft Excel.
+
+Completed:
+
+- Set Automatic calculation, Full Calculation on Load, and Force Full Calculation.
+- Reset the Excel calculation engine ID so stale formula caches are not trusted.
+- Verify exported packages do not contain a stale calculation chain.
+- Keep Activity weekly distribution percentages unchanged.
+- Recalculate amount-weighted WBS and Project Summary percentages when Excel opens the export.
+- Remove the embedded S-Curve preview from the current application scope.
+- Keep the mapping UI free from hover tooltips, animation, and continuous repaint behavior.
+
+Branch: `fix/ms6.3-recalculation-contract`
+
 ### MS-7 — Mapping Workspace UX
 
 **Goal:** Give mapping work the largest practical screen area without adding heavy widgets.
@@ -192,6 +208,7 @@ Planned branch: `feat/ms8-production-polish`
 | MS-5 Persistent Mapping Session | Completed and hardened |
 | MS-6 Final Workbook Export | Completed; Excel compatibility hotfix applied |
 | MS-6.2 Main Amount Contract and Mapping Stabilization | Completed |
+| MS-6.3 Excel Recalculation Contract | Completed |
 | MS-7 Mapping Workspace UX | Planned |
 | MS-8 Production Polish | Planned |
 
