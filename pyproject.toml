@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "progress-studio"
+version = "2.3.0"
+description = "Desktop and command-line tools for Primavera XML import, BOQ mapping, and progress workbook export."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openpyxl>=3.1,<4",
+    "matplotlib>=3.8,<4",
+]
+
+[project.scripts]
+progress-studio = "progress_studio.entrypoints:desktop_main"
+progress-studio-cli = "progress_studio.entrypoints:cli_main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["progress_studio*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

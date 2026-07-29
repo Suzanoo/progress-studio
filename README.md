@@ -73,3 +73,45 @@ Schedule XML
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+---
+
+## Standard installation and entry points (MS-1)
+
+Create a project-local virtual environment and install Progress Studio as an editable package.
+
+### Windows PowerShell
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+progress-studio
+```
+
+### macOS / Linux
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+progress-studio
+```
+
+Available entry points:
+
+```text
+progress-studio           Open the desktop GUI
+python -m progress_studio Open the desktop GUI
+progress-studio-cli       Run the command-line workflow
+python desktop.py         Legacy-compatible desktop launcher
+python main.py            Legacy-compatible CLI launcher
+```
+
+Run the test suite with:
+
+```bash
+pytest
+```

@@ -1,10 +1,10 @@
-from progress_studio.presentation.gui.app import ProgressStudioDesktopApp
+"""Compatibility launcher for the Progress Studio desktop application."""
+
+from progress_studio.entrypoints import desktop_main
 
 
 def main() -> int:
-    app = ProgressStudioDesktopApp()
-    app.mainloop()
-    return 0
+    return desktop_main()
 
 
 if __name__ == "__main__":
