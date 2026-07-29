@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,3 +35,22 @@ class BOQRow:
     @property
     def search_text(self) -> str:
         return f"{self.wbs2} {self.wbs3} {self.wbs4} {self.description}".lower()
+
+
+class MappingStatus(StrEnum):
+    UNMAPPED = "Unmapped"
+    PARTIAL = "Partial"
+    FULL = "Full"
+
+
+@dataclass(frozen=True, slots=True)
+class MappingChange:
+    """Identifiers affected by one mapping command.
+
+    MS-3 maps a BOQ item at 100%.  The model deliberately exposes allocated
+    and remaining amounts so MS-4 can add percentage shares without replacing
+    the UI contract.
+    """
+
+    boq_keys: tuple[str, ...]
+    activity_ids: tuple[str, ...]

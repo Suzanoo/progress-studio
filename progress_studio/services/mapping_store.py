@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from progress_studio.domain.mapping_models import ActivityRow, BOQRow
+from progress_studio.domain.mapping_models import (
+    ActivityRow,
+    BOQRow,
+    MappingChange,
+    MappingStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +21,12 @@ class Page:
 
 
 class MappingStore:
+    """In-memory source of truth for the mapping screen.
+
+    Treeviews only render a page from this store.  They are never used as the
+    data source for mapping, undo, totals, or export.
+    """
+
     def __init__(self, activity_page_size: int = 200, boq_page_size: int = 300) -> None:
         self.activity_page_size = activity_page_size
         self.boq_page_size = boq_page_size
@@ -23,6 +34,7 @@ class MappingStore:
         self.activity_order: list[str] = []
         self.boq_by_id: dict[str, BOQRow] = {}
         self.boq_order: list[str] = []
+        # MS-3: one BOQ item is allocated in full to zero or one Activity.
         self.assignments: dict[str, str] = {}
         self.selected_activity_ids: set[str] = set()
         self.selected_boq_ids: set[str] = set()
@@ -62,8 +74,7 @@ class MappingStore:
         if not query:
             return self.activity_order
         return [
-            key
-            for key in self.activity_order
+            key for key in self.activity_order
             if query in self.activities_by_id[key].search_text
         ]
 
@@ -72,7 +83,10 @@ class MappingStore:
 
     def boq_wbs3_values(self, wbs2: str = "") -> tuple[str, ...]:
         if wbs2:
-            values = {wbs3 for (item_wbs2, wbs3) in self._boq_ids_by_wbs23 if item_wbs2 == wbs2 and wbs3}
+            values = {
+                wbs3 for (item_wbs2, wbs3) in self._boq_ids_by_wbs23
+                if item_wbs2 == wbs2 and wbs3
+            }
         else:
             values = {row.wbs3 for row in self.boq_by_id.values() if row.wbs3}
         return tuple(sorted(values))
@@ -99,12 +113,8 @@ class MappingStore:
         start_index = (page - 1) * page_size
         end_index = min(start_index + page_size, total)
         return Page(
-            ids=tuple(ids[start_index:end_index]),
-            number=page,
-            pages=pages,
-            total=total,
-            start=0 if total == 0 else start_index + 1,
-            end=end_index,
+            ids=tuple(ids[start_index:end_index]), number=page, pages=pages,
+            total=total, start=0 if total == 0 else start_index + 1, end=end_index,
         )
 
     def activity_page_data(self) -> Page:
@@ -118,7 +128,6 @@ class MappingStore:
         return page
 
     def toggle_activity(self, activity_id: str) -> None:
-        # Mapping V1 allows exactly one selected Activity.
         if activity_id in self.selected_activity_ids:
             self.selected_activity_ids.clear()
         else:
@@ -130,47 +139,53 @@ class MappingStore:
         else:
             self.selected_boq_ids.add(key)
 
-    def map_selected(self) -> tuple[str, tuple[str, ...]]:
+    @staticmethod
+    def _affected_activity_ids(previous: dict[str, str | None], new_activity: str | None = None) -> tuple[str, ...]:
+        ids = {value for value in previous.values() if value}
+        if new_activity:
+            ids.add(new_activity)
+        return tuple(sorted(ids))
+
+    def map_selected(self) -> MappingChange:
         if len(self.selected_activity_ids) != 1:
             raise ValueError("Select exactly one Activity.")
         if not self.selected_boq_ids:
             raise ValueError("Select one or more BOQ items.")
         activity_id = next(iter(self.selected_activity_ids))
-        keys = tuple(self.selected_boq_ids)
+        keys = tuple(sorted(self.selected_boq_ids))
         previous = {key: self.assignments.get(key) for key in keys}
         self._undo_stack.append(previous)
         for key in keys:
             self.assignments[key] = activity_id
         self.selected_boq_ids.clear()
-        return activity_id, keys
+        return MappingChange(keys, self._affected_activity_ids(previous, activity_id))
 
-    def unmap_selected(self) -> tuple[str, ...]:
-        keys = tuple(self.selected_boq_ids)
+    def unmap_selected(self) -> MappingChange:
+        keys = tuple(sorted(self.selected_boq_ids))
         if not keys:
             raise ValueError("Select one or more BOQ items.")
         previous = {key: self.assignments.get(key) for key in keys}
+        # Selecting an unmapped BOQ is allowed; undo still restores exact state.
         self._undo_stack.append(previous)
         for key in keys:
             self.assignments.pop(key, None)
         self.selected_boq_ids.clear()
-        return keys
+        return MappingChange(keys, self._affected_activity_ids(previous))
 
-    def undo(self) -> bool:
+    def undo(self) -> MappingChange | None:
         if not self._undo_stack:
-            return False
+            return None
         previous = self._undo_stack.pop()
+        current = {key: self.assignments.get(key) for key in previous}
         for key, activity_id in previous.items():
             if activity_id is None:
                 self.assignments.pop(key, None)
             else:
                 self.assignments[key] = activity_id
-        return True
-
-    def clear_all(self) -> None:
-        if self.assignments:
-            self._undo_stack.append(dict(self.assignments))
-        self.assignments.clear()
-        self.selected_boq_ids.clear()
+        affected = {
+            value for value in (*previous.values(), *current.values()) if value
+        }
+        return MappingChange(tuple(previous), tuple(sorted(affected)))
 
     def activity_amount(self, activity_id: str) -> float:
         return sum(
@@ -179,10 +194,39 @@ class MappingStore:
             if assigned_id == activity_id and key in self.boq_by_id
         )
 
+    def boq_allocated_amount(self, key: str) -> float:
+        row = self.boq_by_id.get(key)
+        if row is None or key not in self.assignments:
+            return 0.0
+        return row.amount
+
+    def boq_remaining_amount(self, key: str) -> float:
+        row = self.boq_by_id.get(key)
+        if row is None:
+            return 0.0
+        return max(0.0, row.amount - self.boq_allocated_amount(key))
+
+    def boq_status(self, key: str) -> MappingStatus:
+        allocated = self.boq_allocated_amount(key)
+        row = self.boq_by_id.get(key)
+        if row is None or allocated <= 0:
+            return MappingStatus.UNMAPPED
+        if allocated + 1e-9 < row.amount:
+            return MappingStatus.PARTIAL
+        return MappingStatus.FULL
+
     @property
     def total_amount(self) -> float:
         return sum(row.amount for row in self.boq_by_id.values())
 
     @property
     def mapped_amount(self) -> float:
-        return sum(self.boq_by_id[key].amount for key in self.assignments if key in self.boq_by_id)
+        return sum(self.boq_allocated_amount(key) for key in self.assignments)
+
+    @property
+    def remaining_amount(self) -> float:
+        return max(0.0, self.total_amount - self.mapped_amount)
+
+    @property
+    def mapped_item_count(self) -> int:
+        return len(self.assignments)
