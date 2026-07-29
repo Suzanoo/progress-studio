@@ -220,6 +220,47 @@ class MappingStore:
                 self.allocations[pair] = share
         return MappingChange(tuple(sorted(affected_boq)), tuple(sorted(affected_activities)))
 
+
+    def restore_allocations(self, records: list[AllocationRecord]) -> MappingChange:
+        """Replace all allocations after validating workbook identifiers and shares."""
+        restored: dict[tuple[str, str], float] = {}
+        totals: dict[str, float] = {}
+        for record in records:
+            if record.boq_key not in self.boq_by_id:
+                raise ValueError(f"Session BOQ item was not found: {record.boq_key}")
+            if record.activity_id not in self.activities_by_id:
+                raise ValueError(f"Session Activity was not found: {record.activity_id}")
+            share = self._validate_share(record.share_percent)
+            pair = (record.boq_key, record.activity_id)
+            if pair in restored:
+                raise ValueError(
+                    f"Session contains a duplicate allocation: {record.boq_key} -> {record.activity_id}"
+                )
+            totals[record.boq_key] = totals.get(record.boq_key, 0.0) + share
+            if totals[record.boq_key] > 100.0 + self.EPSILON:
+                raise ValueError(f"Session allocation exceeds 100% for {record.boq_key}.")
+            restored[pair] = share
+
+        affected_boq = {key for key, _ in self.allocations} | {key for key, _ in restored}
+        affected_activities = {activity for _, activity in self.allocations} | {activity for _, activity in restored}
+        self.allocations = restored
+        self.selected_activity_ids.clear()
+        self.selected_boq_ids.clear()
+        self._undo_stack.clear()
+        return MappingChange(tuple(sorted(affected_boq)), tuple(sorted(affected_activities)))
+
+    def clear_all(self) -> MappingChange:
+        """Clear every allocation as one undoable command."""
+        if not self.allocations:
+            raise ValueError("There are no mappings to clear.")
+        previous = {pair: share for pair, share in self.allocations.items()}
+        self._undo_stack.append(previous)
+        affected_boq = tuple(sorted({key for key, _ in self.allocations}))
+        affected_activities = tuple(sorted({activity for _, activity in self.allocations}))
+        self.allocations.clear()
+        self.selected_boq_ids.clear()
+        return MappingChange(affected_boq, affected_activities)
+
     def activity_amount(self, activity_id: str) -> float:
         return sum(
             self.boq_by_id[key].amount * share / 100.0
