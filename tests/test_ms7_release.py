@@ -125,7 +125,7 @@ class Ms7ReleaseTests(unittest.TestCase):
     def test_release_documents_are_current(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "README_ROADMAP.md").read_text(encoding="utf-8")
-        self.assertIn("2.1.3", readme)
+        self.assertIn("2.3.0", readme)
         self.assertIn("MS-7 — Mapping Workspace UX", roadmap)
         self.assertNotIn("legacy/", readme)
         self.assertNotIn("Scripts 05-07 remain", readme)

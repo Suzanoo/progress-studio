@@ -1,157 +1,42 @@
-# Progress Studio V2
+# Progress Studio
 
-Progress Studio converts a Primavera P6 XML export into an Excel workbook for schedule, amount, progress, plan distribution, and OKD reporting.
+Progress Studio creates a progress workbook from schedule XML, maps BOQ amounts to activities, saves mapping sessions, and exports a recalculation-ready Excel workbook.
 
-**Release:** 2.1.3
+**Current release:** `2.3.0`
 
-## Pipeline
+## User documentation
 
-```text
-Primavera XML
-→ ImportStep
-→ ScheduleStep
-→ TimescaleStep
-→ AmountStep
-→ ProgressStep
-→ DistributionStep
-→ OkdStep
-```
+- [Thai User Guide](docs/th/README.md)
+- [English User Guide](docs/en/README.md)
+- [Documentation index](docs/README.md)
 
-The application does not use subprocesses or the former scripts `01` through `07`.
+Start with:
 
-## Requirements
+- [English User Guide](docs/en/README.md)
+- [Quick Start](docs/en/QUICK_START.md)
+- [Schedule XML Requirements](docs/en/XML_REQUIREMENTS.md)
+- [BOQ Mapping Guide](docs/en/MAPPING_GUIDE.md)
+- [Troubleshooting](docs/en/TROUBLESHOOTING.md)
 
-- Python 3.10 or newer
-- Microsoft Excel is recommended for recalculating formulas before uploading to OKD
+## Schedule XML contract
 
-Install the dependency:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Run interactively
-
-```bash
-python main.py
-```
-
-The application opens an XML file picker, asks for the weekly cutoff day, and asks for the plan distribution method when required.
-
-## Run with command-line options
-
-```bash
-python main.py --input example/example.xml --cutoff-day 5 --amount 1000
-```
-
-Options:
-
-- `--input`: Primavera P6 XML path
-- `--cutoff-day`: `1` Monday through `7` Sunday
-- `--amount`: placeholder amount used only when the XML does not contain activity amounts
-
-Display help:
-
-```bash
-python main.py --help
-```
-
-## Amount rules
-
-- When the XML contains activity amount data, Progress Studio uses those amounts.
-- When XML amount mode is active and an activity has no amount, the activity receives `0`.
-- When the XML contains no activity amount data, the placeholder amount is assigned to every activity.
-- `Amount Mapping` remains editable.
-- Project and parent WBS rows are displayed but are not directly mapped.
-
-## Activity ID rules
-
-- The Primavera Activity ID is retained when available.
-- A missing Activity ID receives a deterministic generated ID such as `GEN-00015`.
-- Activity rows are never exported with a blank Activity ID.
-
-## Output
-
-The project output includes the working Excel files and a final workbook containing:
-
-- `main`
-- `Amount Mapping`
-- `Distribution Report`
-- `progress`
-- `progress_table`
-
-The exact intermediate filenames are managed centrally by `progress_studio/config/settings.py`.
-
-## OKD workflow
-
-The final workbook contains live Excel formulas.
-
-1. Open the generated workbook in Microsoft Excel.
-2. Wait for formula calculation to finish.
-3. Save the workbook.
-4. Upload the saved workbook to OKD.
-
-## Architecture
+Every activity must contain:
 
 ```text
-progress_studio/
-├── app/             # application, composition root, context, and pipeline runner
-├── config/          # settings and workbook schema
-├── domain/          # framework-independent data models
-├── infrastructure/  # Primavera XML, filesystem, and Excel implementations
-├── pipeline/        # seven executable pipeline steps
-├── presentation/    # English CLI and distribution prompts
-├── services/        # workflow and business services
-└── version.py       # release version
-main.py              # bootstrap entry point
+Activity Name
+Plan Start
+Plan Finish
 ```
 
-Maintenance rules:
+Import stops and no workbook is created when any required value is missing or invalid.
 
-- `main.py` remains a small bootstrap file.
-- Domain models do not depend on `openpyxl`.
-- Excel details stay under `infrastructure/excel`.
-- Workbook names and worksheet names are centralized under `config`.
-- New features must not bypass the pipeline or reintroduce subprocess-based stages.
+Optional:
 
-## Tests
+- Activity ID — generated automatically when missing
+- WBS — a flat structure is created when missing
+- Calendar, relationships, duration, actual dates, progress, resources, and codes
 
-Run the complete release test suite:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-Acceptance documents for MS-1 through MS-8 are included in the project root.
-
-
-## Architecture cleanup
-
-Version 2.0.1 removes the obsolete root-level `excel_toolkit/` and `distribution/` packages. Distribution rules now live under `progress_studio/services/distribution/`, Activity ID rules live in `progress_studio/domain/activity_id.py`, and Excel theme helpers live in `progress_studio/infrastructure/excel/styles.py`.
-
-## Desktop application
-
-Desktop Phase 2 adds a Tkinter workflow while retaining the original CLI.
-
-Run the desktop application:
-
-```bash
-python desktop.py
-```
-
-Desktop Phase 2 includes:
-
-- Primavera XML file picker
-- weekly cutoff and fallback amount settings
-- Auto, Flat, Front, Back, or Bell plan distribution
-- background pipeline execution so the window remains responsive
-- seven-step progress bar and live activity log
-- automatic output under `Desktop/Progress_Studio_Output/`
-- buttons to open the completed workbook and project folder
-
-The desktop layer calls the same OOP services and pipeline as the CLI. Business and Excel logic are not duplicated inside Tkinter.
-
-### Windows quick start
+## Windows quick start
 
 ```powershell
 python -m venv .venv
@@ -160,29 +45,31 @@ pip install -r requirements.txt
 python desktop.py
 ```
 
-The CLI remains available:
+## Workflow
 
-```powershell
-python main.py
+```text
+Schedule XML
+→ Progress Workbook
+→ Load BOQ
+→ Map BOQ to Activities
+→ Save Session
+→ Export mapped workbook
+→ Open in Microsoft Excel, recalculate, and save
 ```
 
+## Technical documentation
 
-## Documentation
+- [Documentation index](docs/README.md)
+- [Architecture](ARCHITECTURE.md)
+- [Roadmap](README_ROADMAP.md)
+- [Changelog](CHANGELOG.md)
+- [Release checklist](RELEASE_CHECKLIST.md)
+- [Engineering rules](COPILOT.md)
+- `docs/milestones/` — milestone implementation records
+- `docs/acceptance/` — milestone acceptance records
 
-- `README_ROADMAP.md` — current V3 milestone roadmap.
-- `docs/milestones/` — implementation notes for completed milestones.
-- `docs/acceptance/` — acceptance criteria for completed milestones.
-- `CHANGELOG.md` — release and hotfix history.
-- `COPILOT.md` — engineering rules for coding agents.
+## Tests
 
-
-## Project documentation
-
-- `README_ROADMAP.md` — milestone status and scope.
-- `ARCHITECTURE.md` — data flow, sources of truth, UI rules, and export contract.
-- `COPILOT.md` — implementation constraints for AI-assisted development.
-- `CHANGELOG.md` — release history.
-
-## Schedule XML contract
-
-Progress Studio accepts schedule XML when every activity contains **Activity Name**, **Plan Start**, and **Plan Finish**. Import stops without creating a workbook when any required value is missing or invalid. Activity ID and WBS are optional; deterministic IDs and a flat hierarchy are created when necessary.
+```powershell
+python -m unittest discover -s tests -v
+```
