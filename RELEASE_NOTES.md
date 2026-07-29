@@ -74,3 +74,11 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Added exact single-command undo and unmap behavior.
 - Updated only affected visible rows after mapping commands.
 - Removed the unsafe Clear All action pending session recovery support.
+
+## V3 MS-4
+
+- Added percentage-based BOQ allocation across multiple Activities.
+- Added over-allocation validation so combined BOQ shares cannot exceed 100%.
+- Added live Partial/Full status and remaining BOQ amount calculations.
+- Added pair-specific unmap and exact share undo.
+- Added Share % and Allocated Amount columns to mapping export.

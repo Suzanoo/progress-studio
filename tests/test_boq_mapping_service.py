@@ -1,6 +1,7 @@
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
+from progress_studio.domain.mapping_models import AllocationRecord
 from progress_studio.services.boq_mapping_service import BOQMappingService
 
 
@@ -25,11 +26,14 @@ def test_mapping_read_and_export(tmp_path: Path):
     assert rows[0].amount == 1000
 
     output = tmp_path / "mapped.xlsx"
-    service.export(progress, output, rows, {rows[0].key: "A1000"})
+    service.export(progress, output, rows, [AllocationRecord(rows[0].key, "A1000", 100.0)])
     wb = load_workbook(output, data_only=False)
     assert wb["Amount Mapping"]["D2"].value == 1000
     assert wb["Amount Mapping"]["E2"].value == "MAPPED"
     assert "BOQ Activity Mapping" in wb.sheetnames
+    mapping_ws = wb["BOQ Activity Mapping"]
+    assert mapping_ws["J2"].value == 1.0
+    assert mapping_ws["K2"].value == 1000
     wb.close()
 
 

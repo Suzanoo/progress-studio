@@ -34,7 +34,7 @@ def test_map_and_undo_updates_store_only():
     assert store.mapped_amount == 150.0
 
     assert store.undo() is not None
-    assert store.assignments == {}
+    assert store.allocations == {}
     assert store.mapped_amount == 0.0
 
 
