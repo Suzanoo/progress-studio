@@ -64,7 +64,7 @@ def run_example(output_folder: Path) -> PipelineContext:
 
 class Ms7ReleaseTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "2.1.2")
+        self.assertEqual(__version__, "2.1.3")
 
     def test_cli_help(self):
         stdout = io.StringIO()
@@ -124,15 +124,15 @@ class Ms7ReleaseTests(unittest.TestCase):
 
     def test_release_documents_are_current(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
-        self.assertIn("2.0.1", readme)
-        self.assertIn("MS-7 | Regression, Documentation, and Release | PASS", roadmap)
+        roadmap = (ROOT / "README_ROADMAP.md").read_text(encoding="utf-8")
+        self.assertIn("2.1.3", readme)
+        self.assertIn("MS-7 — Mapping Workspace UX", roadmap)
         self.assertNotIn("legacy/", readme)
         self.assertNotIn("Scripts 05-07 remain", readme)
 
     def test_no_thai_in_application_or_release_docs(self):
         paths = list((ROOT / "progress_studio").rglob("*.py"))
-        paths.extend([ROOT / "README.md", ROOT / "ROADMAP.md", ROOT / "README_ROADMAP.md", ROOT / "docs/acceptance/MS6_ACCEPTANCE.md"])
+        paths.extend([ROOT / "README.md", ROOT / "README_ROADMAP.md", ROOT / "docs/acceptance/MS6_ACCEPTANCE.md"])
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertFalse(any("\u0e00" <= ch <= "\u0e7f" for ch in text), str(path))

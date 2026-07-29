@@ -2,7 +2,7 @@
 
 Progress Studio converts a Primavera P6 XML export into an Excel workbook for schedule, amount, progress, plan distribution, and OKD reporting.
 
-**Release:** 2.0.1
+**Release:** 2.1.3
 
 ## Pipeline
 
