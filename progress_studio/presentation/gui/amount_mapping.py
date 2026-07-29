@@ -180,14 +180,26 @@ class AmountMappingFrame(ttk.Frame):
     def _tree(parent, columns, headings, widths):
         frame = ttk.Frame(parent)
         frame.pack(fill="both", expand=True)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
         tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="none")
         y = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=y.set)
         for name, heading, width in zip(columns, headings, widths):
             tree.heading(name, text=heading)
             tree.column(name, width=width, minwidth=35, stretch=name not in {"check", "amount", "allocated", "remaining", "status", "mapped"})
-        tree.pack(side="left", fill="both", expand=True)
-        y.pack(side="right", fill="y")
+        tree.grid(row=0, column=0, sticky="nsew")
+        y.grid(row=0, column=1, sticky="ns")
+
+        # Scroll only the table currently under the pointer. This keeps the
+        # Activity and BOQ panes independent on Windows and macOS.
+        def on_mousewheel(event):
+            delta = -1 if event.delta > 0 else 1
+            tree.yview_scroll(delta * 3, "units")
+            return "break"
+
+        tree.bind("<Enter>", lambda _event: tree.bind_all("<MouseWheel>", on_mousewheel))
+        tree.bind("<Leave>", lambda _event: tree.unbind_all("<MouseWheel>"))
         return tree
 
     def _detach_session(self) -> None:
