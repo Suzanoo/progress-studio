@@ -106,9 +106,15 @@ class AmountMappingFrame(ttk.Frame):
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
         self.boq_tree = self._tree(
             right,
-            ("check", "wbs2", "wbs3", "wbs4", "description", "amount", "mapped"),
-            ("✓", "WBS-2", "WBS-3", "WBS-4", "Description", "Amount", "Mapped To"),
-            (38, 95, 105, 105, 235, 95, 90),
+            (
+                "check", "wbs2", "wbs3", "wbs4", "description",
+                "amount", "allocated", "remaining", "status", "mapped",
+            ),
+            (
+                "✓", "WBS-2", "WBS-3", "WBS-4", "Description",
+                "Amount", "Allocated", "Remaining", "Status", "Mapped To",
+            ),
+            (38, 90, 100, 100, 210, 88, 88, 88, 72, 85),
         )
         self.boq_tree.bind("<Button-1>", self._boq_click)
         self._build_pager(right, self.boq_page_var, self._boq_prev, self._boq_next)
@@ -118,7 +124,6 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Button(actions, text="Map selected", command=self._map).pack(side="left")
         ttk.Button(actions, text="Undo", command=self._undo).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Unmap selected", command=self._unmap).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Clear all", command=self._clear).pack(side="left", padx=(8, 0))
 
     @staticmethod
     def _build_search(parent, variable: tk.StringVar, command) -> None:
@@ -147,7 +152,7 @@ class AmountMappingFrame(ttk.Frame):
         tree.configure(yscrollcommand=y.set)
         for name, heading, width in zip(columns, headings, widths):
             tree.heading(name, text=heading)
-            tree.column(name, width=width, minwidth=35, stretch=name not in {"check", "amount"})
+            tree.column(name, width=width, minwidth=35, stretch=name not in {"check", "amount", "allocated", "remaining", "status", "mapped"})
         tree.pack(side="left", fill="both", expand=True)
         y.pack(side="right", fill="y")
         return tree
@@ -331,17 +336,41 @@ class AmountMappingFrame(ttk.Frame):
 
         self.activity_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
 
+    def _boq_values(self, key: str) -> tuple[str, ...]:
+        row = self.store.boq_by_id[key]
+        return (
+            "☑" if key in self.store.selected_boq_ids else "☐",
+            row.wbs2,
+            row.wbs3,
+            row.wbs4,
+            row.description,
+            f"{row.amount:,.2f}",
+            f"{self.store.boq_allocated_amount(key):,.2f}",
+            f"{self.store.boq_remaining_amount(key):,.2f}",
+            self.store.boq_status(key).value,
+            self.store.assignments.get(key, ""),
+        )
+
     def _render_boq(self) -> None:
         self.boq_tree.delete(*self.boq_tree.get_children())
         page = self.store.boq_page_data()
         for key in page.ids:
-            row = self.store.boq_by_id[key]
-            check = "☑" if key in self.store.selected_boq_ids else "☐"
-            self.boq_tree.insert("", "end", iid=key, values=(
-                check, row.wbs2, row.wbs3, row.wbs4, row.description,
-                f"{row.amount:,.2f}", self.store.assignments.get(key, ""),
-            ))
+            self.boq_tree.insert("", "end", iid=key, values=self._boq_values(key))
         self.boq_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
+
+    def _refresh_changed_rows(self, change) -> None:
+        """Update visible rows only; the memory store remains the source of truth."""
+        for key in change.boq_keys:
+            if self.boq_tree.exists(key):
+                self.boq_tree.item(key, values=self._boq_values(key))
+        for activity_id in change.activity_ids:
+            if self.activity_tree.exists(activity_id):
+                self.activity_tree.set(
+                    activity_id,
+                    "amount",
+                    f"{self.store.activity_amount(activity_id):,.2f}",
+                )
+        self._update_summary()
 
     def _activity_click(self, event) -> str | None:
         if self.activity_tree.identify_region(event.x, event.y) != "cell" or self.activity_tree.identify_column(event.x) != "#1":
@@ -383,36 +412,31 @@ class AmountMappingFrame(ttk.Frame):
 
     def _map(self) -> None:
         try:
-            self.store.map_selected()
-            self._render_boq(); self._render_activities(); self._update_summary()
+            change = self.store.map_selected()
+            self._refresh_changed_rows(change)
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
 
     def _unmap(self) -> None:
         try:
-            self.store.unmap_selected()
-            self._render_boq(); self._render_activities(); self._update_summary()
+            change = self.store.unmap_selected()
+            self._refresh_changed_rows(change)
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
 
     def _undo(self) -> None:
-        if not self.store.undo():
+        change = self.store.undo()
+        if change is None:
             messagebox.showinfo("Amount Mapping", "Nothing to undo.")
             return
-        self._render_boq(); self._render_activities(); self._update_summary()
-
-    def _clear(self) -> None:
-        if self.store.assignments and not messagebox.askyesno("Amount Mapping", "Clear all mappings?"):
-            return
-        self.store.clear_all()
-        self._render_boq(); self._render_activities(); self._update_summary()
+        self._refresh_changed_rows(change)
 
     def _update_summary(self) -> None:
         total = self.store.total_amount
         mapped = self.store.mapped_amount
         self.summary_var.set(
-            f"Mapped {mapped:,.2f} / {total:,.2f} | Remaining {total - mapped:,.2f} | "
-            f"Items {len(self.store.assignments)}/{len(self.store.boq_order)}"
+            f"Mapped {mapped:,.2f} / {total:,.2f} | Remaining {self.store.remaining_amount:,.2f} | "
+            f"Items {self.store.mapped_item_count}/{len(self.store.boq_order)}"
         )
         self.export_button.configure(state="normal" if self.progress_file and self.store.boq_order else "disabled")
 
