@@ -115,3 +115,98 @@ def test_boq_reader_creates_repeatable_stable_export_id(tmp_path: Path) -> None:
     second = BOQSheetReader().read(path, "BOQ")[0]
     assert first.stable_id.startswith("BOQ-")
     assert first.stable_id == second.stable_id
+
+
+def test_exported_mapping_table_has_single_table_owned_filter(tmp_path: Path) -> None:
+    from zipfile import ZipFile
+    import xml.etree.ElementTree as ET
+
+    source = make_progress(tmp_path / "progress.xlsx")
+    output = tmp_path / "progress_mapped.xlsx"
+    WorkbookExportService().export(source, output, make_store())
+
+    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with ZipFile(output) as archive:
+        table_xml = ET.fromstring(archive.read("xl/tables/table1.xml"))
+        assert table_xml.find("x:autoFilter", ns) is not None
+
+        workbook_xml = ET.fromstring(archive.read("xl/workbook.xml"))
+        rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        mapping_rel_id = None
+        for sheet in workbook_xml.find("x:sheets", ns):
+            if sheet.attrib["name"] == "BOQ Activity Mapping":
+                mapping_rel_id = sheet.attrib[f"{{{rel_ns}}}id"]
+                break
+        assert mapping_rel_id is not None
+
+        package_ns = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
+        rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        target = next(
+            rel.attrib["Target"] for rel in rels.findall("r:Relationship", package_ns)
+            if rel.attrib["Id"] == mapping_rel_id
+        )
+        sheet_path = target.lstrip("/")
+        if not sheet_path.startswith("xl/"):
+            sheet_path = f"xl/{sheet_path}"
+        sheet_xml = ET.fromstring(archive.read(sheet_path))
+        assert sheet_xml.find("x:autoFilter", ns) is None
+        assert sheet_xml.find("x:tableParts", ns) is not None
+
+
+def test_export_without_allocations_writes_headers_without_table(tmp_path: Path) -> None:
+    source = make_progress(tmp_path / "progress.xlsx")
+    output = tmp_path / "empty_mapped.xlsx"
+    store = MappingStore()
+    store.load_activities([
+        ActivityRow("A1000", "1", "1.1", "First activity"),
+        ActivityRow("A2000", "1", "1.2", "Second activity"),
+    ])
+    store.load_boq([
+        BOQRow("Sheet|10|2", "Sheet", 10, "W2", "W3", "W4", "Item one", 1000, "BOQ-ONE"),
+    ])
+
+    result = WorkbookExportService().export(source, output, store)
+    assert result.mapping_rows_written == 0
+    wb = load_workbook(output)
+    try:
+        mapping = wb["BOQ Activity Mapping"]
+        assert mapping.max_row == 1
+        assert not mapping.tables
+        assert mapping.auto_filter.ref is None
+    finally:
+        wb.close()
+
+
+def test_package_validator_rejects_worksheet_filter_on_table_sheet(tmp_path: Path) -> None:
+    from zipfile import ZIP_DEFLATED, ZipFile
+    import xml.etree.ElementTree as ET
+
+    from progress_studio.infrastructure.excel.xlsx_package_validator import (
+        WorkbookPackageValidationError,
+        validate_xlsx_tables,
+    )
+
+    source = make_progress(tmp_path / "progress.xlsx")
+    valid = tmp_path / "valid.xlsx"
+    broken = tmp_path / "broken.xlsx"
+    WorkbookExportService().export(source, valid, make_store())
+
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    ET.register_namespace("", main_ns)
+    with ZipFile(valid) as src, ZipFile(broken, "w", ZIP_DEFLATED) as dst:
+        injected = False
+        for info in src.infolist():
+            payload = src.read(info.filename)
+            if info.filename.startswith("xl/worksheets/sheet") and info.filename.endswith(".xml"):
+                root = ET.fromstring(payload)
+                table_parts = root.find(f"{{{main_ns}}}tableParts")
+                if table_parts is not None:
+                    auto_filter = ET.Element(f"{{{main_ns}}}autoFilter", {"ref": "A1:M4"})
+                    root.insert(list(root).index(table_parts), auto_filter)
+                    payload = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                    injected = True
+            dst.writestr(info, payload)
+        assert injected
+
+    with pytest.raises(WorkbookPackageValidationError, match="AutoFilter overlaps"):
+        validate_xlsx_tables(broken)
