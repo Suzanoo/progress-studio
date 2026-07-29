@@ -256,3 +256,32 @@ def test_export_rechecks_main_workbook_contract(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match='Required worksheet "main"'):
         WorkbookExportService().export(source, tmp_path / "out.xlsx", make_store())
+
+
+def test_export_forces_excel_to_rebuild_formula_results(tmp_path: Path) -> None:
+    import zipfile
+    from xml.etree import ElementTree as ET
+
+    source = make_progress(tmp_path / "progress.xlsx")
+    output = tmp_path / "progress_mapped.xlsx"
+    WorkbookExportService().export(source, output, make_store())
+
+    wb = load_workbook(output, data_only=False)
+    try:
+        assert wb.calculation.calcMode == "auto"
+        assert wb.calculation.fullCalcOnLoad is True
+        assert wb.calculation.forceFullCalc is True
+        assert wb.calculation.calcId == 0
+    finally:
+        wb.close()
+
+    with zipfile.ZipFile(output) as package:
+        assert "xl/calcChain.xml" not in package.namelist()
+        root = ET.fromstring(package.read("xl/workbook.xml"))
+        namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        calc = root.find("x:calcPr", namespace)
+        assert calc is not None
+        assert calc.attrib["calcMode"] == "auto"
+        assert calc.attrib["fullCalcOnLoad"] == "1"
+        assert calc.attrib["forceFullCalc"] == "1"
+        assert calc.attrib["calcId"] == "0"
