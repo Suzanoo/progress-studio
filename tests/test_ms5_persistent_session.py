@@ -64,7 +64,7 @@ def test_session_write_is_json_and_has_expected_contract(tmp_path: Path) -> None
 
     payload = json.loads(target.read_text(encoding="utf-8"))
     assert payload["format"] == "progress-studio-mapping-session"
-    assert payload["version"] == 1
+    assert payload["version"] == 2
     assert payload["boq_sheet"] == "NKC2"
     assert payload["allocations"] == []
     assert not list(tmp_path.glob("*.tmp"))
@@ -77,7 +77,7 @@ def test_changed_workbook_is_rejected(tmp_path: Path) -> None:
     session = repository.create(progress, boq, "Project", [])
 
     progress.write_bytes(b"progress-v2")
-    with pytest.raises(SessionValidationError, match="has changed"):
+    with pytest.raises(SessionValidationError, match="does not match"):
         repository.validate_workbook(session.progress)
 
 
@@ -138,3 +138,70 @@ def test_recent_sessions_keeps_latest_first_and_ignores_missing(tmp_path: Path) 
     assert repository.list() == [first.resolve(), second.resolve()]
     first.unlink()
     assert repository.list() == [second.resolve()]
+
+
+def test_v1_session_is_migrated_to_current_version(tmp_path: Path) -> None:
+    progress = write_workbook_placeholder(tmp_path / "progress.xlsx", b"progress")
+    boq = write_workbook_placeholder(tmp_path / "boq.xlsx", b"boq")
+    repository = MappingSessionRepository()
+    current = repository.create(progress, boq, "Project", [])
+    payload = {
+        "format": current.format,
+        "version": 1,
+        "saved_at": current.saved_at,
+        "progress": {
+            "path": current.progress.path,
+            "size": current.progress.size,
+            "modified_ns": current.progress.modified_ns,
+            "sha256": current.progress.sha256,
+        },
+        "boq": {
+            "path": current.boq.path,
+            "size": current.boq.size,
+            "modified_ns": current.boq.modified_ns,
+            "sha256": current.boq.sha256,
+        },
+        "boq_sheet": "Project",
+        "allocations": [],
+    }
+    target = tmp_path / "legacy.mapping.json"
+    target.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = repository.load(target)
+
+    assert loaded.version == 2
+    assert loaded.progress.filename == "progress.xlsx"
+    assert loaded.boq.filename == "boq.xlsx"
+
+
+def test_moved_or_renamed_workbook_can_be_relinked_by_hash(tmp_path: Path) -> None:
+    original = write_workbook_placeholder(tmp_path / "progress.xlsx", b"same-content")
+    repository = MappingSessionRepository()
+    saved = repository.create(original, original, "Project", []).progress
+    moved = tmp_path / "archive" / "renamed-progress.xlsx"
+    moved.parent.mkdir()
+    original.replace(moved)
+
+    with pytest.raises(SessionValidationError, match="Browse for the moved"):
+        repository.validate_workbook(saved)
+    assert repository.validate_workbook(saved, moved) == moved.resolve()
+
+
+def test_relink_rejects_different_workbook_content(tmp_path: Path) -> None:
+    original = write_workbook_placeholder(tmp_path / "progress.xlsx", b"original")
+    replacement = write_workbook_placeholder(tmp_path / "replacement.xlsx", b"different")
+    repository = MappingSessionRepository()
+    saved = repository.create(original, original, "Project", []).progress
+
+    with pytest.raises(SessionValidationError, match="does not match"):
+        repository.validate_workbook(saved, replacement)
+
+
+def test_future_session_version_is_rejected_with_clear_message(tmp_path: Path) -> None:
+    target = tmp_path / "future.mapping.json"
+    target.write_text(
+        json.dumps({"format": "progress-studio-mapping-session", "version": 999}),
+        encoding="utf-8",
+    )
+    with pytest.raises(SessionValidationError, match="supports up to version"):
+        MappingSessionRepository().load(target)

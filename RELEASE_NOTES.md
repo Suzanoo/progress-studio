@@ -1,3 +1,12 @@
+# MS-5 Session Hardening
+
+- Added session schema version 2 and v1-to-v2 migration.
+- Stored workbook filename alongside saved absolute path and SHA-256.
+- Added safe relink flow for moved or renamed workbooks.
+- Rejected relink candidates whose content differs from the saved fingerprint.
+- Added clearer validation messages and migration/relink tests.
+- Documented that Undo history starts fresh after a session is loaded.
+
 # Release Notes
 
 ## 2.0.4

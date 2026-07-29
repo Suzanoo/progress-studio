@@ -159,7 +159,7 @@ Planned branch: `feat/ms8-production-polish`
 | MS-2 High-performance Mapping UI | Completed |
 | MS-3 Mapping Engine | Completed |
 | MS-4 Share Allocation | Completed |
-| MS-5 Persistent Mapping Session | Completed |
+| MS-5 Persistent Mapping Session | Completed and hardened |
 | MS-6 Final Workbook Export | Planned |
 | MS-7 On-demand S-Curve Generator | Planned |
 | MS-8 Production Polish | Planned |
@@ -183,5 +183,8 @@ Tkinter presentation
 - Mapping operations do not read Excel again.
 - The Mapping Store is the in-memory source of truth.
 - Session JSON is persistence, not the runtime data model.
+- Session files support explicit schema migrations.
+- Relink accepts only moved or renamed workbooks with identical SHA-256 content.
+- Changed workbooks are never reconciled or merged automatically.
 - Export reads from domain records and allocation records, not Treeview rows.
 - Large tables must use pagination and update only affected rows.

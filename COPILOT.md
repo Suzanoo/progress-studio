@@ -23,11 +23,13 @@ Progress Studio maps BOQ cost items to Primavera Activities and exports a Progre
 13. `Amount` and `Allocated` are money; BOQ `Remaining` in the GUI is a percentage.
 14. Session files must be written atomically.
 15. Validate source workbooks before restoring saved allocations.
-16. GUI code must not contain allocation business rules that belong in services/domain code.
-17. Every behavior change requires tests.
-18. Preserve existing CLI and XML-to-workbook workflows unless the milestone explicitly replaces them.
-19. Do not add automatic BOQ detection; the user selects the worksheet.
-20. Do not embed expensive charts in the mapping screen. S-Curve generation is on demand in MS-7.
+16. Relink only when SHA-256 matches; never auto-merge a changed workbook.
+17. Any session schema change must increment `SESSION_VERSION`, add a migration, and add migration tests.
+18. GUI code must not contain allocation business rules that belong in services/domain code.
+19. Every behavior change requires tests.
+20. Preserve existing CLI and XML-to-workbook workflows unless the milestone explicitly replaces them.
+21. Do not add automatic BOQ detection; the user selects the worksheet.
+22. Do not embed expensive charts in the mapping screen. S-Curve generation is on demand in MS-7.
 
 ## Git and milestone discipline
 
@@ -48,6 +50,7 @@ A mapping session stores:
 - Progress workbook path and fingerprint;
 - BOQ workbook path and fingerprint;
 - selected BOQ worksheet;
+- saved path, filename, file metadata, and SHA-256 for each workbook;
 - BOQ key, Activity ID, and Share percentage for each allocation.
 
 A mapping session does not store copied workbook rows. On load, the application validates and reads the original workbooks, then restores allocations into `MappingStore`.
@@ -63,3 +66,14 @@ git log --oneline --decorate -10
 ```
 
 Confirm the full suite passes and the working tree is clean.
+
+
+## Session migration and relink rules
+
+- Current session schema is version 2.
+- Older supported payloads must pass through ordered migration functions in the repository.
+- A future-version payload must fail with a clear message.
+- A missing workbook may be relinked through the GUI.
+- A relink candidate must match the saved SHA-256 exactly.
+- Do not implement automatic reconciliation against edited workbooks without a separately approved milestone and explicit domain rules.
+- Loading a session clears Undo history by design because the restored allocations are the new baseline.
