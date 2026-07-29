@@ -82,3 +82,8 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Added live Partial/Full status and remaining BOQ amount calculations.
 - Added pair-specific unmap and exact share undo.
 - Added Share % and Allocated Amount columns to mapping export.
+
+### MS-4 UI refinement
+- Changed the BOQ table `Remaining` display from money to remaining allocation percentage.
+- Kept `Amount` and `Allocated` as monetary values.
+- Added store-level percentage calculation and tests.

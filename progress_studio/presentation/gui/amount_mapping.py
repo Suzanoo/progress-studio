@@ -113,7 +113,7 @@ class AmountMappingFrame(ttk.Frame):
             ),
             (
                 "✓", "WBS-2", "WBS-3", "WBS-4", "Description",
-                "Amount", "Allocated", "Remaining", "Status", "Mapped To",
+                "Amount", "Allocated", "Remaining %", "Status", "Mapped To",
             ),
             (38, 90, 100, 100, 210, 88, 88, 88, 72, 85),
         )
@@ -356,7 +356,7 @@ class AmountMappingFrame(ttk.Frame):
             row.description,
             f"{row.amount:,.2f}",
             f"{self.store.boq_allocated_amount(key):,.2f}",
-            f"{self.store.boq_remaining_amount(key):,.2f}",
+            f"{self.store.boq_remaining_percent(key):.0f}%",
             self.store.boq_status(key).value,
             self.store.mapped_to_text(key),
         )

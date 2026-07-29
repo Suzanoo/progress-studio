@@ -36,3 +36,9 @@ BOQ item 100,000
 - Clear All with recovery — MS-5
 - Final workbook workflow — MS-6
 - On-demand S-Curve generation — MS-7
+
+## UI refinement
+
+The BOQ table keeps monetary values for **Amount** and **Allocated**, while **Remaining** is displayed as an integer percentage. This makes the remaining allocatable share immediately visible without adding GUI progress bars.
+
+Example: `Amount 189,225.39 | Allocated 132,457.77 | Remaining 30% | Partial`.

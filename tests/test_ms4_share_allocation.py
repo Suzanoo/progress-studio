@@ -86,3 +86,21 @@ def test_unmap_removes_only_selected_activity_share() -> None:
 
     store.undo()
     assert store.boq_status("Project:10") is MappingStatus.FULL
+
+
+def test_boq_remaining_percent_tracks_unallocated_share() -> None:
+    store = make_store()
+
+    assert store.boq_remaining_percent("Project:10") == 100.0
+
+    store.selected_activity_ids = {"A1000"}
+    store.selected_boq_ids = {"Project:10"}
+    store.map_selected(35)
+
+    assert store.boq_remaining_percent("Project:10") == 65.0
+
+    store.selected_activity_ids = {"A2000"}
+    store.selected_boq_ids = {"Project:10"}
+    store.map_selected(65)
+
+    assert store.boq_remaining_percent("Project:10") == 0.0

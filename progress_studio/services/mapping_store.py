@@ -235,6 +235,12 @@ class MappingStore:
         row = self.boq_by_id.get(key)
         return 0.0 if row is None else max(0.0, row.amount - self.boq_allocated_amount(key))
 
+    def boq_remaining_percent(self, key: str) -> float:
+        """Return the unallocated BOQ share as a percentage from 0 to 100."""
+        if key not in self.boq_by_id:
+            return 0.0
+        return max(0.0, min(100.0, 100.0 - self.boq_share_percent(key)))
+
     def boq_status(self, key: str) -> MappingStatus:
         share = self.boq_share_percent(key)
         if share <= self.EPSILON:
