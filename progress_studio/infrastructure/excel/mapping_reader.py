@@ -7,6 +7,31 @@ from typing import Iterable
 from openpyxl import load_workbook
 
 from progress_studio.domain.mapping_models import ActivityRow, BOQRow
+from progress_studio.config.workbook_schema import WORKBOOK_SCHEMA
+from progress_studio.infrastructure.excel.amount_workbook import find_header
+
+
+
+MAIN_REQUIRED_HEADERS = ("Row Type", "Activity ID", "P/A", "Outline Level", "Amount")
+
+
+def validate_progress_workbook_contract(workbook) -> None:
+    """Validate the generated Progress workbook contract before mapping starts."""
+    main_sheet = WORKBOOK_SCHEMA.main_sheet
+    if main_sheet not in workbook.sheetnames:
+        raise ValueError(
+            'Required worksheet "main" was not found.\n\n'
+            'Did you rename the "main" worksheet after generating the Progress workbook?\n'
+            'Please rename it back to "main" and load the workbook again.'
+        )
+    try:
+        find_header(workbook[main_sheet], list(MAIN_REQUIRED_HEADERS))
+    except ValueError as exc:
+        raise ValueError(
+            'The "main" worksheet does not match the generated Progress workbook format.\n\n'
+            'Required columns: Row Type, Activity ID, P/A, Outline Level, Amount.\n'
+            'Please regenerate the Progress workbook or restore the original headers.'
+        ) from exc
 
 
 def _header_map(values: Iterable[object]) -> dict[str, int]:
@@ -62,6 +87,7 @@ class ProgressActivityReader:
     def read(self, path: Path) -> list[ActivityRow]:
         workbook = load_workbook(path, read_only=True, data_only=False)
         try:
+            validate_progress_workbook_contract(workbook)
             if "Amount Mapping" not in workbook.sheetnames:
                 raise ValueError("Worksheet 'Amount Mapping' was not found in the Progress workbook.")
             sheet = workbook["Amount Mapping"]
