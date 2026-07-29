@@ -64,7 +64,7 @@ def run_example(output_folder: Path) -> PipelineContext:
 
 class Ms7ReleaseTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "2.2.0")
+        self.assertEqual(__version__, "2.3.0")
 
     def test_cli_help(self):
         stdout = io.StringIO()
