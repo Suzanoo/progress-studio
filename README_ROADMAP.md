@@ -110,17 +110,22 @@ Branch: `feat/ms5-persistent-session`
 
 ### MS-6 — Final Workbook Export
 
-**Goal:** Produce the final mapped workbook for Excel calculation and OKD.
+**Goal:** Produce the final mapped workbook safely from the in-memory mapping state.
 
-Planned:
+Completed:
 
-- Finalize updates to `Amount Mapping`.
-- Finalize `BOQ Activity Mapping` output.
-- Add export validation and reconciliation summary.
-- Preserve formulas and workbook compatibility.
-- Define the final output naming and overwrite policy.
+- Added export validation and a reconciliation summary.
+- Added explicit confirmation for partial mapping exports.
+- Updated `Amount Mapping` Activity amounts and statuses.
+- Rebuilt `BOQ Activity Mapping` as a formatted Excel table.
+- Added `Mapping Summary` as the first worksheet.
+- Preserved existing worksheets and formulas.
+- Added stable BOQ export IDs while preserving the existing session key contract.
+- Prevented overwriting the loaded source workbook.
+- Added atomic temporary-file export and explicit overwrite policy.
+- Requested full Excel recalculation on open.
 
-Planned branch: `feat/ms6-workbook-export`
+Branch: `feat/ms6-workbook-export`
 
 ### MS-7 — On-demand S-Curve Generator
 
@@ -160,7 +165,7 @@ Planned branch: `feat/ms8-production-polish`
 | MS-3 Mapping Engine | Completed |
 | MS-4 Share Allocation | Completed |
 | MS-5 Persistent Mapping Session | Completed and hardened |
-| MS-6 Final Workbook Export | Planned |
+| MS-6 Final Workbook Export | Completed |
 | MS-7 On-demand S-Curve Generator | Planned |
 | MS-8 Production Polish | Planned |
 

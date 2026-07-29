@@ -1,3 +1,15 @@
+# Release Notes
+
+## V3 MS-6 — Final Workbook Export
+
+- Added validated, atomic mapped-workbook export.
+- Added Mapping Summary reconciliation worksheet.
+- Added partial-export confirmation and final status reporting.
+- Preserved formulas and existing workbook sheets.
+- Added formatted BOQ Activity Mapping table with Mapping ID and stable BOQ ID.
+- Prevented accidental source-workbook overwrite.
+- Added full MS-6 export tests.
+
 # MS-5 Session Hardening
 
 - Added session schema version 2 and v1-to-v2 migration.

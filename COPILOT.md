@@ -30,6 +30,12 @@ Progress Studio maps BOQ cost items to Primavera Activities and exports a Progre
 20. Preserve existing CLI and XML-to-workbook workflows unless the milestone explicitly replaces them.
 21. Do not add automatic BOQ detection; the user selects the worksheet.
 22. Do not embed expensive charts in the mapping screen. S-Curve generation is on demand in MS-7.
+23. Export must read from `MappingStore`, not Treeview rows.
+24. Never overwrite the loaded Progress workbook.
+25. Preserve the first eleven `BOQ Activity Mapping` columns unless an explicit migration is approved.
+26. Export through a temporary workbook and replace the target only after a successful save.
+27. Partial mapping export requires explicit user confirmation and a reconciliation summary.
+28. Keep the session BOQ key contract stable; use `BOQ ID` as an additional export identity.
 
 ## Git and milestone discipline
 
