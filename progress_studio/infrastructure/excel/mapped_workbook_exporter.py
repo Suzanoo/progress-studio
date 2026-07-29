@@ -12,6 +12,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from progress_studio.domain.export_models import ExportResult, ExportValidation
 from progress_studio.domain.mapping_models import AllocationRecord, BOQRow
+from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 
 CURRENCY_FORMAT = '#,##0.00'
 PERCENT_FORMAT = '0.00%'
@@ -87,6 +88,7 @@ class MappedWorkbookExporter:
                 workbook.save(temp_file)
             finally:
                 workbook.close()
+            validate_xlsx_tables(temp_file)
             _atomic_replace(temp_file, output_file)
             return ExportResult(output_file, validation, amount_rows, mapping_rows)
         except Exception:
@@ -155,7 +157,6 @@ class MappedWorkbookExporter:
             ws.cell(current, 11).number_format = CURRENCY_FORMAT
 
         ws.freeze_panes = 'A2'
-        ws.auto_filter.ref = f'A1:M{max(1, ws.max_row)}'
         widths = [16, 32, 22, 12, 22, 28, 28, 60, 18, 12, 18, 16, 20]
         for index, width in enumerate(widths, start=1):
             ws.column_dimensions[ws.cell(1, index).column_letter].width = width
