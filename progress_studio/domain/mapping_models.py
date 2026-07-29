@@ -44,13 +44,17 @@ class MappingStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class MappingChange:
-    """Identifiers affected by one mapping command.
+class AllocationRecord:
+    """One BOQ-to-Activity allocation expressed as a percentage of BOQ amount."""
 
-    MS-3 maps a BOQ item at 100%.  The model deliberately exposes allocated
-    and remaining amounts so MS-4 can add percentage shares without replacing
-    the UI contract.
-    """
+    boq_key: str
+    activity_id: str
+    share_percent: float
+
+
+@dataclass(frozen=True, slots=True)
+class MappingChange:
+    """Identifiers affected by one mapping command."""
 
     boq_keys: tuple[str, ...]
     activity_ids: tuple[str, ...]

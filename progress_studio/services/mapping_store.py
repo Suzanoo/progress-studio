@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from progress_studio.domain.mapping_models import (
     ActivityRow,
+    AllocationRecord,
     BOQRow,
     MappingChange,
     MappingStatus,
@@ -21,11 +22,9 @@ class Page:
 
 
 class MappingStore:
-    """In-memory source of truth for the mapping screen.
+    """In-memory source of truth for the mapping screen."""
 
-    Treeviews only render a page from this store.  They are never used as the
-    data source for mapping, undo, totals, or export.
-    """
+    EPSILON = 1e-9
 
     def __init__(self, activity_page_size: int = 200, boq_page_size: int = 300) -> None:
         self.activity_page_size = activity_page_size
@@ -34,11 +33,11 @@ class MappingStore:
         self.activity_order: list[str] = []
         self.boq_by_id: dict[str, BOQRow] = {}
         self.boq_order: list[str] = []
-        # MS-3: one BOQ item is allocated in full to zero or one Activity.
-        self.assignments: dict[str, str] = {}
+        # (BOQ key, Activity ID) -> percentage of original BOQ amount.
+        self.allocations: dict[tuple[str, str], float] = {}
         self.selected_activity_ids: set[str] = set()
         self.selected_boq_ids: set[str] = set()
-        self._undo_stack: list[dict[str, str | None]] = []
+        self._undo_stack: list[dict[tuple[str, str], float | None]] = []
         self.activity_page = 1
         self.boq_page = 1
         self.activity_query = ""
@@ -64,7 +63,7 @@ class MappingStore:
             self._boq_ids_by_wbs23.setdefault((row.wbs2, row.wbs3), []).append(row.key)
         self.boq_wbs2 = ""
         self.boq_wbs3 = ""
-        self.assignments.clear()
+        self.allocations.clear()
         self.selected_boq_ids.clear()
         self._undo_stack.clear()
         self.boq_page = 1
@@ -73,10 +72,7 @@ class MappingStore:
         query = self.activity_query.strip().lower()
         if not query:
             return self.activity_order
-        return [
-            key for key in self.activity_order
-            if query in self.activities_by_id[key].search_text
-        ]
+        return [key for key in self.activity_order if query in self.activities_by_id[key].search_text]
 
     def boq_wbs2_values(self) -> tuple[str, ...]:
         return tuple(sorted(value for value in self._boq_ids_by_wbs2 if value))
@@ -112,10 +108,7 @@ class MappingStore:
         page = max(1, min(page, pages))
         start_index = (page - 1) * page_size
         end_index = min(start_index + page_size, total)
-        return Page(
-            ids=tuple(ids[start_index:end_index]), number=page, pages=pages,
-            total=total, start=0 if total == 0 else start_index + 1, end=end_index,
-        )
+        return Page(tuple(ids[start_index:end_index]), page, pages, total, 0 if total == 0 else start_index + 1, end_index)
 
     def activity_page_data(self) -> Page:
         page = self._page(self._filtered_activity_ids(), self.activity_page, self.activity_page_size)
@@ -140,78 +133,113 @@ class MappingStore:
             self.selected_boq_ids.add(key)
 
     @staticmethod
-    def _affected_activity_ids(previous: dict[str, str | None], new_activity: str | None = None) -> tuple[str, ...]:
-        ids = {value for value in previous.values() if value}
-        if new_activity:
-            ids.add(new_activity)
-        return tuple(sorted(ids))
+    def _validate_share(share_percent: float) -> float:
+        try:
+            share = float(share_percent)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Share must be a number greater than 0 and not more than 100.") from exc
+        if share <= 0 or share > 100:
+            raise ValueError("Share must be greater than 0 and not more than 100.")
+        return share
 
-    def map_selected(self) -> MappingChange:
+    def boq_share_percent(self, key: str) -> float:
+        return sum(share for (boq_key, _), share in self.allocations.items() if boq_key == key)
+
+    def allocation_share(self, key: str, activity_id: str) -> float:
+        return self.allocations.get((key, activity_id), 0.0)
+
+    def allocation_records(self) -> list[AllocationRecord]:
+        return [
+            AllocationRecord(key, activity_id, share)
+            for (key, activity_id), share in sorted(self.allocations.items())
+        ]
+
+    def mapped_activities(self, key: str) -> tuple[str, ...]:
+        return tuple(sorted(activity_id for (boq_key, activity_id) in self.allocations if boq_key == key))
+
+    def mapped_to_text(self, key: str) -> str:
+        parts = [
+            f"{activity_id} ({self.allocations[(key, activity_id)]:g}%)"
+            for activity_id in self.mapped_activities(key)
+        ]
+        return ", ".join(parts)
+
+    def map_selected(self, share_percent: float = 100.0) -> MappingChange:
         if len(self.selected_activity_ids) != 1:
             raise ValueError("Select exactly one Activity.")
         if not self.selected_boq_ids:
             raise ValueError("Select one or more BOQ items.")
+        share = self._validate_share(share_percent)
         activity_id = next(iter(self.selected_activity_ids))
         keys = tuple(sorted(self.selected_boq_ids))
-        previous = {key: self.assignments.get(key) for key in keys}
-        self._undo_stack.append(previous)
+        changed_pairs = {(key, activity_id) for key in keys}
+        previous = {pair: self.allocations.get(pair) for pair in changed_pairs}
+
         for key in keys:
-            self.assignments[key] = activity_id
+            existing_other = self.boq_share_percent(key) - self.allocation_share(key, activity_id)
+            if existing_other + share > 100.0 + self.EPSILON:
+                remaining = max(0.0, 100.0 - existing_other)
+                raise ValueError(
+                    f"{key} has only {remaining:g}% remaining. "
+                    f"Requested share for {activity_id}: {share:g}%."
+                )
+
+        self._undo_stack.append(previous)
+        for pair in changed_pairs:
+            self.allocations[pair] = share
         self.selected_boq_ids.clear()
-        return MappingChange(keys, self._affected_activity_ids(previous, activity_id))
+        return MappingChange(keys, (activity_id,))
 
     def unmap_selected(self) -> MappingChange:
+        if len(self.selected_activity_ids) != 1:
+            raise ValueError("Select exactly one Activity to unmap.")
         keys = tuple(sorted(self.selected_boq_ids))
         if not keys:
             raise ValueError("Select one or more BOQ items.")
-        previous = {key: self.assignments.get(key) for key in keys}
-        # Selecting an unmapped BOQ is allowed; undo still restores exact state.
+        activity_id = next(iter(self.selected_activity_ids))
+        pairs = {(key, activity_id) for key in keys}
+        previous = {pair: self.allocations.get(pair) for pair in pairs}
+        if not any(value is not None for value in previous.values()):
+            raise ValueError("The selected BOQ items are not mapped to this Activity.")
         self._undo_stack.append(previous)
-        for key in keys:
-            self.assignments.pop(key, None)
+        for pair in pairs:
+            self.allocations.pop(pair, None)
         self.selected_boq_ids.clear()
-        return MappingChange(keys, self._affected_activity_ids(previous))
+        return MappingChange(keys, (activity_id,))
 
     def undo(self) -> MappingChange | None:
         if not self._undo_stack:
             return None
         previous = self._undo_stack.pop()
-        current = {key: self.assignments.get(key) for key in previous}
-        for key, activity_id in previous.items():
-            if activity_id is None:
-                self.assignments.pop(key, None)
+        affected_boq = {key for key, _ in previous}
+        affected_activities = {activity_id for _, activity_id in previous}
+        for pair, share in previous.items():
+            if share is None:
+                self.allocations.pop(pair, None)
             else:
-                self.assignments[key] = activity_id
-        affected = {
-            value for value in (*previous.values(), *current.values()) if value
-        }
-        return MappingChange(tuple(previous), tuple(sorted(affected)))
+                self.allocations[pair] = share
+        return MappingChange(tuple(sorted(affected_boq)), tuple(sorted(affected_activities)))
 
     def activity_amount(self, activity_id: str) -> float:
         return sum(
-            self.boq_by_id[key].amount
-            for key, assigned_id in self.assignments.items()
+            self.boq_by_id[key].amount * share / 100.0
+            for (key, assigned_id), share in self.allocations.items()
             if assigned_id == activity_id and key in self.boq_by_id
         )
 
     def boq_allocated_amount(self, key: str) -> float:
         row = self.boq_by_id.get(key)
-        if row is None or key not in self.assignments:
-            return 0.0
-        return row.amount
+        return 0.0 if row is None else row.amount * self.boq_share_percent(key) / 100.0
 
     def boq_remaining_amount(self, key: str) -> float:
         row = self.boq_by_id.get(key)
-        if row is None:
-            return 0.0
-        return max(0.0, row.amount - self.boq_allocated_amount(key))
+        return 0.0 if row is None else max(0.0, row.amount - self.boq_allocated_amount(key))
 
     def boq_status(self, key: str) -> MappingStatus:
-        allocated = self.boq_allocated_amount(key)
-        row = self.boq_by_id.get(key)
-        if row is None or allocated <= 0:
+        share = self.boq_share_percent(key)
+        if share <= self.EPSILON:
             return MappingStatus.UNMAPPED
-        if allocated + 1e-9 < row.amount:
+        if share < 100.0 - self.EPSILON:
             return MappingStatus.PARTIAL
         return MappingStatus.FULL
 
@@ -221,7 +249,7 @@ class MappingStore:
 
     @property
     def mapped_amount(self) -> float:
-        return sum(self.boq_allocated_amount(key) for key in self.assignments)
+        return sum(self.boq_allocated_amount(key) for key in self.boq_order)
 
     @property
     def remaining_amount(self) -> float:
@@ -229,4 +257,4 @@ class MappingStore:
 
     @property
     def mapped_item_count(self) -> int:
-        return len(self.assignments)
+        return sum(1 for key in self.boq_order if self.boq_share_percent(key) > self.EPSILON)
