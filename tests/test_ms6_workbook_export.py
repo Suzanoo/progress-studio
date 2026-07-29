@@ -19,8 +19,19 @@ def make_progress(path: Path) -> Path:
     ws.append([None, "1", "Project", None, None])
     ws.append(["A1000", "1.1", "First activity", 99, "OLD"])
     ws.append(["A2000", "1.2", "Second activity", 99, "OLD"])
+    main = wb.create_sheet("main")
+    main.append(["Progress Studio test workbook"])
+    main.append([])
+    main.append([])
+    main.append(["Row Type", "Activity ID", "Description", "P/A", "Outline Level", "Amount"])
+    main.append(["Project Summary", "", "Project", "P", 0, 0])
+    main.append(["WBS", "", "Group", "P", 1, 0])
+    main.append(["Activity", "A1000", "First activity", "P", 2, 99])
+    main.append(["Activity", "A1000", "First activity", "A", 2, None])
+    main.append(["Activity", "A2000", "Second activity", "P", 2, 99])
+    main.append(["Activity", "A2000", "Second activity", "A", 2, None])
     formula = wb.create_sheet("Formula Check")
-    formula["A1"] = "=SUM('Amount Mapping'!D3:D4)"
+    formula["A1"] = "=SUM(main!F7,F9)"
     wb.save(path)
     return path
 
@@ -57,11 +68,19 @@ def test_export_updates_amount_mapping_and_writes_reconciliation(tmp_path: Path)
 
     wb = load_workbook(output, data_only=False)
     try:
+        main = wb["main"]
+        assert main["F7"].value == 400
+        assert main["F8"].value is None
+        assert main["F9"].value == 900
+        assert main["F10"].value is None
+        assert str(main["F6"].value).startswith("=SUMIFS(")
+        assert str(main["F5"].value).startswith("=SUMIFS(")
+
         amount = wb["Amount Mapping"]
         assert amount["D3"].value == 400
         assert amount["D4"].value == 900
         assert amount["E3"].value == "MAPPED"
-        assert wb["Formula Check"]["A1"].value == "=SUM('Amount Mapping'!D3:D4)"
+        assert wb["Formula Check"]["A1"].value == "=SUM(main!F7,F9)"
 
         mapping = wb["BOQ Activity Mapping"]
         assert mapping.max_row == 4
@@ -210,3 +229,30 @@ def test_package_validator_rejects_worksheet_filter_on_table_sheet(tmp_path: Pat
 
     with pytest.raises(WorkbookPackageValidationError, match="AutoFilter overlaps"):
         validate_xlsx_tables(broken)
+
+
+def test_progress_reader_rejects_missing_main_sheet(tmp_path: Path) -> None:
+    path = tmp_path / "renamed_main.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "schedule"
+    amount = wb.create_sheet("Amount Mapping")
+    amount.append(["Activity ID", "WBS", "Description", "Amount", "Status"])
+    amount.append(["A1000", "1.1", "Activity", 0, "UNMAPPED"])
+    wb.save(path)
+    wb.close()
+
+    with pytest.raises(ValueError, match='rename it back to "main"'):
+        from progress_studio.infrastructure.excel.mapping_reader import ProgressActivityReader
+        ProgressActivityReader().read(path)
+
+
+def test_export_rechecks_main_workbook_contract(tmp_path: Path) -> None:
+    source = make_progress(tmp_path / "progress.xlsx")
+    wb = load_workbook(source)
+    wb["main"].title = "renamed-main"
+    wb.save(source)
+    wb.close()
+
+    with pytest.raises(ValueError, match='Required worksheet "main"'):
+        WorkbookExportService().export(source, tmp_path / "out.xlsx", make_store())
