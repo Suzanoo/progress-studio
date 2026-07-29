@@ -50,7 +50,10 @@ class MappingStore:
     def load_activities(self, rows: list[ActivityRow]) -> None:
         self.activities_by_id = {row.activity_id: row for row in rows}
         self.activity_order = [row.activity_id for row in rows]
+        self.allocations.clear()
         self.selected_activity_ids.clear()
+        self.selected_boq_ids.clear()
+        self._undo_stack.clear()
         self.activity_page = 1
 
     def load_boq(self, rows: list[BOQRow]) -> None:

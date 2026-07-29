@@ -6,6 +6,11 @@ from tkinter import filedialog, messagebox, ttk
 
 from progress_studio.services.boq_mapping_service import BOQMappingService
 from progress_studio.services.mapping_store import MappingStore
+from progress_studio.infrastructure.session import (
+    MappingSessionRepository,
+    RecentSessionRepository,
+    SessionValidationError,
+)
 
 
 class AmountMappingFrame(ttk.Frame):
@@ -16,6 +21,9 @@ class AmountMappingFrame(ttk.Frame):
         super().__init__(master, padding=8)
         self.service = service or BOQMappingService()
         self.store = MappingStore(self.ACTIVITY_PAGE_SIZE, self.BOQ_PAGE_SIZE)
+        self.session_repository = MappingSessionRepository()
+        self.recent_repository = RecentSessionRepository()
+        self.session_file: Path | None = None
         self.progress_file: Path | None = None
         self.boq_file: Path | None = None
         self.boq_sheet: str | None = None
@@ -31,6 +39,7 @@ class AmountMappingFrame(ttk.Frame):
         self.share_var = tk.StringVar(value="100")
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
+        self.session_status_var = tk.StringVar(value="Session: not saved")
         self._build()
 
     def _build(self) -> None:
@@ -70,6 +79,16 @@ class AmountMappingFrame(ttk.Frame):
             toolbar, text="Export mapped workbook...", command=self._export, state="disabled"
         )
         self.export_button.pack(side="left")
+        ttk.Button(toolbar, text="Load Session...", command=self._load_session).pack(side="left", padx=(8, 0))
+        self.save_session_button = ttk.Button(
+            toolbar, text="Save Session...", command=self._save_session, state="disabled"
+        )
+        self.save_session_button.pack(side="left", padx=(8, 0))
+        self.recent_session_button = ttk.Button(
+            toolbar, text="Recent Sessions...", command=self._load_recent_session
+        )
+        self.recent_session_button.pack(side="left", padx=(8, 0))
+        ttk.Label(toolbar, textvariable=self.session_status_var, foreground="#52606d").pack(side="left", padx=(12, 0))
         ttk.Label(toolbar, textvariable=self.summary_var).pack(side="right")
 
         body = ttk.Panedwindow(self, orient="horizontal")
@@ -129,6 +148,7 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Button(actions, text="Map selected", command=self._map).pack(side="left")
         ttk.Button(actions, text="Undo", command=self._undo).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Unmap selected", command=self._unmap).pack(side="left", padx=(8, 0))
+        ttk.Button(actions, text="Clear all", command=self._clear_all).pack(side="left", padx=(8, 0))
         ttk.Label(
             actions,
             text="Share applies to each selected BOQ item. Mapping the same BOQ/Activity again replaces that pair's share.",
@@ -167,6 +187,10 @@ class AmountMappingFrame(ttk.Frame):
         y.pack(side="right", fill="y")
         return tree
 
+    def _detach_session(self) -> None:
+        self.session_file = None
+        self.session_status_var.set("Session: not saved")
+
     def _browse_progress(self) -> None:
         selected = filedialog.askopenfilename(
             title="Select Progress workbook",
@@ -177,6 +201,7 @@ class AmountMappingFrame(ttk.Frame):
 
     def set_progress_workbook(self, path: Path) -> None:
         self.progress_file = Path(path)
+        self._detach_session()
         try:
             self._busy(True)
             rows = self.service.read_activities(self.progress_file)
@@ -200,6 +225,7 @@ class AmountMappingFrame(ttk.Frame):
         if not selected:
             return
         candidate = Path(selected)
+        self._detach_session()
         try:
             self._busy(True)
             sheet_names = self.service.list_boq_sheets(candidate)
@@ -235,6 +261,7 @@ class AmountMappingFrame(ttk.Frame):
             messagebox.showwarning("Amount Mapping", "Select a BOQ worksheet.")
             return
         try:
+            self._detach_session()
             self._busy(True)
             rows = self.service.read_boq(self.boq_file, sheet_name)
             self.boq_sheet = sheet_name
@@ -424,6 +451,7 @@ class AmountMappingFrame(ttk.Frame):
         try:
             change = self.store.map_selected(self.share_var.get())
             self._refresh_changed_rows(change)
+            self._autosave_session()
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
 
@@ -431,6 +459,7 @@ class AmountMappingFrame(ttk.Frame):
         try:
             change = self.store.unmap_selected()
             self._refresh_changed_rows(change)
+            self._autosave_session()
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
 
@@ -440,6 +469,20 @@ class AmountMappingFrame(ttk.Frame):
             messagebox.showinfo("Amount Mapping", "Nothing to undo.")
             return
         self._refresh_changed_rows(change)
+        self._autosave_session()
+
+    def _clear_all(self) -> None:
+        if not messagebox.askyesno(
+            "Amount Mapping",
+            "Clear every mapping? You can use Undo immediately after this command.",
+        ):
+            return
+        try:
+            change = self.store.clear_all()
+            self._refresh_changed_rows(change)
+            self._autosave_session()
+        except ValueError as exc:
+            messagebox.showinfo("Amount Mapping", str(exc))
 
     def _update_summary(self) -> None:
         total = self.store.total_amount
@@ -448,7 +491,144 @@ class AmountMappingFrame(ttk.Frame):
             f"Mapped {mapped:,.2f} / {total:,.2f} | Remaining {self.store.remaining_amount:,.2f} | "
             f"Items {self.store.mapped_item_count}/{len(self.store.boq_order)}"
         )
-        self.export_button.configure(state="normal" if self.progress_file and self.store.boq_order else "disabled")
+        ready = bool(self.progress_file and self.boq_file and self.boq_sheet and self.store.boq_order)
+        self.export_button.configure(state="normal" if ready else "disabled")
+        self.save_session_button.configure(state="normal" if ready else "disabled")
+
+    def _default_session_path(self) -> Path | None:
+        if not self.progress_file:
+            return None
+        return self.progress_file.with_name(self.progress_file.stem + ".mapping.json")
+
+    def _write_session(self, path: Path, show_message: bool) -> Path:
+        if not self.progress_file or not self.boq_file or not self.boq_sheet:
+            raise ValueError("Load the Progress workbook and BOQ worksheet first.")
+        session = self.session_repository.create(
+            self.progress_file,
+            self.boq_file,
+            self.boq_sheet,
+            self.store.allocation_records(),
+        )
+        saved = self.session_repository.save(path, session)
+        self.session_file = saved
+        self.recent_repository.remember(saved)
+        self.session_status_var.set(f"Session: {saved.name} (saved)")
+        if show_message:
+            messagebox.showinfo("Amount Mapping", f"Mapping session saved:\n{saved}")
+        return saved
+
+    def _save_session(self) -> None:
+        initial = self.session_file or self._default_session_path()
+        if initial is None:
+            messagebox.showwarning("Amount Mapping", "Load a Progress workbook first.")
+            return
+        selected = filedialog.asksaveasfilename(
+            title="Save mapping session",
+            defaultextension=".json",
+            initialfile=initial.name,
+            initialdir=str(initial.parent),
+            filetypes=[("Progress Studio mapping session", "*.json")],
+        )
+        if not selected:
+            return
+        try:
+            self._write_session(Path(selected), show_message=True)
+        except Exception as exc:
+            messagebox.showerror("Amount Mapping", str(exc))
+
+    def _autosave_session(self) -> None:
+        if self.session_file is None:
+            self.session_status_var.set("Session: unsaved changes")
+            return
+        try:
+            self._write_session(self.session_file, show_message=False)
+            self.session_status_var.set(f"Session: {self.session_file.name} (auto-saved)")
+        except Exception as exc:
+            self.session_status_var.set("Session: auto-save failed")
+            messagebox.showerror("Amount Mapping", f"Auto-save failed:\n{exc}")
+
+    def _choose_recent_session(self, paths: list[Path]) -> Path | None:
+        dialog = tk.Toplevel(self)
+        dialog.title("Recent Mapping Sessions")
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+        dialog.geometry("680x260")
+        selected: list[Path] = []
+        ttk.Label(dialog, text="Select a mapping session to continue:").pack(anchor="w", padx=12, pady=(12, 6))
+        box = tk.Listbox(dialog, height=8)
+        box.pack(fill="both", expand=True, padx=12)
+        for path in paths:
+            box.insert("end", str(path))
+        box.selection_set(0)
+
+        buttons = ttk.Frame(dialog)
+        buttons.pack(fill="x", padx=12, pady=12)
+        def open_selected() -> None:
+            indexes = box.curselection()
+            if indexes:
+                selected.append(paths[indexes[0]])
+                dialog.destroy()
+        ttk.Button(buttons, text="Open", command=open_selected).pack(side="right")
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(0, 8))
+        box.bind("<Double-1>", lambda _event: open_selected())
+        dialog.wait_window()
+        return selected[0] if selected else None
+
+    def _load_recent_session(self) -> None:
+        paths = self.recent_repository.list()
+        if not paths:
+            messagebox.showinfo("Amount Mapping", "No recent mapping sessions were found.")
+            return
+        selected = self._choose_recent_session(paths)
+        if selected:
+            self._restore_session(selected)
+
+    def _load_session(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="Load mapping session",
+            filetypes=[("Progress Studio mapping session", "*.json"), ("All files", "*.*")],
+        )
+        if selected:
+            self._restore_session(Path(selected))
+
+    def _restore_session(self, session_path: Path) -> None:
+        try:
+            self._busy(True)
+            session = self.session_repository.load(session_path)
+            progress_file = self.session_repository.validate_workbook(session.progress)
+            boq_file = self.session_repository.validate_workbook(session.boq)
+
+            activities = self.service.read_activities(progress_file)
+            sheet_names = self.service.list_boq_sheets(boq_file)
+            if session.boq_sheet not in sheet_names:
+                raise SessionValidationError(
+                    f"BOQ worksheet was not found: {session.boq_sheet}"
+                )
+            boq_rows = self.service.read_boq(boq_file, session.boq_sheet)
+
+            self.store.load_activities(activities)
+            self.store.load_boq(boq_rows)
+            self.store.restore_allocations(list(session.allocations))
+            self.progress_file = progress_file
+            self.boq_file = boq_file
+            self.boq_sheet = session.boq_sheet
+            self.progress_path_var.set(str(progress_file))
+            self.boq_path_var.set(str(boq_file))
+            self.boq_sheet_combo.configure(values=sheet_names, state="readonly")
+            self.boq_sheet_var.set(session.boq_sheet)
+            self.load_sheet_button.configure(state="normal")
+            self.session_file = Path(session_path).resolve()
+            self.recent_repository.remember(self.session_file)
+            self.session_status_var.set(f"Session: {self.session_file.name} (loaded)")
+            self._refresh_boq_filter_values()
+            self._render_activities()
+            self._render_boq()
+            self._update_summary()
+            self._update_input_status()
+        except (SessionValidationError, ValueError, OSError) as exc:
+            messagebox.showerror("Amount Mapping", str(exc))
+        finally:
+            self._busy(False)
 
     def _export(self) -> None:
         if not self.progress_file:
