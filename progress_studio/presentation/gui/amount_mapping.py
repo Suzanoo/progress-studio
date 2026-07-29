@@ -4,6 +4,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from progress_studio.domain.mapping_session import WorkbookFingerprint
 from progress_studio.services.boq_mapping_service import BOQMappingService
 from progress_studio.services.mapping_store import MappingStore
 from progress_studio.infrastructure.session import (
@@ -591,12 +592,38 @@ class AmountMappingFrame(ttk.Frame):
         if selected:
             self._restore_session(Path(selected))
 
+    def _resolve_session_workbook(
+        self, saved: WorkbookFingerprint, workbook_label: str
+    ) -> Path:
+        try:
+            return self.session_repository.validate_workbook(saved)
+        except SessionValidationError as original_error:
+            browse = messagebox.askyesno(
+                "Relink workbook",
+                f"{workbook_label} workbook cannot be verified at its saved location.\n\n"
+                f"Saved file: {saved.filename}\n\n"
+                "Browse for the moved or renamed workbook?\n"
+                "Only an identical workbook will be accepted.",
+            )
+            if not browse:
+                raise original_error
+            selected = filedialog.askopenfilename(
+                title=f"Relink {workbook_label} workbook",
+                initialfile=saved.filename,
+                filetypes=[("Excel workbook", "*.xlsx *.xlsm"), ("All files", "*.*")],
+            )
+            if not selected:
+                raise SessionValidationError(
+                    f"Relink cancelled for {workbook_label} workbook: {saved.filename}"
+                )
+            return self.session_repository.validate_workbook(saved, Path(selected))
+
     def _restore_session(self, session_path: Path) -> None:
         try:
             self._busy(True)
             session = self.session_repository.load(session_path)
-            progress_file = self.session_repository.validate_workbook(session.progress)
-            boq_file = self.session_repository.validate_workbook(session.boq)
+            progress_file = self._resolve_session_workbook(session.progress, "Progress")
+            boq_file = self._resolve_session_workbook(session.boq, "BOQ")
 
             activities = self.service.read_activities(progress_file)
             sheet_names = self.service.list_boq_sheets(boq_file)
