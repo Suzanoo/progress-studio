@@ -8,6 +8,10 @@ from progress_studio.domain.mapping_session import WorkbookFingerprint
 from progress_studio.services.boq_mapping_service import BOQMappingService
 from progress_studio.services.mapping_store import MappingStore
 from progress_studio.services.workbook_export_service import WorkbookExportService
+from progress_studio.infrastructure.layout_preferences import (
+    LayoutPreferences,
+    LayoutPreferencesRepository,
+)
 from progress_studio.infrastructure.session import (
     MappingSessionRepository,
     RecentSessionRepository,
@@ -43,63 +47,76 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.session_status_var = tk.StringVar(value="Session: not saved")
+        self.layout_repository = LayoutPreferencesRepository()
+        self.layout_preferences = self.layout_repository.load()
+        self.inputs_collapsed = self.layout_preferences.mapping_inputs_collapsed
         self._build()
+        self.after_idle(self._restore_mapping_sash)
+        self.bind("<Destroy>", self._on_destroy, add="+")
 
     def _build(self) -> None:
-        inputs = ttk.LabelFrame(self, text="Mapping Inputs", padding=8)
-        inputs.pack(fill="x", pady=(0, 8))
-        inputs.columnconfigure(1, weight=1)
+        inputs_header = ttk.Frame(self)
+        inputs_header.pack(fill="x", pady=(0, 4))
+        self.inputs_toggle_button = ttk.Button(
+            inputs_header, command=self._toggle_inputs, width=3
+        )
+        self.inputs_toggle_button.pack(side="left")
+        ttk.Label(inputs_header, text="Workbook Inputs", font=("Segoe UI", 10, "bold")).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Label(inputs_header, textvariable=self.input_status_var, foreground="#52606d").pack(
+            side="right"
+        )
 
-        ttk.Label(inputs, text="Progress workbook").grid(row=0, column=0, sticky="w")
-        ttk.Entry(inputs, textvariable=self.progress_path_var, state="readonly").grid(
+        self.inputs_frame = ttk.LabelFrame(self, text="Mapping Inputs", padding=8)
+        self.inputs_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(self.inputs_frame, text="Progress workbook").grid(row=0, column=0, sticky="w")
+        ttk.Entry(self.inputs_frame, textvariable=self.progress_path_var, state="readonly").grid(
             row=0, column=1, sticky="ew", padx=8
         )
-        ttk.Button(inputs, text="Load Progress...", command=self._browse_progress).grid(row=0, column=2)
+        ttk.Button(self.inputs_frame, text="Load Progress...", command=self._browse_progress).grid(row=0, column=2)
 
-        ttk.Label(inputs, text="BOQ workbook").grid(row=1, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(inputs, textvariable=self.boq_path_var, state="readonly").grid(
+        ttk.Label(self.inputs_frame, text="BOQ workbook").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(self.inputs_frame, textvariable=self.boq_path_var, state="readonly").grid(
             row=1, column=1, sticky="ew", padx=8, pady=(6, 0)
         )
-        ttk.Button(inputs, text="Load BOQ...", command=self._browse_boq).grid(row=1, column=2, pady=(6, 0))
+        ttk.Button(self.inputs_frame, text="Load BOQ...", command=self._browse_boq).grid(row=1, column=2, pady=(6, 0))
 
-        ttk.Label(inputs, text="BOQ worksheet").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(self.inputs_frame, text="BOQ worksheet").grid(row=2, column=0, sticky="w", pady=(6, 0))
         self.boq_sheet_combo = ttk.Combobox(
-            inputs, textvariable=self.boq_sheet_var, state="disabled", values=()
+            self.inputs_frame, textvariable=self.boq_sheet_var, state="disabled", values=()
         )
         self.boq_sheet_combo.grid(row=2, column=1, sticky="ew", padx=8, pady=(6, 0))
         self.load_sheet_button = ttk.Button(
-            inputs, text="Load selected sheet", command=self._load_selected_boq_sheet, state="disabled"
+            self.inputs_frame, text="Load selected sheet", command=self._load_selected_boq_sheet, state="disabled"
         )
         self.load_sheet_button.grid(row=2, column=2, pady=(6, 0))
 
-        ttk.Label(inputs, textvariable=self.input_status_var, foreground="#52606d").grid(
-            row=3, column=0, columnspan=3, sticky="w", pady=(7, 0)
-        )
-
         toolbar = ttk.Frame(self)
-        toolbar.pack(fill="x", pady=(0, 8))
+        toolbar.pack(fill="x", pady=(0, 6))
         self.export_button = ttk.Button(
-            toolbar, text="Export mapped workbook...", command=self._export, state="disabled"
+            toolbar, text="Export...", command=self._export, state="disabled"
         )
         self.export_button.pack(side="left")
-        ttk.Button(toolbar, text="Load Session...", command=self._load_session).pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar, text="Load Session...", command=self._load_session).pack(side="left", padx=(6, 0))
         self.save_session_button = ttk.Button(
             toolbar, text="Save Session...", command=self._save_session, state="disabled"
         )
-        self.save_session_button.pack(side="left", padx=(8, 0))
+        self.save_session_button.pack(side="left", padx=(6, 0))
         self.recent_session_button = ttk.Button(
-            toolbar, text="Recent Sessions...", command=self._load_recent_session
+            toolbar, text="Recent...", command=self._load_recent_session
         )
-        self.recent_session_button.pack(side="left", padx=(8, 0))
-        ttk.Label(toolbar, textvariable=self.session_status_var, foreground="#52606d").pack(side="left", padx=(12, 0))
+        self.recent_session_button.pack(side="left", padx=(6, 0))
+        ttk.Label(toolbar, textvariable=self.session_status_var, foreground="#52606d").pack(side="left", padx=(10, 0))
         ttk.Label(toolbar, textvariable=self.summary_var).pack(side="right")
 
-        body = ttk.Panedwindow(self, orient="horizontal")
-        body.pack(fill="both", expand=True)
-        left = ttk.Frame(body, padding=(0, 0, 6, 0))
-        right = ttk.Frame(body, padding=(6, 0, 0, 0))
-        body.add(left, weight=1)
-        body.add(right, weight=1)
+        self.body = ttk.Panedwindow(self, orient="horizontal")
+        self.body.pack(fill="both", expand=True)
+        left = ttk.Frame(self.body, padding=(0, 0, 6, 0))
+        right = ttk.Frame(self.body, padding=(6, 0, 0, 0))
+        self.body.add(left, weight=1)
+        self.body.add(right, weight=1)
 
         ttk.Label(left, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(anchor="w")
         self._build_search(left, self.activity_filter, self._apply_activity_filter)
@@ -107,7 +124,7 @@ class AmountMappingFrame(ttk.Frame):
             left,
             ("check", "id", "description", "amount"),
             ("✓", "Activity ID / WBS", "Description", "Amount"),
-            (38, 125, 330, 95),
+            (38, 125, 390, 105),
         )
         self.activity_tree.tag_configure("wbs_level_1", font=("Segoe UI", 9, "bold"))
         self.activity_tree.tag_configure("wbs_level_2", font=("Segoe UI", 9, "bold"))
@@ -119,11 +136,11 @@ class AmountMappingFrame(ttk.Frame):
         filter_row = ttk.Frame(right)
         filter_row.pack(fill="x", pady=(4, 4))
         ttk.Label(filter_row, text="WBS-2").pack(side="left")
-        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=20, values=("All",))
-        self.boq_wbs2_combo.pack(side="left", padx=(5, 10))
+        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=16, values=("All",))
+        self.boq_wbs2_combo.pack(side="left", padx=(5, 8))
         self.boq_wbs2_combo.bind("<<ComboboxSelected>>", self._on_wbs2_filter)
         ttk.Label(filter_row, text="WBS-3").pack(side="left")
-        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=20, values=("All",))
+        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=16, values=("All",))
         self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
         self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
@@ -137,26 +154,69 @@ class AmountMappingFrame(ttk.Frame):
                 "✓", "WBS-2", "WBS-3", "WBS-4", "Description",
                 "Amount", "Allocated", "Remaining %", "Status", "Mapped To",
             ),
-            (38, 90, 100, 100, 210, 88, 88, 88, 72, 85),
+            (38, 75, 85, 85, 310, 92, 92, 88, 72, 95),
         )
         self.boq_tree.bind("<Button-1>", self._boq_click)
         self._build_pager(right, self.boq_page_var, self._boq_prev, self._boq_next)
 
         actions = ttk.Frame(self)
-        actions.pack(fill="x", pady=(8, 0))
+        actions.pack(fill="x", pady=(6, 0))
         ttk.Label(actions, text="Share").pack(side="left")
-        share_entry = ttk.Entry(actions, textvariable=self.share_var, width=9, justify="right")
+        share_entry = ttk.Entry(actions, textvariable=self.share_var, width=8, justify="right")
         share_entry.pack(side="left", padx=(5, 2))
-        ttk.Label(actions, text="%").pack(side="left", padx=(0, 10))
-        ttk.Button(actions, text="Map selected", command=self._map).pack(side="left")
-        ttk.Button(actions, text="Undo", command=self._undo).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Unmap selected", command=self._unmap).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Clear all", command=self._clear_all).pack(side="left", padx=(8, 0))
+        ttk.Label(actions, text="%").pack(side="left", padx=(0, 8))
+        ttk.Button(actions, text="Map", command=self._map).pack(side="left")
+        ttk.Button(actions, text="Undo", command=self._undo).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Unmap", command=self._unmap).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Clear all", command=self._clear_all).pack(side="left", padx=(6, 0))
         ttk.Label(
             actions,
-            text="Share applies to each selected BOQ item. Mapping the same BOQ/Activity again replaces that pair's share.",
+            text="Share applies to every selected BOQ item.",
             foreground="#52606d",
-        ).pack(side="left", padx=(14, 0))
+        ).pack(side="left", padx=(12, 0))
+
+        self._set_inputs_collapsed(self.inputs_collapsed, persist=False)
+
+    def _toggle_inputs(self) -> None:
+        self._set_inputs_collapsed(not self.inputs_collapsed)
+
+    def _set_inputs_collapsed(self, collapsed: bool, persist: bool = True) -> None:
+        self.inputs_collapsed = collapsed
+        self.inputs_toggle_button.configure(text="▶" if collapsed else "▼")
+        if collapsed:
+            self.inputs_frame.pack_forget()
+        elif not self.inputs_frame.winfo_manager():
+            self.inputs_frame.pack(fill="x", after=self.inputs_toggle_button.master, pady=(0, 6))
+        if persist:
+            self._save_layout_preferences()
+
+    def _restore_mapping_sash(self) -> None:
+        if self.layout_preferences.mapping_sash is None:
+            return
+        try:
+            self.body.sashpos(0, self.layout_preferences.mapping_sash)
+        except tk.TclError:
+            pass
+
+    def _save_layout_preferences(self) -> None:
+        sash = None
+        try:
+            sash = self.body.sashpos(0)
+        except (AttributeError, tk.TclError):
+            pass
+        self.layout_preferences = LayoutPreferences(
+            mapping_inputs_collapsed=self.inputs_collapsed,
+            generator_collapsed=self.layout_preferences.generator_collapsed,
+            mapping_sash=sash,
+        )
+        try:
+            self.layout_repository.save(self.layout_preferences)
+        except OSError:
+            pass
+
+    def _on_destroy(self, event) -> None:
+        if event.widget is self:
+            self._save_layout_preferences()
 
     @staticmethod
     def _build_search(parent, variable: tk.StringVar, command) -> None:
@@ -225,6 +285,8 @@ class AmountMappingFrame(ttk.Frame):
             self._render_activities()
             self._update_summary()
             self._update_input_status()
+            if self.progress_file and self.boq_file and self.boq_sheet:
+                self._set_inputs_collapsed(True)
         except Exception as exc:
             self.progress_file = None
             self.progress_path_var.set("No Progress workbook loaded")
@@ -286,6 +348,7 @@ class AmountMappingFrame(ttk.Frame):
             self._render_activities()
             self._update_summary()
             self._update_input_status()
+            self._set_inputs_collapsed(True)
         except Exception as exc:
             messagebox.showerror("Amount Mapping", str(exc))
         finally:
@@ -666,6 +729,7 @@ class AmountMappingFrame(ttk.Frame):
             self._render_boq()
             self._update_summary()
             self._update_input_status()
+            self._set_inputs_collapsed(True)
         except (SessionValidationError, ValueError, OSError) as exc:
             messagebox.showerror("Amount Mapping", str(exc))
         finally:

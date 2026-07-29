@@ -14,6 +14,10 @@ from progress_studio.app.desktop import DesktopRunOptions, DesktopRunner
 from progress_studio.app.pipeline import PipelineEvent
 from progress_studio.config import SETTINGS
 from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
+from progress_studio.infrastructure.layout_preferences import (
+    LayoutPreferences,
+    LayoutPreferencesRepository,
+)
 
 
 STEP_LABELS = {
@@ -66,9 +70,15 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.status_var = tk.StringVar(value="Ready")
         self.step_var = tk.StringVar(value="Select a Primavera XML file to begin.")
         self.progress_var = tk.DoubleVar(value=0)
+        self.layout_repository = LayoutPreferencesRepository()
+        self.layout_preferences = self.layout_repository.load()
+        self.generator_collapsed = self.layout_preferences.generator_collapsed
 
         self._configure_style()
         self._build_ui()
+        self.after_idle(self._maximize_window)
+        self.after_idle(lambda: self._set_generator_collapsed(self.generator_collapsed, persist=False))
+        self.protocol("WM_DELETE_WINDOW", self._close_application)
         self.after(100, self._drain_messages)
 
     def _configure_style(self) -> None:
@@ -96,13 +106,22 @@ class ProgressStudioDesktopApp(tk.Tk):
             style="Subtitle.TLabel",
         ).pack(anchor="w", pady=(2, 18))
 
-        content = ttk.Panedwindow(root, orient="horizontal")
-        content.pack(fill="both", expand=True)
+        workspace_header = ttk.Frame(root)
+        workspace_header.pack(fill="x", pady=(0, 6))
+        self.focus_mapping_button = ttk.Button(
+            workspace_header, text="Focus Mapping", command=self._toggle_generator
+        )
+        self.focus_mapping_button.pack(side="right")
 
-        left = ttk.Frame(content, style="Card.TFrame", padding=20)
-        right = ttk.Frame(content, style="Card.TFrame", padding=20)
-        content.add(left, weight=5)
-        content.add(right, weight=4)
+        self.content = ttk.Panedwindow(root, orient="horizontal")
+        self.content.pack(fill="both", expand=True)
+
+        self.generator_panel = ttk.Frame(self.content, style="Card.TFrame", padding=20)
+        self.workspace_panel = ttk.Frame(self.content, style="Card.TFrame", padding=12)
+        self.content.add(self.generator_panel, weight=5)
+        self.content.add(self.workspace_panel, weight=6)
+        left = self.generator_panel
+        right = self.workspace_panel
 
         ttk.Label(left, text="1. Project input", style="Section.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
         ttk.Label(left, text="Primavera XML", style="Card.TLabel").grid(row=1, column=0, sticky="w")
@@ -163,6 +182,47 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.log.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         self._append_log("Progress Studio Desktop ready.\n")
+
+    def _maximize_window(self) -> None:
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            width = self.winfo_screenwidth()
+            height = self.winfo_screenheight()
+            self.geometry(f"{width}x{height}+0+0")
+
+    def _toggle_generator(self) -> None:
+        self._set_generator_collapsed(not self.generator_collapsed)
+
+    def _set_generator_collapsed(self, collapsed: bool, persist: bool = True) -> None:
+        self.generator_collapsed = collapsed
+        panes = set(self.content.panes())
+        generator_id = str(self.generator_panel)
+        if collapsed and generator_id in panes:
+            self.content.forget(self.generator_panel)
+        elif not collapsed and generator_id not in panes:
+            self.content.insert(0, self.generator_panel, weight=5)
+        self.focus_mapping_button.configure(
+            text="Show Generator" if collapsed else "Focus Mapping"
+        )
+        if persist:
+            self._save_layout_preferences()
+
+    def _save_layout_preferences(self) -> None:
+        current = self.layout_repository.load()
+        preferences = LayoutPreferences(
+            mapping_inputs_collapsed=current.mapping_inputs_collapsed,
+            generator_collapsed=self.generator_collapsed,
+            mapping_sash=current.mapping_sash,
+        )
+        try:
+            self.layout_repository.save(preferences)
+        except OSError:
+            pass
+
+    def _close_application(self) -> None:
+        self._save_layout_preferences()
+        self.destroy()
 
     def _browse_xml(self) -> None:
         selected = filedialog.askopenfilename(title="Select Primavera XML", filetypes=[("Primavera XML", "*.xml"), ("All files", "*.*")])
