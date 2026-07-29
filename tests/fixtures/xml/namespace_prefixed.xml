@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<p:Project xmlns:p="urn:sample:schedule"><p:Name>Namespaced</p:Name><p:Tasks>
+<p:Task><p:TaskName>Steel work</p:TaskName><p:PlanStart>2026-04-01T08:00:00Z</p:PlanStart><p:PlanFinish>2026-04-10T17:00:00Z</p:PlanFinish></p:Task>
+</p:Tasks></p:Project>

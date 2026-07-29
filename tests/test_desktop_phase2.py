@@ -43,7 +43,7 @@ class DesktopPhase2Tests(unittest.TestCase):
             source = Path(folder) / "project.xlsx"
             source.touch()
             runner = DesktopRunner(lambda method: Pipeline([]))
-            with self.assertRaisesRegex(ValueError, "Primavera XML"):
+            with self.assertRaisesRegex(ValueError, "XML schedule"):
                 runner.run(DesktopRunOptions(source, "5", 1000))
 
 

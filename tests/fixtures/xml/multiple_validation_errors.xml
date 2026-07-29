@@ -1,0 +1,4 @@
+<Project><Activities>
+<Activity><PlanStart>bad-date</PlanStart><PlanFinish>2026-03-02</PlanFinish></Activity>
+<Activity><ActivityName>Foundation</ActivityName><PlanStart>2026-03-03</PlanStart></Activity>
+</Activities></Project>

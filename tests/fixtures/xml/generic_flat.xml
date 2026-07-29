@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectName>Generic Flat Project</ProjectName>
+  <Activities>
+    <Activity><ActivityName>Excavation</ActivityName><PlannedStart>2026-03-01</PlannedStart><PlannedFinish>2026-03-05</PlannedFinish></Activity>
+    <Activity><ActivityName>Foundation</ActivityName><PlannedStart>2026-03-06T08:00:00</PlannedStart><PlannedFinish>2026-03-12T17:00:00</PlannedFinish></Activity>
+  </Activities>
+</Project>

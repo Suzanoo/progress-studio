@@ -1,0 +1,5 @@
+<Project><Name>Partial IDs</Name><Tasks>
+<Task><ActivityID>A1000</ActivityID><Name>Mobilization</Name><Start>2026-01-01</Start><Finish>2026-01-02</Finish></Task>
+<Task><Name>Survey</Name><Start>2026-01-03</Start><Finish>2026-01-04</Finish></Task>
+<Task><ActivityID>A1000</ActivityID><Name>Temporary works</Name><Start>2026-01-05</Start><Finish>2026-01-06</Finish></Task>
+</Tasks></Project>
