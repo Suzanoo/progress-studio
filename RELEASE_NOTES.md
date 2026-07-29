@@ -66,3 +66,11 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Added cascading WBS-2/WBS-3 BOQ filters.
 - Kept paginated, memory-backed mapping tables.
 - Added golden Progress and BOQ workbooks for regression testing.
+
+## V3 MS-3
+
+- Added the full-allocation BOQ-to-Activity mapping engine.
+- Added BOQ allocated amount, remaining amount, mapping status, and mapped Activity display.
+- Added exact single-command undo and unmap behavior.
+- Updated only affected visible rows after mapping commands.
+- Removed the unsafe Clear All action pending session recovery support.
