@@ -130,3 +130,19 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Allocation restoration validation.
 - Confirmed Clear All command with one-step Undo recovery.
 - `README_ROADMAP.md` and `COPILOT.md` for future developers and coding agents.
+
+## [2.1.3] - 2026-07-29
+
+### Fixed
+
+- Validate the required `main` worksheet and generated headers when loading Progress workbooks.
+- Update mapped Activity Amount values in `main` instead of treating `Amount Mapping` as the export source of truth.
+- Rebuild WBS and Project Summary Amount formulas in `main` and keep Actual-row Amount blank.
+- Reject exports whose Activity Amount total does not reconcile with the allocated BOQ amount.
+- Keep the Activity and BOQ table vertical scrollbars visible during resize.
+
+### Changed
+
+- Deferred S-Curve work outside the current V3 roadmap.
+- Replaced the former MS-7 S-Curve milestone with Mapping Workspace UX.
+- Added a user-manual TODO describing the Progress workbook contract.

@@ -29,7 +29,11 @@ Progress Studio maps BOQ cost items to Primavera Activities and exports a Progre
 19. Every behavior change requires tests.
 20. Preserve existing CLI and XML-to-workbook workflows unless the milestone explicitly replaces them.
 21. Do not add automatic BOQ detection; the user selects the worksheet.
-22. Do not embed expensive charts in the mapping screen. S-Curve generation is on demand in MS-7.
+22. Do not add S-Curve generation or embedded charts to the current V3 roadmap.
+23. A Progress workbook is valid only when worksheet `main` exists with the required generated headers. Do not guess renamed worksheet names.
+24. Export Activity Amount only into Plan Activity rows in `main`; downstream worksheets must remain formula-driven.
+25. Reconcile the total Activity Amount written to `main` with the allocated BOQ amount before replacing the destination workbook.
+26. Keep table scrollbars visible and do not replace them with heavy custom widgets or progress bars.
 23. Export must read from `MappingStore`, not Treeview rows.
 24. Never overwrite the loaded Progress workbook.
 25. Preserve the first eleven `BOQ Activity Mapping` columns unless an explicit migration is approved.

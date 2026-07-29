@@ -1,6 +1,6 @@
 # Progress Studio V3 Roadmap
 
-Progress Studio is a desktop workflow that connects Primavera schedule data with BOQ cost data, allocates BOQ amounts to Activities, exports a mapped Progress workbook, and generates reporting outputs.
+Progress Studio is a desktop workflow that connects Primavera schedule data with BOQ cost data, allocates BOQ amounts to Activities, and exports a mapped Progress workbook.
 
 ## End-to-end workflow
 
@@ -18,8 +18,6 @@ Allocate each BOQ item by percentage
 Save and resume the mapping session
     ↓
 Export mapped Progress workbook
-    ↓
-Generate S-Curve on demand
 ```
 
 ## Milestones
@@ -134,19 +132,39 @@ Hotfix completed on `fix/ms6-excel-export-validation`:
 - Added regression coverage for populated and empty mapping exports.
 - Consolidated milestone documentation under `docs/`.
 
-### MS-7 — On-demand S-Curve Generator
+### MS-6.2 — Main Amount Contract and Mapping Stabilization
 
-**Goal:** Generate the S-Curve only after real mapped amounts are available.
+**Goal:** Make the exported workbook update the real source-of-truth worksheet and strengthen the mapping workspace before adding new features.
+
+Completed:
+
+- Require a worksheet named exactly `main` when loading a Progress workbook.
+- Validate the required generated-workbook headers in `main`.
+- Update Plan Activity Amount in `main` by Activity ID during export.
+- Rebuild WBS and Project Summary Amount formulas from descendant Plan Activities.
+- Leave Actual-row Amount blank.
+- Reconcile the total written to `main` against the allocated BOQ amount.
+- Recheck the workbook contract immediately before export.
+- Keep visible vertical scrollbars on the Activity and BOQ tables.
+- Add the Progress workbook contract to the user-manual TODO list.
+
+Branch: `fix/ms6.2-main-amount-contract`
+
+### MS-7 — Mapping Workspace UX
+
+**Goal:** Give mapping work the largest practical screen area without adding heavy widgets.
 
 Planned:
 
-- Remove the permanently embedded S-Curve from the mapping workspace.
-- Add a `Generate S-Curve` action.
-- Generate weekly and monthly views from the current mapped workbook.
-- Allow generation from partial mapping only after explicit confirmation.
-- Keep chart generation separate from the mapping UI.
+- Collapsible workbook-input panel.
+- Compact session and export controls.
+- User-adjustable split panes for Activity and BOQ tables.
+- Maximized startup with normal Restore behavior.
+- Persist useful layout preferences such as divider position and collapsed state.
+- Keep summary and mapping controls compact.
+- No progress bars, embedded charts, or S-Curve feature in this milestone.
 
-Planned branch: `feat/ms7-scurve-generator`
+Planned branch: `feat/ms7-mapping-workspace-ux`
 
 ### MS-8 — Production Polish
 
@@ -173,7 +191,8 @@ Planned branch: `feat/ms8-production-polish`
 | MS-4 Share Allocation | Completed |
 | MS-5 Persistent Mapping Session | Completed and hardened |
 | MS-6 Final Workbook Export | Completed; Excel compatibility hotfix applied |
-| MS-7 On-demand S-Curve Generator | Planned |
+| MS-6.2 Main Amount Contract and Mapping Stabilization | Completed |
+| MS-7 Mapping Workspace UX | Planned |
 | MS-8 Production Polish | Planned |
 
 ## Architecture rules
