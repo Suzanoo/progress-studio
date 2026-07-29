@@ -28,6 +28,7 @@ class AmountMappingFrame(ttk.Frame):
         self.boq_wbs2_filter = tk.StringVar(value="All")
         self.boq_wbs3_filter = tk.StringVar(value="All")
         self.summary_var = tk.StringVar(value="Mapped 0.00 / 0.00 | Remaining 0.00 | Items 0/0")
+        self.share_var = tk.StringVar(value="100")
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self._build()
@@ -121,9 +122,18 @@ class AmountMappingFrame(ttk.Frame):
 
         actions = ttk.Frame(self)
         actions.pack(fill="x", pady=(8, 0))
+        ttk.Label(actions, text="Share").pack(side="left")
+        share_entry = ttk.Entry(actions, textvariable=self.share_var, width=9, justify="right")
+        share_entry.pack(side="left", padx=(5, 2))
+        ttk.Label(actions, text="%").pack(side="left", padx=(0, 10))
         ttk.Button(actions, text="Map selected", command=self._map).pack(side="left")
         ttk.Button(actions, text="Undo", command=self._undo).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Unmap selected", command=self._unmap).pack(side="left", padx=(8, 0))
+        ttk.Label(
+            actions,
+            text="Share applies to each selected BOQ item. Mapping the same BOQ/Activity again replaces that pair's share.",
+            foreground="#52606d",
+        ).pack(side="left", padx=(14, 0))
 
     @staticmethod
     def _build_search(parent, variable: tk.StringVar, command) -> None:
@@ -348,7 +358,7 @@ class AmountMappingFrame(ttk.Frame):
             f"{self.store.boq_allocated_amount(key):,.2f}",
             f"{self.store.boq_remaining_amount(key):,.2f}",
             self.store.boq_status(key).value,
-            self.store.assignments.get(key, ""),
+            self.store.mapped_to_text(key),
         )
 
     def _render_boq(self) -> None:
@@ -412,7 +422,7 @@ class AmountMappingFrame(ttk.Frame):
 
     def _map(self) -> None:
         try:
-            change = self.store.map_selected()
+            change = self.store.map_selected(self.share_var.get())
             self._refresh_changed_rows(change)
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
@@ -459,7 +469,7 @@ class AmountMappingFrame(ttk.Frame):
                 self.progress_file,
                 Path(selected),
                 list(self.store.boq_by_id.values()),
-                dict(self.store.assignments),
+                self.store.allocation_records(),
             )
             messagebox.showinfo("Amount Mapping", f"Mapped workbook created:\n{output}")
         except Exception as exc:

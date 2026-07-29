@@ -6,8 +6,11 @@ import shutil
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from progress_studio.domain.mapping_models import ActivityRow as ActivityRecord
-from progress_studio.domain.mapping_models import BOQRow as BOQRecord
+from progress_studio.domain.mapping_models import (
+    ActivityRow as ActivityRecord,
+    AllocationRecord,
+    BOQRow as BOQRecord,
+)
 from progress_studio.infrastructure.excel.mapping_reader import BOQSheetReader, ProgressActivityReader
 
 
@@ -20,7 +23,7 @@ def _headers(ws, row: int = 1) -> dict[str, int]:
 
 
 class BOQMappingService:
-    """Read mapping inputs efficiently and export a safe one-item-to-one-activity mapping."""
+    """Read mapping inputs efficiently and export percentage allocations."""
 
     def __init__(
         self,
@@ -44,7 +47,7 @@ class BOQMappingService:
         progress_file: Path,
         output_file: Path,
         boq_rows: list[BOQRecord],
-        assignments: dict[str, str],
+        allocations: list[AllocationRecord],
     ) -> Path:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(progress_file, output_file)
@@ -56,12 +59,13 @@ class BOQMappingService:
             amount_col = h["amount"]
             status_col = h.get("status")
 
-            totals: dict[str, float] = {}
             by_key = {row.key: row for row in boq_rows}
-            for key, activity_id in assignments.items():
-                row = by_key.get(key)
+            totals: dict[str, float] = {}
+            for allocation in allocations:
+                row = by_key.get(allocation.boq_key)
                 if row:
-                    totals[activity_id] = totals.get(activity_id, 0.0) + row.amount
+                    allocated = row.amount * allocation.share_percent / 100.0
+                    totals[allocation.activity_id] = totals.get(allocation.activity_id, 0.0) + allocated
 
             for r in range(2, ws_amount.max_row + 1):
                 aid = str(ws_amount.cell(r, aid_col).value or "").strip()
@@ -77,25 +81,36 @@ class BOQMappingService:
             ws = wb.create_sheet("BOQ Activity Mapping")
             headers = [
                 "Activity ID", "BOQ Key", "Source Sheet", "Source Row",
-                "WBS-2", "WBS-3", "WBS-4", "BOQ Description", "Amount",
+                "WBS-2", "WBS-3", "WBS-4", "BOQ Description", "BOQ Amount",
+                "Share %", "Allocated Amount",
             ]
             ws.append(headers)
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill("solid", fgColor="4472C4")
                 cell.alignment = Alignment(horizontal="center")
-            for row in boq_rows:
-                aid = assignments.get(row.key)
-                if not aid:
+
+            for allocation in allocations:
+                row = by_key.get(allocation.boq_key)
+                if not row:
                     continue
+                allocated = row.amount * allocation.share_percent / 100.0
                 ws.append([
-                    aid, row.key, row.source_sheet, row.source_row,
+                    allocation.activity_id, row.key, row.source_sheet, row.source_row,
                     row.wbs2, row.wbs3, row.wbs4, row.description, row.amount,
+                    allocation.share_percent / 100.0, allocated,
                 ])
-                ws.cell(ws.max_row, 9).number_format = "#,##0.00"
+                current = ws.max_row
+                ws.cell(current, 9).number_format = "#,##0.00"
+                ws.cell(current, 10).number_format = "0.00%"
+                ws.cell(current, 11).number_format = "#,##0.00"
+
             ws.freeze_panes = "A2"
-            ws.auto_filter.ref = f"A1:I{max(1, ws.max_row)}"
-            widths = {"A": 16, "B": 30, "C": 22, "D": 12, "E": 22, "F": 28, "G": 28, "H": 60, "I": 18}
+            ws.auto_filter.ref = f"A1:K{max(1, ws.max_row)}"
+            widths = {
+                "A": 16, "B": 30, "C": 22, "D": 12, "E": 22, "F": 28,
+                "G": 28, "H": 60, "I": 18, "J": 12, "K": 18,
+            }
             for col, width in widths.items():
                 ws.column_dimensions[col].width = width
             wb.calculation.calcMode = "auto"
