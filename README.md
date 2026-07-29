@@ -174,3 +174,11 @@ python main.py
 - `docs/acceptance/` — acceptance criteria for completed milestones.
 - `CHANGELOG.md` — release and hotfix history.
 - `COPILOT.md` — engineering rules for coding agents.
+
+
+## Project documentation
+
+- `README_ROADMAP.md` — milestone status and scope.
+- `ARCHITECTURE.md` — data flow, sources of truth, UI rules, and export contract.
+- `COPILOT.md` — implementation constraints for AI-assisted development.
+- `CHANGELOG.md` — release history.

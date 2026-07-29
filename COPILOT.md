@@ -99,3 +99,11 @@ Confirm the full suite passes and the working tree is clean.
 - Every mapped export must use Automatic calculation, Full Calculation on Load, Force Full Calculation, and `calcId = 0`.
 - Do not add hover tooltips, mouse-motion rendering, animation, or continuous Treeview repainting.
 - The embedded S-Curve preview is outside the current V3 scope.
+
+## Mapping workspace rules
+
+- Layout preferences may contain only presentation state, never Activity, BOQ, allocation, or session data.
+- Full BOQ rows must remain accessible after mapping; do not hide them automatically.
+- Do not add row tooltips, hover tracking, animation, flashing, or continuous repaint loops.
+- Prefer native PanedWindow, Treeview scrolling, and event-driven updates.
+- The generator panel and Workbook Inputs may be collapsed to prioritize mapping space.

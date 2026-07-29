@@ -170,17 +170,19 @@ Branch: `fix/ms6.3-recalculation-contract`
 
 **Goal:** Give mapping work the largest practical screen area without adding heavy widgets.
 
-Planned:
+Completed:
 
-- Collapsible workbook-input panel.
-- Compact session and export controls.
-- User-adjustable split panes for Activity and BOQ tables.
+- Collapsible Workbook Inputs panel with automatic collapse after loading.
+- Focus Mapping / Show Generator workspace toggle.
+- Compact session, export, mapping, and BOQ filter controls.
+- User-adjustable Activity and BOQ split pane.
 - Maximized startup with normal Restore behavior.
-- Persist useful layout preferences such as divider position and collapsed state.
-- Keep summary and mapping controls compact.
-- No progress bars, embedded charts, or S-Curve feature in this milestone.
+- Persist divider position and collapsed states in an optional layout preference file.
+- Wider Description columns and narrower WBS columns.
+- Full BOQ items remain visible and editable.
+- No tooltips, hover rendering, animation, progress bars, embedded charts, or S-Curve feature.
 
-Planned branch: `feat/ms7-mapping-workspace-ux`
+Branch: `feat/ms7-mapping-workspace-ux`
 
 ### MS-8 — Production Polish
 
@@ -209,7 +211,7 @@ Planned branch: `feat/ms8-production-polish`
 | MS-6 Final Workbook Export | Completed; Excel compatibility hotfix applied |
 | MS-6.2 Main Amount Contract and Mapping Stabilization | Completed |
 | MS-6.3 Excel Recalculation Contract | Completed |
-| MS-7 Mapping Workspace UX | Planned |
+| MS-7 Mapping Workspace UX | Completed |
 | MS-8 Production Polish | Planned |
 
 ## Architecture rules

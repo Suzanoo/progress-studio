@@ -147,6 +147,24 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Replaced the former MS-7 S-Curve milestone with Mapping Workspace UX.
 - Added a user-manual TODO describing the Progress workbook contract.
 
+## [2.2.0] - 2026-07-29
+
+### Added
+
+- Added a Focus Mapping workspace mode that collapses the Primavera generator panel.
+- Added collapsible Workbook Inputs with automatic collapse after loading.
+- Added optional persisted layout preferences for collapsed states and the mapping divider.
+- Added `ARCHITECTURE.md` and MS-7 milestone/acceptance documentation.
+
+### Changed
+
+- Start the desktop window maximized with a platform-safe fallback.
+- Compact mapping controls and allocate more table width to descriptions.
+
+### Performance
+
+- Added no hover tracking, row tooltips, animation, charts, or continuous repaint loops.
+
 ## [2.1.4] - 2026-07-29
 
 ### Fixed
