@@ -16,6 +16,7 @@ from progress_studio.domain.mapping_models import AllocationRecord, BOQRow
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
+from progress_studio.infrastructure.excel.calculation_policy import request_full_excel_recalculation
 
 CURRENCY_FORMAT = '#,##0.00'
 PERCENT_FORMAT = '0.00%'
@@ -88,9 +89,7 @@ class MappedWorkbookExporter:
                 self._write_amount_mapping(workbook, totals)
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
-                workbook.calculation.calcMode = 'auto'
-                workbook.calculation.fullCalcOnLoad = True
-                workbook.calculation.forceFullCalc = True
+                request_full_excel_recalculation(workbook)
                 workbook.save(temp_file)
             finally:
                 workbook.close()

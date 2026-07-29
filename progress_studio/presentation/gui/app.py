@@ -13,9 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 from progress_studio.app.desktop import DesktopRunOptions, DesktopRunner
 from progress_studio.app.pipeline import PipelineEvent
 from progress_studio.config import SETTINGS
-from progress_studio.presentation.gui.scurve_chart import SCurveChart
 from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
-from progress_studio.services.scurve_service import SCurveService
 
 
 STEP_LABELS = {
@@ -51,7 +49,6 @@ class ProgressStudioDesktopApp(tk.Tk):
     def __init__(self, runner: DesktopRunner | None = None) -> None:
         super().__init__()
         self.runner = runner or DesktopRunner()
-        self.scurve_service = SCurveService()
         self.messages: queue.Queue[tuple[str, object]] = queue.Queue()
         self.worker: threading.Thread | None = None
         self.output_file: Path | None = None
@@ -150,15 +147,11 @@ class ProgressStudioDesktopApp(tk.Tk):
         details = ttk.Notebook(right)
         details.pack(fill="both", expand=True)
 
-        chart_tab = ttk.Frame(details, padding=6)
         log_tab = ttk.Frame(details, padding=6)
         mapping_tab = ttk.Frame(details, padding=0)
-        details.add(chart_tab, text="S-Curve")
         details.add(log_tab, text="Activity log")
         details.add(mapping_tab, text="Amount Mapping")
 
-        self.scurve_chart = SCurveChart(chart_tab)
-        self.scurve_chart.pack(fill="both", expand=True)
         self.amount_mapping = AmountMappingFrame(mapping_tab)
         self.amount_mapping.pack(fill="both", expand=True)
 
@@ -198,7 +191,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.open_file_button.configure(state="disabled")
         self.open_folder_button.configure(state="disabled")
         self.log.delete("1.0", "end")
-        self.scurve_chart.show_empty("Generating the latest S-curve...")
         self._append_log(f"INPUT : {xml}\n")
         self._append_log(f"CUTOFF: {cutoff}\n")
         self._append_log(f"DISTRIBUTION: {options.distribution_method}\n\n")
@@ -254,12 +246,9 @@ class ProgressStudioDesktopApp(tk.Tk):
             self.open_file_button.configure(state="normal")
             self._append_log(f"\nCOMPLETED: {self.output_file}\n")
             try:
-                self.scurve_chart.render(self.scurve_service.read(self.output_file))
                 self.amount_mapping.set_progress_workbook(self.output_file)
-                self._append_log("S-CURVE: Preview updated.\n")
             except Exception as exc:
-                self.scurve_chart.show_empty(f"S-curve preview unavailable.\n{exc}")
-                self._append_log(f"S-CURVE WARNING: {exc}\n")
+                self._append_log(f"MAPPING WARNING: {exc}\n")
         if project_folder:
             self.project_folder = Path(project_folder)
             self.open_folder_button.configure(state="normal")
@@ -269,7 +258,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.status_var.set("Failed")
         self.step_var.set("Pipeline stopped. Review the activity log.")
         self.run_button.configure(state="normal")
-        self.scurve_chart.show_empty("S-curve was not updated because the pipeline failed.")
         self._append_log(f"\nERROR: {error}\n")
         messagebox.showerror("Progress Studio", str(error))
 
