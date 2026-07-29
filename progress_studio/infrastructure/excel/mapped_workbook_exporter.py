@@ -145,7 +145,7 @@ class MappedWorkbookExporter:
             allocated = row.amount * allocation.share_percent / 100.0
             mapping_id = f'MAP-{index:06d}'
             ws.append([
-                mapping_id, allocation.activity_id, row.stable_id, row.key, row.source_sheet,
+                mapping_id, allocation.activity_id, row.stable_id or row.key, row.key, row.source_sheet,
                 row.source_row, row.wbs2, row.wbs3, row.wbs4, row.description,
                 row.amount, allocation.share_percent / 100.0, allocated,
             ])

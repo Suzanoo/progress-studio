@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 from progress_studio.domain.mapping_session import WorkbookFingerprint
 from progress_studio.services.boq_mapping_service import BOQMappingService
 from progress_studio.services.mapping_store import MappingStore
+from progress_studio.services.workbook_export_service import WorkbookExportService
 from progress_studio.infrastructure.session import (
     MappingSessionRepository,
     RecentSessionRepository,
@@ -23,6 +24,7 @@ class AmountMappingFrame(ttk.Frame):
         self.service = service or BOQMappingService()
         self.store = MappingStore(self.ACTIVITY_PAGE_SIZE, self.BOQ_PAGE_SIZE)
         self.session_repository = MappingSessionRepository()
+        self.export_service = WorkbookExportService()
         self.recent_repository = RecentSessionRepository()
         self.session_file: Path | None = None
         self.progress_file: Path | None = None
@@ -661,6 +663,27 @@ class AmountMappingFrame(ttk.Frame):
         if not self.progress_file:
             messagebox.showwarning("Amount Mapping", "Load a Progress workbook first.")
             return
+        try:
+            validation = self.export_service.validate(self.store)
+        except ValueError as exc:
+            messagebox.showerror("Export mapped workbook", str(exc))
+            return
+
+        summary = (
+            f"Allocated: {validation.allocated_amount:,.2f} / {validation.total_boq_amount:,.2f} "
+            f"({validation.allocated_percent:.2f}%)\n"
+            f"Full BOQ items: {validation.full_boq_count}\n"
+            f"Partial BOQ items: {validation.partial_boq_count}\n"
+            f"Unmapped BOQ items: {validation.unmapped_boq_count}"
+        )
+        if not validation.is_complete:
+            proceed = messagebox.askyesno(
+                "Export partial mapping?",
+                summary + "\n\nThe mapping is incomplete. Export the partial workbook anyway?",
+            )
+            if not proceed:
+                return
+
         initial = self.progress_file.with_name(self.progress_file.stem + "_mapped.xlsx")
         selected = filedialog.asksaveasfilename(
             title="Export mapped Progress workbook",
@@ -668,16 +691,22 @@ class AmountMappingFrame(ttk.Frame):
             initialfile=initial.name,
             initialdir=str(initial.parent),
             filetypes=[("Excel workbook", "*.xlsx")],
+            confirmoverwrite=True,
         )
         if not selected:
             return
         try:
-            output = self.service.export(
-                self.progress_file,
-                Path(selected),
-                list(self.store.boq_by_id.values()),
-                self.store.allocation_records(),
+            self._busy(True)
+            result = self.export_service.export(
+                self.progress_file, Path(selected), self.store, overwrite=True
             )
-            messagebox.showinfo("Amount Mapping", f"Mapped workbook created:\n{output}")
+            messagebox.showinfo(
+                "Export complete",
+                f"Mapped workbook created:\n{result.output_file}\n\n"
+                f"Amount rows updated: {result.amount_rows_updated}\n"
+                f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}",
+            )
         except Exception as exc:
-            messagebox.showerror("Amount Mapping", str(exc))
+            messagebox.showerror("Export mapped workbook", str(exc))
+        finally:
+            self._busy(False)
