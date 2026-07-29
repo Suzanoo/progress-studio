@@ -21,7 +21,7 @@ from progress_studio.infrastructure.layout_preferences import (
 
 
 STEP_LABELS = {
-    "import-primavera-xml": "Import Primavera XML",
+    "import-schedule-xml": "Import Schedule XML",
     "prepare-plan-actual-schedule": "Prepare plan / actual schedule",
     "build-timescale": "Build weekly timescale",
     "build-and-apply-amounts": "Build amount mapping",
@@ -68,7 +68,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.amount_var = tk.StringVar(value=f"{SETTINGS.default_activity_amount:.0f}")
         self.distribution_var = tk.StringVar(value="auto")
         self.status_var = tk.StringVar(value="Ready")
-        self.step_var = tk.StringVar(value="Select a Primavera XML file to begin.")
+        self.step_var = tk.StringVar(value="Select an XML schedule file to begin.")
         self.progress_var = tk.DoubleVar(value=0)
         self.layout_repository = LayoutPreferencesRepository()
         self.layout_preferences = self.layout_repository.load()
@@ -102,7 +102,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         ttk.Label(root, text="Progress Studio", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             root,
-            text="Desktop workflow for Primavera XML → Progress workbook → OKD",
+            text="Desktop workflow for Schedule XML → Progress workbook → OKD",
             style="Subtitle.TLabel",
         ).pack(anchor="w", pady=(2, 18))
 
@@ -124,7 +124,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         right = self.workspace_panel
 
         ttk.Label(left, text="1. Project input", style="Section.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
-        ttk.Label(left, text="Primavera XML", style="Card.TLabel").grid(row=1, column=0, sticky="w")
+        ttk.Label(left, text="Schedule XML", style="Card.TLabel").grid(row=1, column=0, sticky="w")
         entry = ttk.Entry(left, textvariable=self.xml_var)
         entry.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 5))
         ttk.Button(left, text="Browse...", command=self._browse_xml).grid(row=2, column=2, padx=(8, 0))

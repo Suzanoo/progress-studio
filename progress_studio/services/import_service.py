@@ -3,12 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from progress_studio.infrastructure.excel import ImportWorkbookWriter
-from progress_studio.infrastructure.primavera import PrimaveraXmlReader
+from progress_studio.infrastructure.schedule_xml import ScheduleXmlReader
 from progress_studio.services.schedule_service import ScheduleService
 
 
 class ImportService:
-    def __init__(self, reader: PrimaveraXmlReader, schedule_service: ScheduleService, writer: ImportWorkbookWriter) -> None:
+    def __init__(self, reader: ScheduleXmlReader, schedule_service: ScheduleService, writer: ImportWorkbookWriter) -> None:
         self._reader = reader
         self._schedule_service = schedule_service
         self._writer = writer

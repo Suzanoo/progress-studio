@@ -9,7 +9,7 @@ from progress_studio.services.import_service import ImportService
 
 
 class ImportStep:
-    name = "import-primavera-xml"
+    name = "import-schedule-xml"
 
     def __init__(self, service: ImportService) -> None:
         self._service = service
@@ -22,7 +22,7 @@ class ImportStep:
         output_folder = context.working_folder / "01_import"
         output_file = output_folder / f"{project_name}_imported.xlsx"
         print("\n" + "=" * 72)
-        print("[1/8] Import Primavera XML")
+        print("[1/8] Import Schedule XML")
         print("=" * 72)
         print(f"INPUT  : {context.source_xml}")
         print(f"OUTPUT : {output_file}")

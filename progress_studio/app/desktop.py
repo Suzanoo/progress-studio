@@ -8,7 +8,7 @@ from progress_studio.app.context import PipelineContext
 from progress_studio.app.pipeline import Pipeline, PipelineEvent
 from progress_studio.config import SETTINGS
 from progress_studio.infrastructure.excel import ImportWorkbookWriter
-from progress_studio.infrastructure.primavera import PrimaveraXmlReader
+from progress_studio.infrastructure.schedule_xml import ScheduleXmlReader
 from progress_studio.pipeline.amount_step import AmountStep
 from progress_studio.pipeline.distribution_step import DistributionStep
 from progress_studio.pipeline.import_step import ImportStep
@@ -48,9 +48,9 @@ class DesktopRunner:
     ) -> PipelineContext:
         source = options.source_xml.expanduser().resolve()
         if not source.is_file():
-            raise FileNotFoundError(f"Primavera XML file not found: {source}")
+            raise FileNotFoundError(f"Schedule XML file not found: {source}")
         if source.suffix.lower() != ".xml":
-            raise ValueError("Input file must be a Primavera XML file.")
+            raise ValueError("Input file must be an XML schedule file.")
         if options.cutoff_day not in {"1", "2", "3", "4", "5", "6", "7"}:
             raise ValueError("Cutoff day must be between 1 and 7.")
         if options.amount_per_activity <= 0:
@@ -67,7 +67,7 @@ class DesktopRunner:
 def build_desktop_pipeline(distribution_method: str = "auto") -> Pipeline:
     schedule_service = ScheduleService()
     import_service = ImportService(
-        PrimaveraXmlReader(), schedule_service, ImportWorkbookWriter()
+        ScheduleXmlReader(), schedule_service, ImportWorkbookWriter()
     )
     return Pipeline(
         [
