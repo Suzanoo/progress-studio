@@ -131,9 +131,9 @@ class MappedWorkbookExporter:
         _safe_remove_sheet(workbook, MAPPING_SHEET)
         ws = workbook.create_sheet(MAPPING_SHEET)
         headers = [
-            'Mapping ID', 'Activity ID', 'BOQ ID', 'BOQ Key', 'Source Sheet', 'Source Row',
+            'Activity ID', 'BOQ Key', 'Source Sheet', 'Source Row',
             'WBS-2', 'WBS-3', 'WBS-4', 'BOQ Description', 'BOQ Amount',
-            'Share %', 'Allocated Amount',
+            'Share %', 'Allocated Amount', 'Mapping ID', 'BOQ ID',
         ]
         ws.append(headers)
         _style_header(ws)
@@ -145,18 +145,18 @@ class MappedWorkbookExporter:
             allocated = row.amount * allocation.share_percent / 100.0
             mapping_id = f'MAP-{index:06d}'
             ws.append([
-                mapping_id, allocation.activity_id, row.stable_id or row.key, row.key, row.source_sheet,
-                row.source_row, row.wbs2, row.wbs3, row.wbs4, row.description,
-                row.amount, allocation.share_percent / 100.0, allocated,
+                allocation.activity_id, row.key, row.source_sheet, row.source_row,
+                row.wbs2, row.wbs3, row.wbs4, row.description, row.amount,
+                allocation.share_percent / 100.0, allocated, mapping_id, row.stable_id or row.key,
             ])
             current = ws.max_row
+            ws.cell(current, 9).number_format = CURRENCY_FORMAT
+            ws.cell(current, 10).number_format = PERCENT_FORMAT
             ws.cell(current, 11).number_format = CURRENCY_FORMAT
-            ws.cell(current, 12).number_format = PERCENT_FORMAT
-            ws.cell(current, 13).number_format = CURRENCY_FORMAT
 
         ws.freeze_panes = 'A2'
         ws.auto_filter.ref = f'A1:M{max(1, ws.max_row)}'
-        widths = [16, 16, 20, 32, 22, 12, 22, 28, 28, 60, 18, 12, 18]
+        widths = [16, 32, 22, 12, 22, 28, 28, 60, 18, 12, 18, 16, 20]
         for index, width in enumerate(widths, start=1):
             ws.column_dimensions[ws.cell(1, index).column_letter].width = width
         if ws.max_row >= 2:
