@@ -87,3 +87,15 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Changed the BOQ table `Remaining` display from money to remaining allocation percentage.
 - Kept `Amount` and `Allocated` as monetary values.
 - Added store-level percentage calculation and tests.
+
+## V3 MS-5 — Persistent Mapping Session
+
+### Added
+
+- Atomic JSON mapping-session persistence.
+- Save Session, Load Session, and Recent Sessions desktop actions.
+- Auto-save after mapping changes once a session has been saved.
+- SHA-256 validation of Progress and BOQ workbooks during restore.
+- Allocation restoration validation.
+- Confirmed Clear All command with one-step Undo recovery.
+- `README_ROADMAP.md` and `COPILOT.md` for future developers and coding agents.

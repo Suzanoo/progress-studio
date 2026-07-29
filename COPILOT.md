@@ -1,0 +1,65 @@
+# Copilot Instructions — Progress Studio
+
+Read `README_ROADMAP.md`, the current milestone README, and the relevant tests before editing code.
+
+## Project purpose
+
+Progress Studio maps BOQ cost items to Primavera Activities and exports a Progress workbook. Correct allocation, recoverability, workbook compatibility, and desktop performance are more important than adding convenience features.
+
+## Non-negotiable rules
+
+1. Do not make Tkinter widgets the source of truth.
+2. Keep mapping data in `MappingStore` and domain records.
+3. Do not read Treeview rows to calculate, save, or export data.
+4. Do not keep Excel workbooks open after loading.
+5. Use `read_only=True` and `iter_rows(values_only=True)` for input readers when practical.
+6. Do not render every Activity or BOQ item at once; preserve pagination.
+7. Do not create thousands of Checkbutton widgets; use the text checkbox columns.
+8. Update only affected visible rows after mapping commands.
+9. Do not change required workbook column names without an explicit migration plan and tests.
+10. BOQ identity must use its stable key/source metadata, never Description alone.
+11. Activity identity is `Activity ID`.
+12. A BOQ item may be split among Activities, but its total allocation must not exceed 100%.
+13. `Amount` and `Allocated` are money; BOQ `Remaining` in the GUI is a percentage.
+14. Session files must be written atomically.
+15. Validate source workbooks before restoring saved allocations.
+16. GUI code must not contain allocation business rules that belong in services/domain code.
+17. Every behavior change requires tests.
+18. Preserve existing CLI and XML-to-workbook workflows unless the milestone explicitly replaces them.
+19. Do not add automatic BOQ detection; the user selects the worksheet.
+20. Do not embed expensive charts in the mapping screen. S-Curve generation is on demand in MS-7.
+
+## Git and milestone discipline
+
+- One milestone uses one dedicated branch.
+- Start from the previous completed milestone branch.
+- Use focused commits for domain/infrastructure, UI, tests, and documentation.
+- Keep `.git` in delivered project archives.
+- Run the full test suite before delivery.
+- `git status` must be clean.
+- Update `README_ROADMAP.md`, the milestone README, and `RELEASE_NOTES.md`.
+
+## MS-5 session contract
+
+A mapping session stores:
+
+- format and schema version;
+- saved timestamp;
+- Progress workbook path and fingerprint;
+- BOQ workbook path and fingerprint;
+- selected BOQ worksheet;
+- BOQ key, Activity ID, and Share percentage for each allocation.
+
+A mapping session does not store copied workbook rows. On load, the application validates and reads the original workbooks, then restores allocations into `MappingStore`.
+
+## Before completing a change
+
+Run:
+
+```powershell
+pytest -q
+git status
+git log --oneline --decorate -10
+```
+
+Confirm the full suite passes and the working tree is clean.
