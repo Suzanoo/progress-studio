@@ -49,74 +49,29 @@ class BOQMappingService:
         boq_rows: list[BOQRecord],
         allocations: list[AllocationRecord],
     ) -> Path:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(progress_file, output_file)
-        wb = load_workbook(output_file)
-        try:
-            ws_amount = wb["Amount Mapping"]
-            h = _headers(ws_amount)
-            aid_col = h["activity id"]
-            amount_col = h["amount"]
-            status_col = h.get("status")
+        """Compatibility wrapper; new GUI uses WorkbookExportService."""
+        from progress_studio.domain.export_models import ExportValidation
+        from progress_studio.infrastructure.excel.mapped_workbook_exporter import MappedWorkbookExporter
 
-            by_key = {row.key: row for row in boq_rows}
-            totals: dict[str, float] = {}
-            for allocation in allocations:
-                row = by_key.get(allocation.boq_key)
-                if row:
-                    allocated = row.amount * allocation.share_percent / 100.0
-                    totals[allocation.activity_id] = totals.get(allocation.activity_id, 0.0) + allocated
-
-            for r in range(2, ws_amount.max_row + 1):
-                aid = str(ws_amount.cell(r, aid_col).value or "").strip()
-                if not aid:
-                    continue
-                ws_amount.cell(r, amount_col).value = totals.get(aid, 0.0)
-                ws_amount.cell(r, amount_col).number_format = "#,##0.00"
-                if status_col:
-                    ws_amount.cell(r, status_col).value = "MAPPED" if aid in totals else "UNMAPPED"
-
-            if "BOQ Activity Mapping" in wb.sheetnames:
-                del wb["BOQ Activity Mapping"]
-            ws = wb.create_sheet("BOQ Activity Mapping")
-            headers = [
-                "Activity ID", "BOQ Key", "Source Sheet", "Source Row",
-                "WBS-2", "WBS-3", "WBS-4", "BOQ Description", "BOQ Amount",
-                "Share %", "Allocated Amount",
-            ]
-            ws.append(headers)
-            for cell in ws[1]:
-                cell.font = Font(bold=True, color="FFFFFF")
-                cell.fill = PatternFill("solid", fgColor="4472C4")
-                cell.alignment = Alignment(horizontal="center")
-
-            for allocation in allocations:
-                row = by_key.get(allocation.boq_key)
-                if not row:
-                    continue
-                allocated = row.amount * allocation.share_percent / 100.0
-                ws.append([
-                    allocation.activity_id, row.key, row.source_sheet, row.source_row,
-                    row.wbs2, row.wbs3, row.wbs4, row.description, row.amount,
-                    allocation.share_percent / 100.0, allocated,
-                ])
-                current = ws.max_row
-                ws.cell(current, 9).number_format = "#,##0.00"
-                ws.cell(current, 10).number_format = "0.00%"
-                ws.cell(current, 11).number_format = "#,##0.00"
-
-            ws.freeze_panes = "A2"
-            ws.auto_filter.ref = f"A1:K{max(1, ws.max_row)}"
-            widths = {
-                "A": 16, "B": 30, "C": 22, "D": 12, "E": 22, "F": 28,
-                "G": 28, "H": 60, "I": 18, "J": 12, "K": 18,
-            }
-            for col, width in widths.items():
-                ws.column_dimensions[col].width = width
-            wb.calculation.calcMode = "auto"
-            wb.calculation.fullCalcOnLoad = True
-            wb.calculation.forceFullCalc = True
-            wb.save(output_file)
-            return output_file
-        finally:
-            wb.close()
+        by_key = {row.key: row for row in boq_rows}
+        allocated = sum(
+            by_key[item.boq_key].amount * item.share_percent / 100.0
+            for item in allocations if item.boq_key in by_key
+        )
+        shares: dict[str, float] = {}
+        for item in allocations:
+            shares[item.boq_key] = shares.get(item.boq_key, 0.0) + item.share_percent
+        total = sum(row.amount for row in boq_rows)
+        validation = ExportValidation(
+            activity_count=0, boq_count=len(boq_rows), allocation_count=len(allocations),
+            mapped_activity_count=len({item.activity_id for item in allocations}),
+            mapped_boq_count=sum(value > 1e-9 for value in shares.values()),
+            full_boq_count=sum(value >= 100.0 - 1e-9 for value in shares.values()),
+            partial_boq_count=sum(1e-9 < value < 100.0 - 1e-9 for value in shares.values()),
+            unmapped_boq_count=sum(row.key not in shares for row in boq_rows),
+            total_boq_amount=total, allocated_amount=allocated, remaining_amount=max(0.0, total - allocated),
+        )
+        result = MappedWorkbookExporter().export(
+            progress_file, output_file, boq_rows, allocations, validation, overwrite=True
+        )
+        return result.output_file

@@ -31,6 +31,7 @@ class BOQRow:
     wbs4: str
     description: str
     amount: float
+    stable_id: str = ""
 
     @property
     def search_text(self) -> str:

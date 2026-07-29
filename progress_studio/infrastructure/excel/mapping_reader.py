@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 from typing import Iterable
 
 from openpyxl import load_workbook
@@ -40,6 +41,16 @@ def _wbs_parent_child(wbs: str) -> tuple[str, str]:
     if len(parts) <= 1:
         return "", value
     return ".".join(parts[:-1]), value
+
+
+
+def _stable_boq_id(source_sheet: str, source_row: int, wbs2: str, wbs3: str, wbs4: str, description: str) -> str:
+    identity = "|".join((
+        source_sheet.strip().lower(), str(source_row), wbs2.strip().lower(),
+        wbs3.strip().lower(), wbs4.strip().lower(), description.strip().lower(),
+    ))
+    digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12].upper()
+    return f"BOQ-{digest}"
 
 
 def _ancestor_codes(wbs: str) -> tuple[str, ...]:
@@ -139,17 +150,22 @@ class BOQSheetReader:
                     source_row = int(raw_source_row)
                 except (TypeError, ValueError):
                     source_row = excel_row
+                wbs2 = _text(values[headers["wbs-2"]])
+                wbs3 = _text(values[headers["wbs-3"]])
+                wbs4 = _text(values[headers["wbs-4"]])
+                description = _text(values[headers["description"]])
                 key = f"{source_sheet}|{source_row}|{excel_row}"
                 result.append(
                     BOQRow(
                         key=key,
                         source_sheet=source_sheet,
                         source_row=source_row,
-                        wbs2=_text(values[headers["wbs-2"]]),
-                        wbs3=_text(values[headers["wbs-3"]]),
-                        wbs4=_text(values[headers["wbs-4"]]),
-                        description=_text(values[headers["description"]]),
+                        wbs2=wbs2,
+                        wbs3=wbs3,
+                        wbs4=wbs4,
+                        description=description,
                         amount=amount,
+                        stable_id=_stable_boq_id(source_sheet, source_row, wbs2, wbs3, wbs4, description),
                     )
                 )
             return result
