@@ -182,3 +182,7 @@ python main.py
 - `ARCHITECTURE.md` — data flow, sources of truth, UI rules, and export contract.
 - `COPILOT.md` — implementation constraints for AI-assisted development.
 - `CHANGELOG.md` — release history.
+
+## Schedule XML contract
+
+Progress Studio accepts schedule XML when every activity contains **Activity Name**, **Plan Start**, and **Plan Finish**. Import stops without creating a workbook when any required value is missing or invalid. Activity ID and WBS are optional; deterministic IDs and a flat hierarchy are created when necessary.

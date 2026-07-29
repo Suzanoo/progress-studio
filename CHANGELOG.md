@@ -180,3 +180,19 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 ### Documented
 
 - Clarify that Activity weekly percentages are manual distribution inputs, while WBS and Project Summary percentages are amount-weighted formulas.
+
+## [2.3.0] - 2026-07-29
+
+### Added
+
+- Source-independent Schedule XML reader with namespace-safe field resolution.
+- Strict Activity Name, Plan Start, and Plan Finish import contract.
+- Aggregated validation errors that stop processing before workbook creation.
+- Deterministic generated Activity IDs when source IDs are unavailable.
+- Generic, namespace, Unicode, missing-field, malformed XML, and regression fixtures.
+
+### Changed
+
+- Renamed the desktop input from Primavera XML to Schedule XML.
+- Kept the former `PrimaveraXmlReader` as a compatibility adapter.
+- Isolated XML parsing and validation from the existing workbook, mapping, session, and export pipeline.

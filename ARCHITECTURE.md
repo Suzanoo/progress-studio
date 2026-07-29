@@ -58,3 +58,22 @@ Final mapped workbook
 ```
 
 A failed validation must not replace an existing destination workbook.
+
+## Schedule XML import contract
+
+Schedule XML is normalized before the workbook pipeline. The downstream schedule,
+mapping, session, and export services remain source-independent.
+
+Every non-summary activity must resolve these fields:
+
+- Activity Name
+- Plan Start
+- Plan Finish
+
+If any required value is missing, invalid, or Plan Finish is earlier than Plan Start,
+the importer reports all detected issues and stops before creating a workbook.
+
+Activity ID and WBS are optional. Missing Activity IDs are generated deterministically
+as `ACT-000001`, `ACT-000002`, and so on. Missing hierarchy is represented as a flat
+activity structure. Existing Microsoft Project / P6-exported XML remains supported
+through the same normalized reader.
