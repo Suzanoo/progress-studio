@@ -1,14 +1,20 @@
-# MS-6 Acceptance — OKD and Legacy Removal
+# MS-6 Acceptance — Final Workbook Export
 
 MS-6 passes only when all conditions below are true:
 
-1. `OkdStep` and `OkdService` are part of the application pipeline.
-2. OKD Excel logic is under `infrastructure/excel/okd_workbook.py`.
-3. `progress` and `progress_table` are generated without subprocesses.
-4. The temporary legacy adapter and `progress_studio/legacy` package are removed.
-5. Root scripts `01` through `07` are removed from the release package.
-6. No application module imports or calls `subprocess`.
-7. The final workbook remains the distribution workbook with OKD sheets added in place.
-8. The Amount Mapping workbook is copied to the project output folder.
-9. No Thai text exists in application source.
-10. Automated MS-6 tests pass.
+1. Export reads Activities, BOQ items, and allocations from `MappingStore`, never Treeview rows.
+2. Export validation reports Activity, BOQ, allocation, status, and monetary reconciliation totals.
+3. Partial mapping requires explicit user confirmation.
+4. The loaded Progress workbook cannot be overwritten.
+5. Existing output replacement is explicit.
+6. Export uses a temporary file in the destination folder and replaces the final file only after successful save.
+7. Existing workbook sheets and formulas remain present.
+8. `Amount Mapping` Activity amounts are updated from allocated money.
+9. `BOQ Activity Mapping` contains Share %, Allocated Amount, Mapping ID, and BOQ ID.
+10. The first eleven mapping columns remain compatible with MS-4.
+11. `Mapping Summary` records Complete or Partial status and reconciliation totals.
+12. Workbook calculation mode requests full recalculation on open.
+13. Stable BOQ export IDs are deterministic for identical source metadata.
+14. Automated MS-6 tests and the full test suite pass.
+15. `README_MS6.md`, `README_ROADMAP.md`, `COPILOT.md`, and `RELEASE_NOTES.md` are updated.
+16. Git working tree is clean.
