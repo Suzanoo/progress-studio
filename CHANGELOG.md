@@ -1,3 +1,13 @@
+# Changelog
+
+## MS-6.1 — Excel export compatibility hotfix
+
+- Fixed Excel repair warning caused by duplicate worksheet and Table AutoFilters.
+- Added direct OOXML table and relationship validation before atomic export replacement.
+- Added empty-allocation and Excel compatibility regression tests.
+- Consolidated milestone and acceptance documentation under `docs/`.
+- Removed obsolete phase acceptance notes and premature MS-7/MS-8 acceptance files.
+
 # Release Notes
 
 ## V3 MS-6 — Final Workbook Export

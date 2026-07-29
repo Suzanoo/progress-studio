@@ -1,6 +1,6 @@
 # Copilot Instructions — Progress Studio
 
-Read `README_ROADMAP.md`, the current milestone README, and the relevant tests before editing code.
+Read `README_ROADMAP.md`, the current file under `docs/milestones/`, and the relevant tests before editing code.
 
 ## Project purpose
 
@@ -36,6 +36,9 @@ Progress Studio maps BOQ cost items to Primavera Activities and exports a Progre
 26. Export through a temporary workbook and replace the target only after a successful save.
 27. Partial mapping export requires explicit user confirmation and a reconciliation summary.
 28. Keep the session BOQ key contract stable; use `BOQ ID` as an additional export identity.
+29. Never set a worksheet AutoFilter on the same worksheet range as an Excel Table.
+30. Validate the saved OOXML package before replacing the export destination.
+31. Desktop Excel compatibility takes precedence over openpyxl-only compatibility.
 
 ## Git and milestone discipline
 
@@ -45,7 +48,7 @@ Progress Studio maps BOQ cost items to Primavera Activities and exports a Progre
 - Keep `.git` in delivered project archives.
 - Run the full test suite before delivery.
 - `git status` must be clean.
-- Update `README_ROADMAP.md`, the milestone README, and `RELEASE_NOTES.md`.
+- Update `README_ROADMAP.md`, the milestone document under `docs/milestones/`, and `CHANGELOG.md`.
 
 ## MS-5 session contract
 

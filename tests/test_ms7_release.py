@@ -132,7 +132,7 @@ class Ms7ReleaseTests(unittest.TestCase):
 
     def test_no_thai_in_application_or_release_docs(self):
         paths = list((ROOT / "progress_studio").rglob("*.py"))
-        paths.extend([ROOT / "README.md", ROOT / "ROADMAP.md", ROOT / "MS7_ACCEPTANCE.md"])
+        paths.extend([ROOT / "README.md", ROOT / "ROADMAP.md", ROOT / "README_ROADMAP.md", ROOT / "docs/acceptance/MS6_ACCEPTANCE.md"])
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertFalse(any("\u0e00" <= ch <= "\u0e7f" for ch in text), str(path))

@@ -165,3 +165,12 @@ The CLI remains available:
 ```powershell
 python main.py
 ```
+
+
+## Documentation
+
+- `README_ROADMAP.md` — current V3 milestone roadmap.
+- `docs/milestones/` — implementation notes for completed milestones.
+- `docs/acceptance/` — acceptance criteria for completed milestones.
+- `CHANGELOG.md` — release and hotfix history.
+- `COPILOT.md` — engineering rules for coding agents.

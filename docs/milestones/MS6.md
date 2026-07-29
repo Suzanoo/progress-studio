@@ -94,3 +94,13 @@ python desktop.py
 ```powershell
 pytest -q
 ```
+
+
+## MS-6.1 Excel compatibility hotfix
+
+The original MS-6 exporter created both a worksheet-level AutoFilter and an Excel Table on the same range. Desktop Excel repaired the package by removing the table. The hotfix now:
+
+- leaves filtering to the Excel Table only;
+- creates no table and no filter when there are zero allocations;
+- validates table XML, columns, relationships, and filter ownership directly in the temporary XLSX package;
+- replaces the destination only after package validation succeeds.

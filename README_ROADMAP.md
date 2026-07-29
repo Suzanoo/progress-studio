@@ -127,6 +127,13 @@ Completed:
 
 Branch: `feat/ms6-workbook-export`
 
+Hotfix completed on `fix/ms6-excel-export-validation`:
+
+- Removed the duplicate worksheet-level AutoFilter from the mapping table sheet.
+- Added direct OOXML package validation before atomic replacement.
+- Added regression coverage for populated and empty mapping exports.
+- Consolidated milestone documentation under `docs/`.
+
 ### MS-7 — On-demand S-Curve Generator
 
 **Goal:** Generate the S-Curve only after real mapped amounts are available.
@@ -165,7 +172,7 @@ Planned branch: `feat/ms8-production-polish`
 | MS-3 Mapping Engine | Completed |
 | MS-4 Share Allocation | Completed |
 | MS-5 Persistent Mapping Session | Completed and hardened |
-| MS-6 Final Workbook Export | Completed |
+| MS-6 Final Workbook Export | Completed; Excel compatibility hotfix applied |
 | MS-7 On-demand S-Curve Generator | Planned |
 | MS-8 Production Polish | Planned |
 

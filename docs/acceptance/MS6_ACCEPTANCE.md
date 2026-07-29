@@ -16,5 +16,13 @@ MS-6 passes only when all conditions below are true:
 12. Workbook calculation mode requests full recalculation on open.
 13. Stable BOQ export IDs are deterministic for identical source metadata.
 14. Automated MS-6 tests and the full test suite pass.
-15. `README_MS6.md`, `README_ROADMAP.md`, `COPILOT.md`, and `RELEASE_NOTES.md` are updated.
+15. `docs/milestones/MS6.md`, `README_ROADMAP.md`, `COPILOT.md`, and `CHANGELOG.md` are updated.
 16. Git working tree is clean.
+
+
+## MS-6.1 hotfix acceptance
+
+- Mapping sheet with allocation rows has one Table-owned AutoFilter and no worksheet AutoFilter.
+- Mapping sheet with zero allocations has headers only, with no Table and no AutoFilter.
+- Temporary XLSX package validation completes before destination replacement.
+- Invalid table relationships, duplicate filter ownership, or malformed table XML fail export safely.
