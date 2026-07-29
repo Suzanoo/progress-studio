@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from typing import Any, Callable
 
 from progress_studio.domain.mapping_models import AllocationRecord
 from progress_studio.domain.mapping_session import (
@@ -50,10 +51,58 @@ def fingerprint(path: Path) -> WorkbookFingerprint:
     stat = path.stat()
     return WorkbookFingerprint(
         path=str(path),
+        filename=path.name,
         size=stat.st_size,
         modified_ns=stat.st_mtime_ns,
         sha256=digest.hexdigest(),
     )
+
+
+def _migrate_v1_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    """Add explicit workbook filenames while preserving v1 compatibility."""
+    migrated = dict(payload)
+    for key in ("progress", "boq"):
+        workbook = dict(migrated.get(key) or {})
+        workbook.setdefault("filename", Path(str(workbook.get("path", ""))).name)
+        migrated[key] = workbook
+    migrated["version"] = 2
+    return migrated
+
+
+Migration = Callable[[dict[str, Any]], dict[str, Any]]
+_MIGRATIONS: dict[int, Migration] = {
+    1: _migrate_v1_to_v2,
+}
+
+
+def _migrate_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        version = int(payload.get("version"))
+    except (TypeError, ValueError) as exc:
+        raise SessionValidationError("The mapping session version is missing or invalid.") from exc
+
+    if version > SESSION_VERSION:
+        raise SessionValidationError(
+            f"Unsupported mapping session version: {version}. "
+            f"This application supports up to version {SESSION_VERSION}."
+        )
+
+    migrated = dict(payload)
+    while version < SESSION_VERSION:
+        migration = _MIGRATIONS.get(version)
+        if migration is None:
+            raise SessionValidationError(
+                f"No migration path is available from mapping session version {version}."
+            )
+        migrated = migration(migrated)
+        try:
+            next_version = int(migrated.get("version"))
+        except (TypeError, ValueError) as exc:
+            raise SessionValidationError("A mapping session migration produced an invalid version.") from exc
+        if next_version <= version:
+            raise SessionValidationError("A mapping session migration did not advance the version.")
+        version = next_version
+    return migrated
 
 
 class MappingSessionRepository:
@@ -91,18 +140,17 @@ class MappingSessionRepository:
     def load(self, path: Path) -> MappingSessionData:
         path = Path(path)
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            raw_payload = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError as exc:
             raise SessionValidationError(f"Mapping session was not found: {path}") from exc
         except (OSError, json.JSONDecodeError) as exc:
             raise SessionValidationError(f"Mapping session cannot be read: {path}") from exc
 
-        if payload.get("format") != SESSION_FORMAT:
+        if not isinstance(raw_payload, dict):
+            raise SessionValidationError("The mapping session root must be a JSON object.")
+        if raw_payload.get("format") != SESSION_FORMAT:
             raise SessionValidationError("This file is not a Progress Studio mapping session.")
-        if payload.get("version") != SESSION_VERSION:
-            raise SessionValidationError(
-                f"Unsupported mapping session version: {payload.get('version')!r}."
-            )
+        payload = _migrate_payload(raw_payload)
         try:
             progress = WorkbookFingerprint(**payload["progress"])
             boq = WorkbookFingerprint(**payload["boq"])
@@ -122,12 +170,28 @@ class MappingSessionRepository:
         )
 
     @staticmethod
-    def validate_workbook(saved: WorkbookFingerprint) -> Path:
-        path = Path(saved.path)
-        current = fingerprint(path)
+    def validate_workbook(saved: WorkbookFingerprint, candidate: Path | None = None) -> Path:
+        """Return a verified workbook path.
+
+        The saved absolute path is tried by default. A user-selected candidate may be
+        supplied when the workbook was moved or renamed. Only identical SHA-256 content
+        is accepted; changed workbooks are never merged automatically.
+        """
+        path = Path(candidate).expanduser().resolve() if candidate else saved.saved_path
+        try:
+            current = fingerprint(path)
+        except SessionValidationError as exc:
+            if candidate is None:
+                raise SessionValidationError(
+                    f"{saved.filename} was not found at its saved location. "
+                    "Browse for the moved or renamed workbook to continue."
+                ) from exc
+            raise
         if current.sha256 != saved.sha256:
+            source = "selected workbook" if candidate else "workbook at the saved location"
             raise SessionValidationError(
-                f"Workbook has changed since the session was saved: {path.name}"
+                f"The {source} does not match the session copy: {saved.filename}. "
+                "Progress Studio will not merge a changed workbook automatically."
             )
         return path
 

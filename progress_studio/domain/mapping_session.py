@@ -7,19 +7,20 @@ from progress_studio.domain.mapping_models import AllocationRecord
 
 
 SESSION_FORMAT = "progress-studio-mapping-session"
-SESSION_VERSION = 1
+SESSION_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
 class WorkbookFingerprint:
     path: str
+    filename: str
     size: int
     modified_ns: int
     sha256: str
 
     @property
-    def filename(self) -> str:
-        return Path(self.path).name
+    def saved_path(self) -> Path:
+        return Path(self.path)
 
 
 @dataclass(frozen=True, slots=True)
