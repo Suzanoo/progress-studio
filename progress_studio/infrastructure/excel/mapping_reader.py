@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import hashlib
+import re
 from typing import Iterable
 
 from openpyxl import load_workbook
@@ -10,6 +11,34 @@ from progress_studio.domain.mapping_models import ActivityRow, BOQRow
 from progress_studio.config.workbook_schema import WORKBOOK_SCHEMA
 from progress_studio.infrastructure.excel.amount_workbook import find_header
 
+
+
+_CELL_REFERENCE_RE = re.compile(
+    r"(?:'((?:[^']|'')+)'|([A-Za-z0-9 _.-]+))!\$?([A-Z]{1,3})\$?(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _formula_fallback_value(value: object, formula: object, value_workbook) -> object:
+    """Resolve BOQ Studio link formulas when Excel cached values are absent.
+
+    BOQ Studio's merged Project worksheet links cells to source worksheets.
+    Some generated/copied workbooks have not yet been recalculated by Excel, so
+    openpyxl's data_only view returns None. The final worksheet reference in the
+    formula is the value returned by the IF wrapper and can be read safely from
+    the source worksheet.
+    """
+    if value not in (None, "") or not isinstance(formula, str) or not formula.startswith("="):
+        return value
+    references = list(_CELL_REFERENCE_RE.finditer(formula))
+    if not references:
+        return value
+    match = references[-1]
+    sheet_name = (match.group(1) or match.group(2) or "").replace("''", "'").strip()
+    coordinate = f"{match.group(3).upper()}{match.group(4)}"
+    if sheet_name not in value_workbook.sheetnames:
+        return value
+    return value_workbook[sheet_name][coordinate].value
 
 
 MAIN_REQUIRED_HEADERS = ("Row Type", "Activity ID", "P/A", "Outline Level", "Amount")
@@ -146,13 +175,17 @@ class BOQSheetReader:
 
     def read(self, path: Path, sheet_name: str) -> list[BOQRow]:
         workbook = load_workbook(path, read_only=True, data_only=True)
+        formula_workbook = load_workbook(path, read_only=True, data_only=False)
         try:
             if sheet_name not in workbook.sheetnames:
                 raise ValueError(f"Worksheet {sheet_name!r} was not found in the BOQ workbook.")
             sheet = workbook[sheet_name]
+            formula_sheet = formula_workbook[sheet_name]
             rows = sheet.iter_rows(values_only=True)
+            formula_rows = formula_sheet.iter_rows(values_only=True)
             try:
                 headers = _header_map(next(rows))
+                next(formula_rows)
             except StopIteration as exc:
                 raise ValueError(f"Worksheet {sheet_name!r} is empty.") from exc
 
@@ -164,8 +197,12 @@ class BOQSheetReader:
             source_sheet_index = headers.get("source sheet")
             source_row_index = headers.get("source row")
             result: list[BOQRow] = []
-            for excel_row, values in enumerate(rows, start=2):
-                amount = _number(values[headers["amount"]])
+            for excel_row, (values, formula_values) in enumerate(zip(rows, formula_rows), start=2):
+                def resolved(header: str) -> object:
+                    index = headers[header]
+                    return _formula_fallback_value(values[index], formula_values[index], workbook)
+
+                amount = _number(resolved("amount"))
                 if amount <= 0:
                     continue
                 source_sheet = (
@@ -176,10 +213,10 @@ class BOQSheetReader:
                     source_row = int(raw_source_row)
                 except (TypeError, ValueError):
                     source_row = excel_row
-                wbs2 = _text(values[headers["wbs-2"]])
-                wbs3 = _text(values[headers["wbs-3"]])
-                wbs4 = _text(values[headers["wbs-4"]])
-                description = _text(values[headers["description"]])
+                wbs2 = _text(resolved("wbs-2"))
+                wbs3 = _text(resolved("wbs-3"))
+                wbs4 = _text(resolved("wbs-4"))
+                description = _text(resolved("description"))
                 key = f"{source_sheet}|{source_row}|{excel_row}"
                 result.append(
                     BOQRow(
@@ -197,3 +234,4 @@ class BOQSheetReader:
             return result
         finally:
             workbook.close()
+            formula_workbook.close()

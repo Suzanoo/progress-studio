@@ -10,6 +10,8 @@ import tempfile
 from typing import Any, Callable
 
 from progress_studio.domain.mapping_models import AllocationRecord
+from progress_studio.infrastructure.platform_paths import user_data_dir
+
 from progress_studio.domain.mapping_session import (
     MappingSessionData,
     SESSION_FORMAT,
@@ -202,7 +204,7 @@ class RecentSessionRepository:
     MAX_ITEMS = 10
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or (Path.home() / ".progress_studio" / "recent_sessions.json")
+        self.path = path or (user_data_dir() / "recent_sessions.json")
 
     def list(self) -> list[Path]:
         try:

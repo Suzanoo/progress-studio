@@ -12,6 +12,7 @@ from progress_studio.infrastructure.layout_preferences import (
     LayoutPreferences,
     LayoutPreferencesRepository,
 )
+from progress_studio.infrastructure.platform_paths import user_data_dir
 from progress_studio.infrastructure.session import (
     MappingSessionRepository,
     RecentSessionRepository,
@@ -574,9 +575,21 @@ class AmountMappingFrame(ttk.Frame):
         self.save_session_button.configure(state="normal" if ready else "disabled")
 
     def _default_session_path(self) -> Path | None:
-        if not self.progress_file:
+        """Return the automatic working-session path for the current inputs."""
+        if not self.progress_file or not self.boq_file or not self.boq_sheet:
             return None
-        return self.progress_file.with_name(self.progress_file.stem + ".mapping.json")
+        identity = "|".join((
+            str(self.progress_file.expanduser().resolve()).lower(),
+            str(self.boq_file.expanduser().resolve()).lower(),
+            self.boq_sheet.strip().lower(),
+        ))
+        import hashlib
+        key = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12]
+        safe_stem = "".join(
+            character if character.isalnum() or character in ("-", "_") else "_"
+            for character in self.progress_file.stem
+        ).strip("_") or "project"
+        return user_data_dir() / "sessions" / f"{safe_stem}-{key}.mapping.json"
 
     def _write_session(self, path: Path, show_message: bool) -> Path:
         if not self.progress_file or not self.boq_file or not self.boq_sheet:
@@ -616,7 +629,9 @@ class AmountMappingFrame(ttk.Frame):
 
     def _autosave_session(self) -> None:
         if self.session_file is None:
-            self.session_status_var.set("Session: unsaved changes")
+            self.session_file = self._default_session_path()
+        if self.session_file is None:
+            self.session_status_var.set("Session: waiting for both workbooks")
             return
         try:
             self._write_session(self.session_file, show_message=False)

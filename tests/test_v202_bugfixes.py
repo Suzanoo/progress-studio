@@ -81,3 +81,29 @@ class TestV202Bugfixes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_boq_formula_fallback_reads_linked_project_value(tmp_path):
+    from openpyxl import Workbook, load_workbook
+    from progress_studio.infrastructure.excel.mapping_reader import _formula_fallback_value
+
+    path = tmp_path / "boq.xlsx"
+    workbook = Workbook()
+    source = workbook.active
+    source.title = "ARCH"
+    source["K5"] = 123.45
+    project = workbook.create_sheet("Project")
+    project["K5"] = '=IF(ARCH!K5="","",ARCH!K5)'
+    workbook.save(path)
+
+    values = load_workbook(path, data_only=True)
+    formulas = load_workbook(path, data_only=False)
+    try:
+        assert _formula_fallback_value(
+            values["Project"]["K5"].value,
+            formulas["Project"]["K5"].value,
+            values,
+        ) == 123.45
+    finally:
+        values.close()
+        formulas.close()
