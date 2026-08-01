@@ -14,6 +14,7 @@ class ActivityRow:
     origin: str = "workbook"
     supplemental_wbs_code: str = ""
     supplemental_wbs_name: str = ""
+    node_id: str = ""
 
     @property
     def is_supplemental(self) -> bool:
@@ -34,6 +35,7 @@ class SupplementalWBS:
     name: str
     parent_path: tuple[tuple[str, str], ...] = ()
     origin: str = "user_created"
+    node_id: str = ""
 
     @property
     def path(self) -> tuple[tuple[str, str], ...]:

@@ -1051,6 +1051,7 @@ class AmountMappingFrame(ttk.Frame):
             for row in session.supplemental_activities:
                 self.store.activities_by_id[row.activity_id] = row
                 self.store.activity_order.append(row.activity_id)
+            self.store._rebuild_working_tree()
             self.store.load_boq(boq_rows)
             self.store.restore_allocations(list(session.allocations))
             self.progress_file = progress_file

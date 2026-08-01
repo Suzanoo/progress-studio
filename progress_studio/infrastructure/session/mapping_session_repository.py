@@ -10,6 +10,7 @@ import tempfile
 from typing import Any, Callable
 
 from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, SupplementalWBS
+from progress_studio.domain.working_tree import WorkingScheduleTree
 from progress_studio.infrastructure.platform_paths import user_data_dir
 
 from progress_studio.domain.mapping_session import (
@@ -86,10 +87,42 @@ def _migrate_v3_to_v4(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_v4_to_v5(payload: dict[str, Any]) -> dict[str, Any]:
+    """Assign stable editor identities to previously created nodes."""
+    migrated = dict(payload)
+    activities = []
+    for item in migrated.get("supplemental_activities", []):
+        record = dict(item)
+        path = "/".join(part[0] for part in record.get("wbs_path", []))
+        record.setdefault(
+            "node_id",
+            WorkingScheduleTree.legacy_created_node_id(
+                "activity", f"{record.get('activity_id', '')}:{path}"
+            ),
+        )
+        activities.append(record)
+    wbs_nodes = []
+    for item in migrated.get("supplemental_wbs", []):
+        record = dict(item)
+        parent = "/".join(part[0] for part in record.get("parent_path", []))
+        record.setdefault(
+            "node_id",
+            WorkingScheduleTree.legacy_created_node_id(
+                "wbs", f"{parent}:{record.get('code', '')}"
+            ),
+        )
+        wbs_nodes.append(record)
+    migrated["supplemental_activities"] = activities
+    migrated["supplemental_wbs"] = wbs_nodes
+    migrated["version"] = 5
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
+    4: _migrate_v4_to_v5,
 }
 
 

@@ -10,6 +10,7 @@ from progress_studio.domain.mapping_models import (
     MappingStatus,
     SupplementalWBS,
 )
+from progress_studio.domain.working_tree import WorkingScheduleTree, WorkingTreeNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,8 @@ class MappingStore:
         self.collapsed_wbs_paths: set[tuple[str, ...]] = set()
         self.supplemental_wbs_nodes: list[SupplementalWBS] = []
         self.selected_wbs_path: tuple[tuple[str, str], ...] = ()
+        self.selected_node_id: str = ""
+        self.working_tree = WorkingScheduleTree()
 
     def load_activities(self, rows: list[ActivityRow]) -> None:
         self.activities_by_id = {row.activity_id: row for row in rows}
@@ -62,6 +65,27 @@ class MappingStore:
         self.activity_page = 1
         self.collapsed_wbs_paths.clear()
         self.selected_wbs_path = ()
+        self.selected_node_id = ""
+        self.supplemental_wbs_nodes = []
+        self.working_tree = WorkingScheduleTree.build(list(self.activities_by_id.values()), [])
+
+    def _rebuild_working_tree(self) -> None:
+        self.working_tree = WorkingScheduleTree.build(
+            [self.activities_by_id[key] for key in self.activity_order],
+            self.supplemental_wbs_nodes,
+        )
+        if self.selected_wbs_path:
+            selected = self.working_tree.find_wbs_by_path(self.selected_wbs_path)
+            self.selected_node_id = selected.node_id if selected else ""
+        elif self.selected_activity_ids:
+            activity_id = next(iter(self.selected_activity_ids))
+            selected = self.working_tree.find_activity(activity_id)
+            self.selected_node_id = selected.node_id if selected else ""
+        else:
+            self.selected_node_id = ""
+
+    def working_tree_nodes(self) -> tuple[WorkingTreeNode, ...]:
+        return self.working_tree.nodes()
 
     def all_wbs_paths(self) -> list[tuple[tuple[str, str], ...]]:
         paths = {tuple(row.wbs_path[:level]) for row in self.activities_by_id.values() for level in range(1, len(row.wbs_path)+1)}
@@ -70,6 +94,8 @@ class MappingStore:
 
     def select_wbs(self, path: tuple[tuple[str, str], ...]) -> None:
         self.selected_wbs_path = tuple(path)
+        node = self.working_tree.find_wbs_by_path(self.selected_wbs_path)
+        self.selected_node_id = node.node_id if node else ""
 
     def add_supplemental_wbs(self, *, parent_path: tuple[tuple[str, str], ...], code: str, name: str) -> SupplementalWBS:
         code, name = code.strip(), name.strip()
@@ -79,9 +105,15 @@ class MappingStore:
             raise ValueError(f"WBS code already exists: {code}")
         if parent_path and tuple(parent_path) not in self.all_wbs_paths():
             raise ValueError("The selected parent WBS no longer exists.")
-        node = SupplementalWBS(code=code, name=name, parent_path=tuple(parent_path))
+        node = SupplementalWBS(
+            code=code,
+            name=name,
+            parent_path=tuple(parent_path),
+            node_id=WorkingScheduleTree.created_node_id(),
+        )
         self.supplemental_wbs_nodes.append(node)
         self.selected_wbs_path = node.path
+        self._rebuild_working_tree()
         return node
 
     def edit_supplemental_wbs(self, path: tuple[tuple[str, str], ...], *, code: str, name: str) -> SupplementalWBS:
@@ -94,17 +126,27 @@ class MappingStore:
             raise ValueError("WBS code and WBS name are required.")
         if code != old.code and any(code == item_code for candidate in self.all_wbs_paths() for item_code, _ in candidate):
             raise ValueError(f"WBS code already exists: {code}")
-        replacement = SupplementalWBS(code=code, name=name, parent_path=old.parent_path)
+        replacement = SupplementalWBS(
+            code=code,
+            name=name,
+            parent_path=old.parent_path,
+            origin=old.origin,
+            node_id=old.node_id or WorkingScheduleTree.created_node_id(),
+        )
         old_path, new_path = old.path, replacement.path
         self.supplemental_wbs_nodes[index] = replacement
         for i, node in enumerate(list(self.supplemental_wbs_nodes)):
             if node.parent_path[:len(old_path)] == old_path:
-                self.supplemental_wbs_nodes[i] = SupplementalWBS(node.code, node.name, new_path + node.parent_path[len(old_path):])
+                self.supplemental_wbs_nodes[i] = SupplementalWBS(
+                    node.code, node.name, new_path + node.parent_path[len(old_path):],
+                    node.origin, node.node_id,
+                )
         for activity_id, row in list(self.activities_by_id.items()):
             if row.wbs_path[:len(old_path)] == old_path:
                 from dataclasses import replace
                 self.activities_by_id[activity_id] = replace(row, wbs_path=new_path + row.wbs_path[len(old_path):], parent_wbs=(new_path + row.wbs_path[len(old_path):])[-1][0])
         self.selected_wbs_path = new_path
+        self._rebuild_working_tree()
         return replacement
 
     def remove_supplemental_wbs(self, path: tuple[tuple[str, str], ...]) -> None:
@@ -117,6 +159,7 @@ class MappingStore:
             raise ValueError("Remove or move Activities under this WBS first.")
         self.supplemental_wbs_nodes.remove(node)
         self.selected_wbs_path = node.parent_path
+        self._rebuild_working_tree()
 
     def add_supplemental_activity(
         self, *, parent_path: tuple[tuple[str, str], ...], wbs_code: str,
@@ -149,11 +192,13 @@ class MappingStore:
             origin="user_created",
             supplemental_wbs_code=activity_path[-1][0] if activity_path else wbs_code,
             supplemental_wbs_name=activity_path[-1][1] if activity_path else wbs_name,
+            node_id=WorkingScheduleTree.created_node_id(),
         )
         self.activities_by_id[activity_id] = row
         self.activity_order.append(activity_id)
         self.selected_activity_ids = {activity_id}
         self.activity_page = 1
+        self._rebuild_working_tree()
         return row
 
     def supplemental_activities(self) -> list[ActivityRow]:
@@ -168,6 +213,7 @@ class MappingStore:
         self.activities_by_id.pop(activity_id)
         self.activity_order.remove(activity_id)
         self.selected_activity_ids.discard(activity_id)
+        self._rebuild_working_tree()
 
     def load_boq(self, rows: list[BOQRow]) -> None:
         self.boq_by_id = {row.key: row for row in rows}
@@ -292,8 +338,12 @@ class MappingStore:
     def toggle_activity(self, activity_id: str) -> None:
         if activity_id in self.selected_activity_ids:
             self.selected_activity_ids.clear()
+            self.selected_node_id = ""
         else:
             self.selected_activity_ids = {activity_id}
+            self.selected_wbs_path = ()
+            node = self.working_tree.find_activity(activity_id)
+            self.selected_node_id = node.node_id if node else ""
 
     def toggle_boq(self, key: str, *, additive: bool = True) -> None:
         if not additive:

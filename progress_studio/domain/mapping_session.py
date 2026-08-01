@@ -7,7 +7,7 @@ from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord,
 
 
 SESSION_FORMAT = "progress-studio-mapping-session"
-SESSION_VERSION = 4
+SESSION_VERSION = 5
 
 
 @dataclass(frozen=True, slots=True)
