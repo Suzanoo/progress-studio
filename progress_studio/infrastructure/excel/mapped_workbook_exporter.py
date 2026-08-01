@@ -19,6 +19,8 @@ from progress_studio.infrastructure.excel.xlsx_package_validator import validate
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
 from progress_studio.infrastructure.excel.calculation_policy import request_full_excel_recalculation
+from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
+from progress_studio.services.workbook_generation_service import WorkbookGenerationService
 
 CURRENCY_FORMAT = '#,##0.00'
 PERCENT_FORMAT = '0.00%'
@@ -79,6 +81,17 @@ class MappedWorkbookExporter:
         if output_file.suffix.lower() != '.xlsx':
             raise ValueError('Export filename must use the .xlsx extension.')
 
+        source_workbook = load_workbook(progress_file, read_only=False, data_only=False)
+        try:
+            validate_progress_workbook_contract(source_workbook)
+            can_generate = (
+                bool(working_tree_nodes)
+                and self._supports_main_rebuild(source_workbook)
+                and "Timescale Info" in source_workbook.sheetnames
+            )
+        finally:
+            source_workbook.close()
+
         output_file.parent.mkdir(parents=True, exist_ok=True)
         fd, temp_name = tempfile.mkstemp(
             prefix=f'.{output_file.stem}.', suffix='.tmp.xlsx', dir=output_file.parent
@@ -86,22 +99,36 @@ class MappedWorkbookExporter:
         os.close(fd)
         temp_file = Path(temp_name)
         try:
-            shutil.copy2(progress_file, temp_file)
+            totals = self._allocation_totals(boq_rows, allocations)
+            activities = activities or []
+            if can_generate:
+                source = WorkingTreeScheduleSource(progress_file, working_tree_nodes or [], totals)
+                cutoff_day = self._read_cutoff_day(progress_file)
+                generation = WorkbookGenerationService().generate(
+                    source,
+                    temp_file,
+                    cutoff_day=cutoff_day,
+                    distribution_method="auto",
+                    amounts=totals,
+                )
+                amount_rows = generation.activity_count
+            else:
+                shutil.copy2(progress_file, temp_file)
+                amount_rows = 0
+
             workbook = load_workbook(temp_file)
             try:
                 validate_progress_workbook_contract(workbook)
-                totals = self._allocation_totals(boq_rows, allocations)
-                activities = activities or []
-                supplemental_ids = {row.activity_id for row in activities if row.is_supplemental}
-                main_totals = {key: value for key, value in totals.items() if key not in supplemental_ids}
-                supplemental_total = sum(value for key, value in totals.items() if key in supplemental_ids)
-                if working_tree_nodes and self._supports_main_rebuild(workbook):
-                    amount_rows = self._rebuild_main_from_working_tree(
-                        workbook, working_tree_nodes, totals
-                    )
-                else:
-                    amount_rows = self._write_main_amounts(workbook, main_totals, validation.allocated_amount - supplemental_total)
-                self._write_amount_mapping(workbook, main_totals)
+                if not can_generate:
+                    if working_tree_nodes and self._supports_main_rebuild(workbook):
+                        amount_rows = self._rebuild_main_from_working_tree(
+                            workbook, working_tree_nodes, totals
+                        )
+                    else:
+                        amount_rows = self._write_main_amounts(
+                            workbook, totals, validation.allocated_amount
+                        )
+                self._write_amount_mapping(workbook, totals)
                 self._write_extension_sheet(workbook, activities, totals, supplemental_wbs or [])
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
@@ -117,6 +144,21 @@ class MappedWorkbookExporter:
             raise
 
 
+
+
+    @staticmethod
+    def _read_cutoff_day(progress_file: Path) -> str:
+        """Reuse the source workbook cutoff when available."""
+        workbook = load_workbook(progress_file, data_only=True, read_only=True)
+        try:
+            if "Timescale Info" in workbook.sheetnames:
+                ws = workbook["Timescale Info"]
+                for row in ws.iter_rows(min_row=1, max_col=2, values_only=True):
+                    if str(row[0] or "").strip().lower() == "cutoff day":
+                        return str(row[1] or "Friday")
+            return "Friday"
+        finally:
+            workbook.close()
 
     @staticmethod
     def _supports_main_rebuild(workbook) -> bool:
