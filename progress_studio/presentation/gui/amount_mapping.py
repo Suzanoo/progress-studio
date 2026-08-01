@@ -49,6 +49,7 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_selection_var = tk.StringVar(value="Selected 0 items | 0.00")
+        self.boq_mapping_detail_var = tk.StringVar(value="Select a BOQ item to view all mapped activities.")
         self._wbs_header_paths: dict[str, tuple[tuple[str, str], ...]] = {}
         self.session_status_var = tk.StringVar(value="Project: unsaved")
         self.operation_status_var = tk.StringVar(value="Ready")
@@ -142,11 +143,11 @@ class AmountMappingFrame(ttk.Frame):
         filter_row = ttk.Frame(right)
         filter_row.pack(fill="x", pady=(4, 4))
         ttk.Label(filter_row, text="WBS-2").pack(side="left")
-        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=16, values=("All",))
+        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=24, values=("All",))
         self.boq_wbs2_combo.pack(side="left", padx=(5, 8))
         self.boq_wbs2_combo.bind("<<ComboboxSelected>>", self._on_wbs2_filter)
         ttk.Label(filter_row, text="WBS-3").pack(side="left")
-        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=16, values=("All",))
+        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=28, values=("All",))
         self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
         self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
@@ -166,9 +167,18 @@ class AmountMappingFrame(ttk.Frame):
                 "✓", "WBS-2", "WBS-3", "WBS-4", "Description",
                 "Amount", "Allocated", "Remaining %", "Status", "Mapped To",
             ),
-            (38, 75, 85, 85, 310, 92, 92, 88, 72, 95),
+            (38, 75, 105, 95, 310, 92, 92, 88, 72, 125),
         )
         self.boq_tree.bind("<Button-1>", self._boq_click)
+        mapping_detail = ttk.Frame(right, padding=(0, 4, 0, 0))
+        mapping_detail.pack(fill="x")
+        ttk.Label(mapping_detail, text="Mapped activities", font=("Segoe UI", 9, "bold")).pack(side="left")
+        ttk.Label(
+            mapping_detail,
+            textvariable=self.boq_mapping_detail_var,
+            foreground=PALETTE.muted,
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True, padx=(8, 0))
         self._build_pager(right, self.boq_page_var, self._boq_prev, self._boq_next)
 
         actions = ttk.Frame(self)
@@ -704,7 +714,7 @@ class AmountMappingFrame(ttk.Frame):
             f"{self.store.boq_allocated_amount(key):,.2f}",
             f"{self.store.boq_remaining_percent(key):.0f}%",
             self.store.boq_status(key).value,
-            self.store.mapped_to_text(key),
+            self.store.mapped_to_compact_text(key),
         )
 
     def _render_boq(self) -> None:
@@ -758,6 +768,8 @@ class AmountMappingFrame(ttk.Frame):
         item = self.boq_tree.identify_row(event.y)
         if not item:
             return "break"
+        full_mapping = self.store.mapped_to_text(item)
+        self.boq_mapping_detail_var.set(full_mapping or "Not mapped")
         previous = set(self.store.selected_boq_ids)
         shift = bool(event.state & 0x0001)
         additive = bool(event.state & 0x0004) or bool(event.state & 0x0008)
@@ -875,7 +887,11 @@ class AmountMappingFrame(ttk.Frame):
             f"Items {self.store.mapped_item_count}/{len(self.store.boq_order)}"
         )
         ready = bool(self.progress_file and self.boq_file and self.boq_sheet and self.store.boq_order)
-        self.export_button.configure(state="normal" if ready else "disabled")
+        # Export now lives in the application shell. Keep compatibility with
+        # embedded/legacy layouts that still provide a local export button.
+        export_button = getattr(self, "export_button", None)
+        if export_button is not None:
+            export_button.configure(state="normal" if ready else "disabled")
 
     def _default_session_path(self) -> Path | None:
         """Return the automatic working-session path for the current inputs."""

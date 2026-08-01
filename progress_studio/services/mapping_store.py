@@ -371,6 +371,16 @@ class MappingStore:
         ]
         return ", ".join(parts)
 
+    def mapped_to_compact_text(self, key: str) -> str:
+        """Return a table-friendly mapping summary while retaining full detail elsewhere."""
+        activities = self.mapped_activities(key)
+        if not activities:
+            return "—"
+        first = activities[0]
+        first_share = self.allocations[(key, first)]
+        suffix = f" +{len(activities) - 1}" if len(activities) > 1 else ""
+        return f"{first} ({first_share:g}%){suffix}"
+
     def map_selected(self, share_percent: float = 100.0) -> MappingChange:
         if len(self.selected_activity_ids) != 1:
             raise ValueError("Select exactly one Activity.")
