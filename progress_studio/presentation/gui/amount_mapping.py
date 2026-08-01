@@ -13,6 +13,7 @@ from progress_studio.infrastructure.layout_preferences import (
     LayoutPreferencesRepository,
 )
 from progress_studio.infrastructure.platform_paths import user_data_dir
+from progress_studio.presentation.gui.theme import PALETTE
 from progress_studio.infrastructure.session import (
     MappingSessionRepository,
     RecentSessionRepository,
@@ -48,12 +49,16 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.session_status_var = tk.StringVar(value="Session: not saved")
+        self.operation_status_var = tk.StringVar(value="Ready")
+        self.activity_empty_var = tk.StringVar(value="No Progress workbook loaded")
+        self.boq_empty_var = tk.StringVar(value="No BOQ worksheet loaded")
         self.layout_repository = LayoutPreferencesRepository()
         self.layout_preferences = self.layout_repository.load()
         self.inputs_collapsed = self.layout_preferences.mapping_inputs_collapsed
         self._build()
         self.after_idle(self._restore_mapping_sash)
         self.bind("<Destroy>", self._on_destroy, add="+")
+        self.after_idle(self._bind_shortcuts)
 
     def _build(self) -> None:
         inputs_header = ttk.Frame(self)
@@ -94,23 +99,28 @@ class AmountMappingFrame(ttk.Frame):
         )
         self.load_sheet_button.grid(row=2, column=2, pady=(6, 0))
 
-        toolbar = ttk.Frame(self)
+        # One command bar keeps the primary mapping workflow visible at all times.
+        toolbar = ttk.Frame(self, style="CommandBar.TFrame", padding=(8, 6))
         toolbar.pack(fill="x", pady=(0, 6))
-        self.export_button = ttk.Button(
-            toolbar, text="Export...", command=self._export, state="disabled"
-        )
-        self.export_button.pack(side="left")
-        ttk.Button(toolbar, text="Load Session...", command=self._load_session).pack(side="left", padx=(6, 0))
+        ttk.Button(toolbar, text="Open Progress", command=self._browse_progress).pack(side="left")
+        ttk.Button(toolbar, text="Open BOQ", command=self._browse_boq).pack(side="left", padx=(4, 0))
+        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=8)
         self.save_session_button = ttk.Button(
-            toolbar, text="Save Session...", command=self._save_session, state="disabled"
+            toolbar, text="Save Session", command=self._save_session, state="disabled"
         )
-        self.save_session_button.pack(side="left", padx=(6, 0))
+        self.save_session_button.pack(side="left")
         self.recent_session_button = ttk.Button(
-            toolbar, text="Recent...", command=self._load_recent_session
+            toolbar, text="Recent", command=self._load_recent_session
         )
-        self.recent_session_button.pack(side="left", padx=(6, 0))
-        ttk.Label(toolbar, textvariable=self.session_status_var, foreground="#52606d").pack(side="left", padx=(10, 0))
-        ttk.Label(toolbar, textvariable=self.summary_var).pack(side="right")
+        self.recent_session_button.pack(side="left", padx=(4, 0))
+        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=8)
+        ttk.Button(toolbar, text="Undo", command=self._undo).pack(side="left")
+        ttk.Button(toolbar, text="Map", style="Accent.TButton", command=self._map).pack(side="left", padx=(4, 0))
+        ttk.Button(toolbar, text="Unmap", command=self._unmap).pack(side="left", padx=(4, 0))
+        self.export_button = ttk.Button(
+            toolbar, text="Export", command=self._export, state="disabled"
+        )
+        self.export_button.pack(side="right")
 
         self.body = ttk.Panedwindow(self, orient="horizontal")
         self.body.pack(fill="both", expand=True)
@@ -120,6 +130,8 @@ class AmountMappingFrame(ttk.Frame):
         self.body.add(right, weight=1)
 
         ttk.Label(left, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
+        self.activity_empty_label.pack(fill="x", pady=(12, 4))
         self._build_search(left, self.activity_filter, self._apply_activity_filter)
         self.activity_tree = self._tree(
             left,
@@ -134,6 +146,8 @@ class AmountMappingFrame(ttk.Frame):
         self._build_pager(left, self.activity_page_var, self._activity_prev, self._activity_next)
 
         ttk.Label(right, text="BOQ Items", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        self.boq_empty_label = ttk.Label(right, textvariable=self.boq_empty_var, style="Empty.TLabel", anchor="center")
+        self.boq_empty_label.pack(fill="x", pady=(12, 4))
         filter_row = ttk.Frame(right)
         filter_row.pack(fill="x", pady=(4, 4))
         ttk.Label(filter_row, text="WBS-2").pack(side="left")
@@ -176,7 +190,61 @@ class AmountMappingFrame(ttk.Frame):
             foreground="#52606d",
         ).pack(side="left", padx=(12, 0))
 
+        self.mapping_status_bar = ttk.Frame(self, style="StatusBar.TFrame", padding=(8, 4))
+        self.mapping_status_bar.pack(fill="x", pady=(6, 0))
+        ttk.Label(self.mapping_status_bar, textvariable=self.operation_status_var, style="StatusReady.TLabel").pack(side="left")
+        ttk.Label(self.mapping_status_bar, textvariable=self.session_status_var, style="Status.TLabel").pack(side="left", padx=(12, 0))
+        ttk.Label(self.mapping_status_bar, textvariable=self.summary_var, style="Status.TLabel").pack(side="right")
+
+        self.loading_overlay = ttk.Frame(self, style="Loading.TFrame", padding=24)
+        ttk.Label(self.loading_overlay, text="Working...", style="LoadingTitle.TLabel").pack()
+        self.loading_progress = ttk.Progressbar(self.loading_overlay, mode="indeterminate", length=260)
+        self.loading_progress.pack(pady=(10, 0))
+
         self._set_inputs_collapsed(self.inputs_collapsed, persist=False)
+
+    def _bind_shortcuts(self) -> None:
+        top = self.winfo_toplevel()
+        for sequence in ("<Control-o>", "<Command-o>"):
+            top.bind(sequence, lambda _event: self._browse_progress(), add="+")
+        for sequence in ("<Control-Shift-O>", "<Command-Shift-O>"):
+            top.bind(sequence, lambda _event: self._browse_boq(), add="+")
+        for sequence in ("<Control-s>", "<Command-s>"):
+            top.bind(sequence, lambda _event: self._save_session(), add="+")
+        for sequence in ("<Control-z>", "<Command-z>"):
+            top.bind(sequence, lambda _event: self._undo(), add="+")
+        for sequence in ("<Control-f>", "<Command-f>"):
+            top.bind(sequence, self._focus_search, add="+")
+        top.bind("<Delete>", self._keyboard_unmap, add="+")
+        top.bind("<BackSpace>", self._keyboard_unmap, add="+")
+
+    def _focus_search(self, _event=None) -> str:
+        self.activity_search_entry.focus_set()
+        self.activity_search_entry.selection_range(0, "end")
+        return "break"
+
+    def _keyboard_unmap(self, event) -> str | None:
+        widget_class = event.widget.winfo_class()
+        if widget_class in {"Entry", "TEntry", "Text", "TCombobox", "Spinbox"}:
+            return None
+        self._unmap()
+        return "break"
+
+    def _notify(self, message: str, kind: str = "success") -> None:
+        self.operation_status_var.set(message)
+        top = self.winfo_toplevel()
+        toast = tk.Toplevel(top)
+        toast.overrideredirect(True)
+        toast.attributes("-topmost", True)
+        background = PALETTE.success if kind == "success" else PALETTE.warning
+        label = tk.Label(toast, text=message, bg=background, fg="white", padx=16, pady=10)
+        label.pack()
+        top.update_idletasks()
+        toast.update_idletasks()
+        x = top.winfo_rootx() + max(0, top.winfo_width() - toast.winfo_width() - 24)
+        y = top.winfo_rooty() + max(0, top.winfo_height() - toast.winfo_height() - 48)
+        toast.geometry(f"+{x}+{y}")
+        toast.after(2200, toast.destroy)
 
     def _toggle_inputs(self) -> None:
         self._set_inputs_collapsed(not self.inputs_collapsed)
@@ -221,12 +289,15 @@ class AmountMappingFrame(ttk.Frame):
         if event.widget is self:
             self._save_layout_preferences()
 
-    @staticmethod
-    def _build_search(parent, variable: tk.StringVar, command) -> None:
+    def _build_search(self, parent, variable: tk.StringVar, command) -> None:
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=(4, 6))
         entry = ttk.Entry(row, textvariable=variable)
         entry.pack(side="left", fill="x", expand=True)
+        if variable is self.activity_filter:
+            self.activity_search_entry = entry
+        elif variable is self.boq_filter:
+            self.boq_search_entry = entry
         entry.bind("<Return>", lambda _event: command())
         ttk.Button(row, text="Search", command=command).pack(side="left", padx=(6, 0))
         ttk.Button(row, text="Clear", command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
@@ -369,9 +440,17 @@ class AmountMappingFrame(ttk.Frame):
             boq_text = "BOQ: not loaded"
         self.input_status_var.set(f"{progress_text} | {boq_text}")
 
-    def _busy(self, active: bool) -> None:
+    def _busy(self, active: bool, message: str = "Working...") -> None:
         top = self.winfo_toplevel()
         top.configure(cursor="watch" if active else "")
+        self.operation_status_var.set(message if active else "Ready")
+        if active:
+            self.loading_overlay.place(relx=0.5, rely=0.5, anchor="center")
+            self.loading_overlay.lift()
+            self.loading_progress.start(12)
+        else:
+            self.loading_progress.stop()
+            self.loading_overlay.place_forget()
         top.update_idletasks()
 
 
@@ -452,6 +531,7 @@ class AmountMappingFrame(ttk.Frame):
             )
             previous_path = row.wbs_path
 
+        self.activity_empty_var.set("" if page.total else ("No matching activities" if self.progress_file else "No Progress workbook loaded"))
         self.activity_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
 
     def _boq_values(self, key: str) -> tuple[str, ...]:
@@ -474,6 +554,7 @@ class AmountMappingFrame(ttk.Frame):
         page = self.store.boq_page_data()
         for key in page.ids:
             self.boq_tree.insert("", "end", iid=key, values=self._boq_values(key))
+        self.boq_empty_var.set("" if page.total else ("No matching BOQ items" if self.boq_sheet else "No BOQ worksheet loaded"))
         self.boq_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
 
     def _refresh_changed_rows(self, change) -> None:
@@ -533,6 +614,7 @@ class AmountMappingFrame(ttk.Frame):
             change = self.store.map_selected(self.share_var.get())
             self._refresh_changed_rows(change)
             self._autosave_session()
+            self._notify("Mapping saved")
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
 
@@ -541,6 +623,7 @@ class AmountMappingFrame(ttk.Frame):
             change = self.store.unmap_selected()
             self._refresh_changed_rows(change)
             self._autosave_session()
+            self._notify("Mapping removed")
         except ValueError as exc:
             messagebox.showwarning("Amount Mapping", str(exc))
 
@@ -551,6 +634,7 @@ class AmountMappingFrame(ttk.Frame):
             return
         self._refresh_changed_rows(change)
         self._autosave_session()
+        self._notify("Undo complete")
 
     def _clear_all(self) -> None:
         if not messagebox.askyesno(
@@ -637,7 +721,7 @@ class AmountMappingFrame(ttk.Frame):
             return
         try:
             self._write_session(self.session_file, show_message=False)
-            self.session_status_var.set(f"Session: {self.session_file.name} (auto-saved)")
+            self.session_status_var.set("Auto-saved")
         except Exception as exc:
             self.session_status_var.set("Session: auto-save failed")
             messagebox.showerror("Amount Mapping", f"Auto-save failed:\n{exc}")
@@ -793,6 +877,7 @@ class AmountMappingFrame(ttk.Frame):
             result = self.export_service.export(
                 self.progress_file, Path(selected), self.store, overwrite=True
             )
+            self._notify("Workbook exported")
             messagebox.showinfo(
                 "Export complete",
                 f"Mapped workbook created:\n{result.output_file}\n\n"
