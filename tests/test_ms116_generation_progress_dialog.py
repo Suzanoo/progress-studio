@@ -47,3 +47,14 @@ def test_export_ui_passes_generation_progress_callback() -> None:
     assert "GenerationProgressDialog" in source
     assert "progress_callback=report" in source
     assert '"Generating workbook..."' in source
+
+
+def test_export_generation_runs_on_background_thread_and_queues_ui_events() -> None:
+    source = Path("progress_studio/presentation/gui/amount_mapping.py").read_text(
+        encoding="utf-8"
+    )
+    assert "threading.Thread(" in source
+    assert "queue.Queue" in source
+    assert 'events.put(("progress"' in source
+    assert "self.after(50, poll_events)" in source
+    assert 'name="progress-studio-workbook-export"' in source

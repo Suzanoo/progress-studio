@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import queue
+import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
@@ -1257,34 +1259,72 @@ class AmountMappingFrame(ttk.Frame):
         )
         if not selected:
             return
+
         dialog = GenerationProgressDialog(self)
+        events: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._busy(True, "Generating workbook...")
 
         def report(step: str, message: str, complete: bool) -> None:
-            if complete:
-                dialog.complete_step(step, message)
-            else:
-                dialog.update_step(step, message)
+            # Workbook generation runs outside Tk's UI thread. Queue events and
+            # let the Tk event loop update widgets safely.
+            events.put(("progress", (step, message, complete)))
 
-        try:
-            self._busy(True, "Generating workbook...")
-            result = self.export_service.export(
-                self.progress_file,
-                Path(selected),
-                self.store,
-                overwrite=True,
-                progress_callback=report,
-            )
-            dialog.complete_step("finalize", "Workbook generated successfully.")
-            self._notify("Workbook exported")
-            messagebox.showinfo(
-                "Export complete",
-                f"Mapped workbook created:\n{result.output_file}\n\n"
-                f"Amount rows updated: {result.amount_rows_updated}\n"
-                f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}",
-            )
-        except Exception as exc:
-            dialog.fail(f"Generation failed: {exc}")
-            messagebox.showerror("Export mapped workbook", str(exc))
-        finally:
-            dialog.close()
-            self._busy(False)
+        def generate() -> None:
+            try:
+                result = self.export_service.export(
+                    self.progress_file,
+                    Path(selected),
+                    self.store,
+                    overwrite=True,
+                    progress_callback=report,
+                )
+                events.put(("done", result))
+            except Exception as exc:  # surfaced on the Tk thread below
+                events.put(("error", exc))
+
+        worker = threading.Thread(
+            target=generate,
+            name="progress-studio-workbook-export",
+            daemon=True,
+        )
+        worker.start()
+
+        def poll_events() -> None:
+            finished = False
+            try:
+                while True:
+                    event, payload = events.get_nowait()
+                    if event == "progress":
+                        step, message, complete = payload
+                        if complete:
+                            dialog.complete_step(step, message)
+                        else:
+                            dialog.update_step(step, message)
+                    elif event == "done":
+                        result = payload
+                        dialog.complete_step("finalize", "Workbook generated successfully.")
+                        dialog.close()
+                        self._busy(False)
+                        self._notify("Workbook exported")
+                        messagebox.showinfo(
+                            "Export complete",
+                            f"Mapped workbook created:\n{result.output_file}\n\n"
+                            f"Amount rows updated: {result.amount_rows_updated}\n"
+                            f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}",
+                        )
+                        finished = True
+                    elif event == "error":
+                        exc = payload
+                        dialog.fail(f"Generation failed: {exc}")
+                        dialog.close()
+                        self._busy(False)
+                        messagebox.showerror("Export mapped workbook", str(exc))
+                        finished = True
+            except queue.Empty:
+                pass
+
+            if not finished and dialog.winfo_exists():
+                self.after(50, poll_events)
+
+        # Give Tk one idle cycle to paint the dialog before polling begins.
+        self.after(0, poll_events)
