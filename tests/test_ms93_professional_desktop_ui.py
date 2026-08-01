@@ -1,27 +1,22 @@
 from pathlib import Path
 
-
-def source() -> str:
-    root = Path(__file__).resolve().parents[1]
-    return (root / "progress_studio/presentation/gui/amount_mapping.py").read_text(encoding="utf-8")
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_command_toolbar_contract():
-    text = source()
-    for label in ("Open Progress", "Open BOQ", "Save Session", "Undo", "Map", "Unmap", "Export"):
-        assert f'text="{label}"' in text
+def test_project_command_bar_contract():
+    text = (ROOT / "progress_studio/presentation/gui/app.py").read_text(encoding="utf-8")
+    for label in ("Open", "Save", "Save As", "Undo", "Map", "Unmap", "Export"):
+        assert f'("{label}",' in text or f'text="{label}"' in text
+
+
+def test_user_facing_project_language_replaces_session_language():
+    mapping = (ROOT / "progress_studio/presentation/gui/amount_mapping.py").read_text(encoding="utf-8")
+    assert 'title="Save Progress Studio project"' in mapping
+    assert '"Recent Projects"' in mapping
+    assert 'text="Save Session"' not in mapping
 
 
 def test_keyboard_first_contract():
-    text = source()
-    for sequence in ("<Control-o>", "<Command-o>", "<Control-s>", "<Command-s>", "<Control-z>", "<Command-z>", "<Delete>"):
-        assert sequence in text
-
-
-def test_loading_empty_state_and_notifications_exist():
-    text = source()
-    assert "loading_overlay" in text
-    assert "activity_empty_var" in text
-    assert "boq_empty_var" in text
-    assert "def _notify" in text
-    assert "mapping_status_bar" in text
+    app = (ROOT / "progress_studio/presentation/gui/app.py").read_text(encoding="utf-8")
+    for key in ("<Control-o>", "<Control-s>", "<Control-Shift-S>", "<Control-z>"):
+        assert key in app

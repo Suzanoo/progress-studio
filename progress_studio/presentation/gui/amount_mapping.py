@@ -50,7 +50,7 @@ class AmountMappingFrame(ttk.Frame):
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_selection_var = tk.StringVar(value="Selected 0 items | 0.00")
         self._wbs_header_paths: dict[str, tuple[tuple[str, str], ...]] = {}
-        self.session_status_var = tk.StringVar(value="Session: not saved")
+        self.session_status_var = tk.StringVar(value="Project: unsaved")
         self.operation_status_var = tk.StringVar(value="Ready")
         self.activity_empty_var = tk.StringVar(value="No Progress workbook loaded")
         self.boq_empty_var = tk.StringVar(value="No BOQ worksheet loaded")
@@ -72,7 +72,7 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Label(inputs_header, text="Workbook Inputs", font=("Segoe UI", 10, "bold")).pack(
             side="left", padx=(6, 0)
         )
-        ttk.Label(inputs_header, textvariable=self.input_status_var, foreground="#52606d").pack(
+        ttk.Label(inputs_header, textvariable=self.input_status_var, foreground=PALETTE.muted).pack(
             side="right"
         )
 
@@ -101,28 +101,8 @@ class AmountMappingFrame(ttk.Frame):
         )
         self.load_sheet_button.grid(row=2, column=2, pady=(6, 0))
 
-        # One command bar keeps the primary mapping workflow visible at all times.
-        toolbar = ttk.Frame(self, style="CommandBar.TFrame", padding=(8, 6))
-        toolbar.pack(fill="x", pady=(0, 6))
-        ttk.Button(toolbar, text="Open Progress", command=self._browse_progress).pack(side="left")
-        ttk.Button(toolbar, text="Open BOQ", command=self._browse_boq).pack(side="left", padx=(4, 0))
-        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=8)
-        self.save_session_button = ttk.Button(
-            toolbar, text="Save Session", command=self._save_session, state="disabled"
-        )
-        self.save_session_button.pack(side="left")
-        self.recent_session_button = ttk.Button(
-            toolbar, text="Recent", command=self._load_recent_session
-        )
-        self.recent_session_button.pack(side="left", padx=(4, 0))
-        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=8)
-        ttk.Button(toolbar, text="Undo", command=self._undo).pack(side="left")
-        ttk.Button(toolbar, text="Map", style="Accent.TButton", command=self._map).pack(side="left", padx=(4, 0))
-        ttk.Button(toolbar, text="Unmap", command=self._unmap).pack(side="left", padx=(4, 0))
-        self.export_button = ttk.Button(
-            toolbar, text="Export", command=self._export, state="disabled"
-        )
-        self.export_button.pack(side="right")
+        # Project commands live in the application shell. This workspace only
+        # contains context actions for the selected Progress/BOQ nodes.
 
         self.body = ttk.Panedwindow(self, orient="horizontal")
         self.body.pack(fill="both", expand=True)
@@ -152,7 +132,7 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_tree.tag_configure("wbs_level_1", font=("Segoe UI", 9, "bold"))
         self.activity_tree.tag_configure("wbs_level_2", font=("Segoe UI", 9, "bold"))
         self.activity_tree.tag_configure("wbs_level_3", font=("Segoe UI", 9, "bold"))
-        self.activity_tree.tag_configure("selected_wbs", background="#dcecff")
+        self.activity_tree.tag_configure("selected_wbs", background=PALETTE.selection)
         self.activity_tree.bind("<Button-1>", self._activity_click)
         self._build_pager(left, self.activity_page_var, self._activity_prev, self._activity_next)
 
@@ -175,7 +155,7 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Button(selection_row, text="Select page", command=self._select_boq_page).pack(side="left")
         ttk.Button(selection_row, text="Select all filtered", command=self._select_all_filtered_boq).pack(side="left", padx=(4, 0))
         ttk.Button(selection_row, text="Clear selection", command=self._clear_boq_selection).pack(side="left", padx=(4, 0))
-        ttk.Label(selection_row, textvariable=self.boq_selection_var, foreground="#52606d").pack(side="right")
+        ttk.Label(selection_row, textvariable=self.boq_selection_var, foreground=PALETTE.muted).pack(side="right")
         self.boq_tree = self._tree(
             right,
             (
@@ -204,7 +184,7 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Label(
             actions,
             text="Share applies to every selected BOQ item.",
-            foreground="#52606d",
+            foreground=PALETTE.muted,
         ).pack(side="left", padx=(12, 0))
 
         self.mapping_status_bar = ttk.Frame(self, style="StatusBar.TFrame", padding=(8, 4))
@@ -219,6 +199,45 @@ class AmountMappingFrame(ttk.Frame):
         self.loading_progress.pack(pady=(10, 0))
 
         self._set_inputs_collapsed(self.inputs_collapsed, persist=False)
+
+    # Application-shell command surface. Internal repository names remain
+    # session-based for backward compatibility, while users work with Projects.
+    def open_progress(self) -> None:
+        self._browse_progress()
+
+    def open_boq(self) -> None:
+        self._browse_boq()
+
+    def open_project(self) -> None:
+        self._load_session()
+
+    def open_recent_project(self) -> None:
+        self._load_recent_session()
+
+    def save_project(self) -> None:
+        if self.session_file and self.session_file.suffix == ".progressstudio":
+            try:
+                self._write_session(self.session_file, show_message=False)
+                self._notify("Project saved")
+            except Exception as exc:
+                messagebox.showerror("Progress Studio", str(exc))
+        else:
+            self.save_project_as()
+
+    def save_project_as(self) -> None:
+        self._save_session()
+
+    def undo_mapping(self) -> None:
+        self._undo()
+
+    def map_selection(self) -> None:
+        self._map()
+
+    def unmap_selection(self) -> None:
+        self._unmap()
+
+    def export_workbook(self) -> None:
+        self._export()
 
     def _bind_shortcuts(self) -> None:
         top = self.winfo_toplevel()
@@ -857,7 +876,6 @@ class AmountMappingFrame(ttk.Frame):
         )
         ready = bool(self.progress_file and self.boq_file and self.boq_sheet and self.store.boq_order)
         self.export_button.configure(state="normal" if ready else "disabled")
-        self.save_session_button.configure(state="normal" if ready else "disabled")
 
     def _default_session_path(self) -> Path | None:
         """Return the automatic working-session path for the current inputs."""
@@ -874,7 +892,7 @@ class AmountMappingFrame(ttk.Frame):
             character if character.isalnum() or character in ("-", "_") else "_"
             for character in self.progress_file.stem
         ).strip("_") or "project"
-        return user_data_dir() / "sessions" / f"{safe_stem}-{key}.mapping.json"
+        return user_data_dir() / "sessions" / f"{safe_stem}-{key}.progressstudio"
 
     def _write_session(self, path: Path, show_message: bool) -> Path:
         if not self.progress_file or not self.boq_file or not self.boq_sheet:
@@ -890,9 +908,9 @@ class AmountMappingFrame(ttk.Frame):
         saved = self.session_repository.save(path, session)
         self.session_file = saved
         self.recent_repository.remember(saved)
-        self.session_status_var.set(f"Session: {saved.name} (saved)")
+        self.session_status_var.set(f"Project: {saved.name} (saved)")
         if show_message:
-            messagebox.showinfo("Amount Mapping", f"Mapping session saved:\n{saved}")
+            messagebox.showinfo("Amount Mapping", f"Project saved:\n{saved}")
         return saved
 
     def _save_session(self) -> None:
@@ -901,11 +919,11 @@ class AmountMappingFrame(ttk.Frame):
             messagebox.showwarning("Amount Mapping", "Load a Progress workbook first.")
             return
         selected = filedialog.asksaveasfilename(
-            title="Save mapping session",
+            title="Save Progress Studio project",
             defaultextension=".json",
             initialfile=initial.name,
             initialdir=str(initial.parent),
-            filetypes=[("Progress Studio mapping session", "*.json")],
+            filetypes=[("Progress Studio project", "*.progressstudio")],
         )
         if not selected:
             return
@@ -918,23 +936,23 @@ class AmountMappingFrame(ttk.Frame):
         if self.session_file is None:
             self.session_file = self._default_session_path()
         if self.session_file is None:
-            self.session_status_var.set("Session: waiting for both workbooks")
+            self.session_status_var.set("Project: waiting for both workbooks")
             return
         try:
             self._write_session(self.session_file, show_message=False)
             self.session_status_var.set("Auto-saved")
         except Exception as exc:
-            self.session_status_var.set("Session: auto-save failed")
+            self.session_status_var.set("Project: auto-save failed")
             messagebox.showerror("Amount Mapping", f"Auto-save failed:\n{exc}")
 
     def _choose_recent_session(self, paths: list[Path]) -> Path | None:
         dialog = tk.Toplevel(self)
-        dialog.title("Recent Mapping Sessions")
+        dialog.title("Recent Projects")
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
         dialog.geometry("680x260")
         selected: list[Path] = []
-        ttk.Label(dialog, text="Select a mapping session to continue:").pack(anchor="w", padx=12, pady=(12, 6))
+        ttk.Label(dialog, text="Select a project to continue:").pack(anchor="w", padx=12, pady=(12, 6))
         box = tk.Listbox(dialog, height=8)
         box.pack(fill="both", expand=True, padx=12)
         for path in paths:
@@ -957,7 +975,7 @@ class AmountMappingFrame(ttk.Frame):
     def _load_recent_session(self) -> None:
         paths = self.recent_repository.list()
         if not paths:
-            messagebox.showinfo("Amount Mapping", "No recent mapping sessions were found.")
+            messagebox.showinfo("Amount Mapping", "No recent projects were found.")
             return
         selected = self._choose_recent_session(paths)
         if selected:
@@ -965,8 +983,8 @@ class AmountMappingFrame(ttk.Frame):
 
     def _load_session(self) -> None:
         selected = filedialog.askopenfilename(
-            title="Load mapping session",
-            filetypes=[("Progress Studio mapping session", "*.json"), ("All files", "*.*")],
+            title="Open Progress Studio project",
+            filetypes=[("Progress Studio project", "*.progressstudio"), ("All files", "*.*")],
         )
         if selected:
             self._restore_session(Path(selected))
@@ -1029,7 +1047,7 @@ class AmountMappingFrame(ttk.Frame):
             self.load_sheet_button.configure(state="normal")
             self.session_file = Path(session_path).resolve()
             self.recent_repository.remember(self.session_file)
-            self.session_status_var.set(f"Session: {self.session_file.name} (loaded)")
+            self.session_status_var.set(f"Project: {self.session_file.name} (loaded)")
             self._refresh_boq_filter_values()
             self._render_activities()
             self._render_boq()
