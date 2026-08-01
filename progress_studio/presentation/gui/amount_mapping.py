@@ -119,6 +119,11 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Button(activity_header, text="Add Activity", command=self._add_supplemental_activity).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Edit", command=self._edit_progress_node).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Delete", command=self._delete_progress_node).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Up", command=lambda: self._move_progress_node(-1)).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Down", command=lambda: self._move_progress_node(1)).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Move...", command=self._reparent_progress_node).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Undo edit", command=self._undo_tree_edit).pack(side="left", padx=(8, 0))
+        ttk.Button(activity_header, text="Redo edit", command=self._redo_tree_edit).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Expand all", command=self._expand_all_wbs).pack(side="right")
         ttk.Button(activity_header, text="Collapse all", command=self._collapse_all_wbs).pack(side="right", padx=(0, 4))
         self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
@@ -583,47 +588,129 @@ class AmountMappingFrame(ttk.Frame):
             messagebox.showerror("Progress tree", str(exc))
 
     def _edit_progress_node(self) -> None:
-        path = self.store.selected_wbs_path
-        if path:
-            node = next((item for item in self.store.supplemental_wbs_nodes if item.path == path), None)
-            if node is None:
-                messagebox.showwarning("Progress tree", "Original WBS nodes are read-only.")
-                return
-            code = simpledialog.askstring("Edit WBS", "WBS code:", initialvalue=node.code, parent=self)
-            if code is None:
-                return
-            name = simpledialog.askstring("Edit WBS", "WBS name:", initialvalue=node.name, parent=self)
-            if name is None:
-                return
-            try:
-                self.store.edit_supplemental_wbs(path, code=code, name=name)
-            except ValueError as exc:
-                messagebox.showerror("Progress tree", str(exc)); return
-        else:
-            selected = next(iter(self.store.selected_activity_ids), "")
-            row = self.store.activities_by_id.get(selected)
-            if row is None or not row.is_supplemental:
-                messagebox.showwarning("Progress tree", "Select a WBS or created Activity to edit.")
-                return
-            description = simpledialog.askstring("Edit Activity", "Activity name:", initialvalue=row.description, parent=self)
-            if description is None:
-                return
-            from dataclasses import replace
-            self.store.activities_by_id[selected] = replace(row, description=description.strip())
-        self._render_activities(); self._autosave_session(); self._notify("Progress tree updated")
-
-    def _delete_progress_node(self) -> None:
+        node = self.store.selected_working_node()
+        if node is None:
+            messagebox.showwarning("Progress tree", "Select a WBS or Activity to edit.")
+            return
+        title = "Edit WBS" if node.kind.value == "wbs" else "Edit Activity"
+        code_label = "WBS code:" if node.kind.value == "wbs" else "Activity ID:"
+        code = simpledialog.askstring(title, code_label, initialvalue=node.code, parent=self)
+        if code is None:
+            return
+        name = simpledialog.askstring(title, "Name:", initialvalue=node.name, parent=self)
+        if name is None:
+            return
         try:
-            if self.store.selected_wbs_path:
-                self.store.remove_supplemental_wbs(self.store.selected_wbs_path)
-            else:
-                selected = next(iter(self.store.selected_activity_ids), "")
-                if not selected:
-                    raise ValueError("Select a created WBS or Activity first.")
-                self.store.remove_supplemental_activity(selected)
-            self._render_activities(); self._autosave_session(); self._notify("Created node removed")
+            self.store.edit_selected_node(code=code, name=name)
+            self._render_activities()
+            self._render_boq()
+            self._update_summary()
+            self._autosave_session()
+            self._notify("Progress tree updated")
         except ValueError as exc:
             messagebox.showerror("Progress tree", str(exc))
+
+    def _delete_progress_node(self) -> None:
+        node = self.store.selected_working_node()
+        if node is None:
+            messagebox.showwarning("Progress tree", "Select a WBS or Activity to delete.")
+            return
+        label = f"{node.code} — {node.name}"
+        if not messagebox.askyesno(
+            "Delete progress node",
+            f"Delete {label}?\n\nChild nodes will also be removed from the working tree. "
+            "The source workbook will not be overwritten.",
+        ):
+            return
+        try:
+            self.store.delete_selected_node()
+            self._render_activities()
+            self._render_boq()
+            self._update_summary()
+            self._autosave_session()
+            self._notify("Progress node deleted")
+        except ValueError as exc:
+            messagebox.showerror("Progress tree", str(exc))
+
+    def _move_progress_node(self, offset: int) -> None:
+        try:
+            if not self.store.move_selected_node(offset):
+                self._notify("Node is already at the edge of its group")
+                return
+            self._render_activities()
+            self._autosave_session()
+            self._notify("Progress node reordered")
+        except ValueError as exc:
+            messagebox.showerror("Progress tree", str(exc))
+
+    def _reparent_progress_node(self) -> None:
+        node = self.store.selected_working_node()
+        if node is None:
+            messagebox.showwarning("Progress tree", "Select a WBS or Activity to move.")
+            return
+        choices = [
+            item for item in self.store.working_tree_nodes()
+            if item.kind.value == "wbs" and item.node_id != node.node_id
+        ]
+        if not choices:
+            messagebox.showwarning("Progress tree", "No destination WBS is available.")
+            return
+        dialog = tk.Toplevel(self)
+        dialog.title("Move progress node")
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+        dialog.geometry("520x340")
+        ttk.Label(dialog, text=f"Move {node.code} — {node.name} under:").pack(anchor="w", padx=12, pady=(12, 6))
+        box = tk.Listbox(dialog, height=13)
+        box.pack(fill="both", expand=True, padx=12)
+        ids: list[str] = []
+        for item in choices:
+            path = " > ".join(part.code for part in self.store.working_tree.path_for(item.node_id) if part.kind.value == "wbs")
+            box.insert("end", f"{path} — {item.name}")
+            ids.append(item.node_id)
+        if ids:
+            box.selection_set(0)
+        selected: list[str] = []
+        def accept() -> None:
+            indexes = box.curselection()
+            if indexes:
+                selected.append(ids[indexes[0]])
+                dialog.destroy()
+        row = ttk.Frame(dialog)
+        row.pack(fill="x", padx=12, pady=12)
+        ttk.Button(row, text="Move", command=accept).pack(side="right")
+        ttk.Button(row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(0, 8))
+        box.bind("<Double-1>", lambda _event: accept())
+        dialog.wait_window()
+        if not selected:
+            return
+        try:
+            self.store.reparent_selected_node(selected[0])
+            self._render_activities()
+            self._autosave_session()
+            self._notify("Progress node moved")
+        except ValueError as exc:
+            messagebox.showerror("Progress tree", str(exc))
+
+    def _undo_tree_edit(self) -> None:
+        if not self.store.undo_tree_edit():
+            self._notify("Nothing to undo in the progress tree")
+            return
+        self._render_activities()
+        self._render_boq()
+        self._update_summary()
+        self._autosave_session()
+        self._notify("Tree edit undone")
+
+    def _redo_tree_edit(self) -> None:
+        if not self.store.redo_tree_edit():
+            self._notify("Nothing to redo in the progress tree")
+            return
+        self._render_activities()
+        self._render_boq()
+        self._update_summary()
+        self._autosave_session()
+        self._notify("Tree edit redone")
 
     def _apply_activity_filter(self) -> None:
         self.store.activity_query = self.activity_filter.get()
@@ -920,6 +1007,7 @@ class AmountMappingFrame(ttk.Frame):
             self.store.allocation_records(),
             self.store.supplemental_activities(),
             self.store.supplemental_wbs_nodes,
+            list(self.store.working_tree_nodes()),
         )
         saved = self.session_repository.save(path, session)
         self.session_file = saved
@@ -1052,6 +1140,8 @@ class AmountMappingFrame(ttk.Frame):
                 self.store.activities_by_id[row.activity_id] = row
                 self.store.activity_order.append(row.activity_id)
             self.store._rebuild_working_tree()
+            if session.working_tree_nodes:
+                self.store.restore_working_tree(session.working_tree_nodes)
             self.store.load_boq(boq_rows)
             self.store.restore_allocations(list(session.allocations))
             self.progress_file = progress_file

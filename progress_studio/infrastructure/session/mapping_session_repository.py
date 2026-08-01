@@ -10,7 +10,9 @@ import tempfile
 from typing import Any, Callable
 
 from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, SupplementalWBS
-from progress_studio.domain.working_tree import WorkingScheduleTree
+from progress_studio.domain.working_tree import (
+    WorkingScheduleTree, WorkingTreeNode, WorkingNodeKind, WorkingNodeOrigin,
+)
 from progress_studio.infrastructure.platform_paths import user_data_dir
 
 from progress_studio.domain.mapping_session import (
@@ -118,11 +120,21 @@ def _migrate_v4_to_v5(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+
+
+def _migrate_v5_to_v6(payload: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(payload)
+    migrated.setdefault("working_tree_nodes", [])
+    migrated["version"] = 6
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
     4: _migrate_v4_to_v5,
+    5: _migrate_v5_to_v6,
 }
 
 
@@ -167,6 +179,7 @@ class MappingSessionRepository:
         allocations: list[AllocationRecord],
         supplemental_activities: list[ActivityRow] | None = None,
         supplemental_wbs: list[SupplementalWBS] | None = None,
+        working_tree_nodes: list[WorkingTreeNode] | None = None,
     ) -> MappingSessionData:
         return MappingSessionData(
             progress=fingerprint(progress_file),
@@ -176,6 +189,7 @@ class MappingSessionRepository:
             saved_at=datetime.now(timezone.utc).isoformat(),
             supplemental_activities=tuple(supplemental_activities or ()),
             supplemental_wbs=tuple(supplemental_wbs or ()),
+            working_tree_nodes=tuple(working_tree_nodes or ()),
         )
 
     def save(self, path: Path, session: MappingSessionData) -> Path:
@@ -190,6 +204,7 @@ class MappingSessionRepository:
             "allocations": [asdict(record) for record in session.allocations],
             "supplemental_activities": [asdict(record) for record in session.supplemental_activities],
             "supplemental_wbs": [asdict(record) for record in session.supplemental_wbs],
+            "working_tree_nodes": [asdict(record) for record in session.working_tree_nodes],
         }
         _atomic_json_write(path, payload)
         return path
@@ -220,6 +235,17 @@ class MappingSessionRepository:
                 SupplementalWBS(**{**item, "parent_path": tuple(tuple(part) for part in item.get("parent_path", ()))})
                 for item in payload.get("supplemental_wbs", [])
             )
+            working_tree_nodes = tuple(
+                WorkingTreeNode(
+                    **{
+                        **item,
+                        "kind": WorkingNodeKind(item["kind"]),
+                        "origin": WorkingNodeOrigin(item["origin"]),
+                        "source_path": tuple(tuple(part) for part in item.get("source_path", ())),
+                    }
+                )
+                for item in payload.get("working_tree_nodes", [])
+            )
             boq_sheet = str(payload["boq_sheet"]).strip()
             saved_at = str(payload["saved_at"])
         except (KeyError, TypeError, ValueError) as exc:
@@ -234,6 +260,7 @@ class MappingSessionRepository:
             saved_at=saved_at,
             supplemental_activities=supplemental_activities,
             supplemental_wbs=supplemental_wbs,
+            working_tree_nodes=working_tree_nodes,
         )
 
     @staticmethod

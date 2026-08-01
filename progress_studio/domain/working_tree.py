@@ -257,6 +257,143 @@ class WorkingScheduleTree:
                 errors.append(str(exc))
         return tuple(dict.fromkeys(errors))
 
+
+    def snapshot(self) -> tuple[WorkingTreeNode, ...]:
+        return tuple(replace(node) for node in self.nodes(include_deleted=True))
+
+    def descendants(self, node_id: str, *, include_deleted: bool = False) -> tuple[WorkingTreeNode, ...]:
+        result: list[WorkingTreeNode] = []
+        pending = list(self._children.get(node_id, ()))
+        while pending:
+            child_id = pending.pop(0)
+            child = self._nodes[child_id]
+            if include_deleted or not child.deleted:
+                result.append(child)
+            pending[0:0] = list(self._children.get(child_id, ()))
+        return tuple(result)
+
+    def add_node(
+        self,
+        *,
+        kind: WorkingNodeKind,
+        parent_id: str | None,
+        code: str,
+        name: str,
+        origin: WorkingNodeOrigin = WorkingNodeOrigin.USER_CREATED,
+        source_activity_id: str = "",
+    ) -> WorkingTreeNode:
+        code, name = code.strip(), name.strip()
+        if not code or not name:
+            raise ValueError("Node code and name are required.")
+        if parent_id is not None:
+            parent = self.get(parent_id)
+            if parent is None or parent.deleted or parent.kind is not WorkingNodeKind.WBS:
+                raise ValueError("The selected parent WBS is not available.")
+        if kind is WorkingNodeKind.ACTIVITY:
+            normalized = code.upper()
+            if any(
+                node.kind is WorkingNodeKind.ACTIVITY
+                and not node.deleted
+                and node.code.upper() == normalized
+                for node in self._nodes.values()
+            ):
+                raise ValueError(f"Activity ID already exists: {code}")
+        elif any(
+            node.kind is WorkingNodeKind.WBS
+            and not node.deleted
+            and node.code == code
+            for node in self._nodes.values()
+        ):
+            raise ValueError(f"WBS code already exists: {code}")
+        order = max((node.order for node in self._nodes.values()), default=-1) + 1
+        node = WorkingTreeNode(
+            node_id=self.created_node_id(),
+            kind=kind,
+            parent_id=parent_id,
+            code=code,
+            name=name,
+            origin=origin,
+            order=order,
+            source_activity_id=source_activity_id or (code if kind is WorkingNodeKind.ACTIVITY else ""),
+        )
+        self._insert(node)
+        return node
+
+    def rename(self, node_id: str, *, code: str, name: str) -> WorkingTreeNode:
+        node = self.get(node_id)
+        if node is None or node.deleted:
+            raise ValueError("The selected node is not available.")
+        code, name = code.strip(), name.strip()
+        if not code or not name:
+            raise ValueError("Node code and name are required.")
+        if node.kind is WorkingNodeKind.ACTIVITY:
+            normalized = code.upper()
+            if any(
+                other.node_id != node_id
+                and other.kind is WorkingNodeKind.ACTIVITY
+                and not other.deleted
+                and other.code.upper() == normalized
+                for other in self._nodes.values()
+            ):
+                raise ValueError(f"Activity ID already exists: {code}")
+        elif code != node.code and any(
+            other.node_id != node_id
+            and other.kind is WorkingNodeKind.WBS
+            and not other.deleted
+            and other.code == code
+            for other in self._nodes.values()
+        ):
+            raise ValueError(f"WBS code already exists: {code}")
+        updated = replace(node, code=code.upper() if node.kind is WorkingNodeKind.ACTIVITY else code, name=name)
+        self.replace(updated)
+        return updated
+
+    def reparent(self, node_id: str, parent_id: str | None) -> WorkingTreeNode:
+        node = self.get(node_id)
+        if node is None or node.deleted:
+            raise ValueError("The selected node is not available.")
+        if parent_id == node_id:
+            raise ValueError("A node cannot be its own parent.")
+        if parent_id is not None:
+            parent = self.get(parent_id)
+            if parent is None or parent.deleted or parent.kind is not WorkingNodeKind.WBS:
+                raise ValueError("The new parent must be an active WBS node.")
+            if any(item.node_id == parent_id for item in self.descendants(node_id, include_deleted=True)):
+                raise ValueError("A WBS cannot be moved below one of its descendants.")
+        if node.kind is WorkingNodeKind.ACTIVITY and parent_id is None:
+            raise ValueError("An Activity must belong to a WBS.")
+        updated = replace(node, parent_id=parent_id)
+        self.replace(updated)
+        return updated
+
+    def move_sibling(self, node_id: str, offset: int) -> bool:
+        node = self.get(node_id)
+        if node is None or node.deleted or offset == 0:
+            return False
+        siblings = [
+            self._nodes[item_id]
+            for item_id in self._children.get(node.parent_id, ())
+            if not self._nodes[item_id].deleted
+        ]
+        siblings.sort(key=lambda item: item.order)
+        index = next((i for i, item in enumerate(siblings) if item.node_id == node_id), -1)
+        target = index + (-1 if offset < 0 else 1)
+        if index < 0 or target < 0 or target >= len(siblings):
+            return False
+        other = siblings[target]
+        self.replace(replace(node, order=other.order))
+        self.replace(replace(other, order=node.order))
+        return True
+
+    def soft_delete(self, node_id: str) -> tuple[WorkingTreeNode, ...]:
+        node = self.get(node_id)
+        if node is None or node.deleted:
+            raise ValueError("The selected node is not available.")
+        affected = (node,) + self.descendants(node_id)
+        for item in affected:
+            self.replace(replace(item, deleted=True))
+        return affected
+
     def replace(self, node: WorkingTreeNode) -> None:
         old = self._nodes.get(node.node_id)
         if old is None:

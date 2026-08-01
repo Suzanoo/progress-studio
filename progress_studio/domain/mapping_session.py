@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, SupplementalWBS
+from progress_studio.domain.working_tree import WorkingTreeNode
 
 
 SESSION_FORMAT = "progress-studio-mapping-session"
-SESSION_VERSION = 5
+SESSION_VERSION = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,5 +33,6 @@ class MappingSessionData:
     saved_at: str
     supplemental_activities: tuple[ActivityRow, ...] = ()
     supplemental_wbs: tuple[SupplementalWBS, ...] = ()
+    working_tree_nodes: tuple[WorkingTreeNode, ...] = ()
     format: str = SESSION_FORMAT
     version: int = SESSION_VERSION
