@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from progress_studio.domain.mapping_session import WorkbookFingerprint
 from progress_studio.services.boq_mapping_service import BOQMappingService
@@ -134,6 +134,8 @@ class AmountMappingFrame(ttk.Frame):
         activity_header = ttk.Frame(left)
         activity_header.pack(fill="x")
         ttk.Label(activity_header, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(side="left")
+        ttk.Button(activity_header, text="Add WBS + Activity", command=self._add_supplemental_activity).pack(side="left", padx=(8, 0))
+        ttk.Button(activity_header, text="Remove created", command=self._remove_supplemental_activity).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Expand all", command=self._expand_all_wbs).pack(side="right")
         ttk.Button(activity_header, text="Collapse all", command=self._collapse_all_wbs).pack(side="right", padx=(0, 4))
         self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
@@ -490,6 +492,66 @@ class AmountMappingFrame(ttk.Frame):
         self.store.boq_page = 1
         self._render_boq()
 
+    def _add_supplemental_activity(self) -> None:
+        if not self.store.activities_by_id:
+            messagebox.showwarning("Supplemental structure", "Load a Progress workbook first.")
+            return
+        selected = next(iter(self.store.selected_activity_ids), "")
+        selected_row = self.store.activities_by_id.get(selected)
+        parent_path = selected_row.wbs_path if selected_row else ()
+        parent_label = " / ".join(f"{code} {name}" for code, name in parent_path) or "Project root"
+        if not messagebox.askokcancel(
+            "Create supplemental WBS",
+            f"Parent context:\n{parent_label}\n\n"
+            "This structure is stored in the session and exported to the "
+            "ProgressStudio Extensions worksheet. It does not rewrite the source schedule hierarchy.",
+        ):
+            return
+        wbs_code = simpledialog.askstring("Supplemental WBS", "WBS code (must be unique):", parent=self)
+        if wbs_code is None:
+            return
+        wbs_name = simpledialog.askstring("Supplemental WBS", "WBS name:", parent=self)
+        if wbs_name is None:
+            return
+        activity_id = simpledialog.askstring("Supplemental Activity", "Activity ID (must be unique):", parent=self)
+        if activity_id is None:
+            return
+        description = simpledialog.askstring("Supplemental Activity", "Activity name:", parent=self)
+        if description is None:
+            return
+        try:
+            self.store.add_supplemental_activity(
+                parent_path=parent_path, wbs_code=wbs_code, wbs_name=wbs_name,
+                activity_id=activity_id, description=description,
+            )
+            self._render_activities()
+            self._update_summary()
+            self._autosave_session()
+            self._notify("Supplemental WBS and Activity created")
+        except ValueError as exc:
+            messagebox.showerror("Supplemental structure", str(exc))
+
+    def _remove_supplemental_activity(self) -> None:
+        selected = next(iter(self.store.selected_activity_ids), "")
+        if not selected:
+            messagebox.showwarning("Supplemental structure", "Select a created Activity first.")
+            return
+        try:
+            row = self.store.activities_by_id[selected]
+            if not row.is_supplemental:
+                raise ValueError("Original Progress Activities cannot be removed here.")
+            if not messagebox.askyesno(
+                "Remove supplemental Activity",
+                f"Remove {row.activity_id} - {row.description}?",
+            ):
+                return
+            self.store.remove_supplemental_activity(selected)
+            self._render_activities()
+            self._autosave_session()
+            self._notify("Supplemental Activity removed")
+        except ValueError as exc:
+            messagebox.showerror("Supplemental structure", str(exc))
+
     def _apply_activity_filter(self) -> None:
         self.store.activity_query = self.activity_filter.get()
         self.store.activity_page = 1
@@ -759,6 +821,7 @@ class AmountMappingFrame(ttk.Frame):
             self.boq_file,
             self.boq_sheet,
             self.store.allocation_records(),
+            self.store.supplemental_activities(),
         )
         saved = self.session_repository.save(path, session)
         self.session_file = saved
@@ -886,6 +949,9 @@ class AmountMappingFrame(ttk.Frame):
             boq_rows = self.service.read_boq(boq_file, session.boq_sheet)
 
             self.store.load_activities(activities)
+            for row in session.supplemental_activities:
+                self.store.activities_by_id[row.activity_id] = row
+                self.store.activity_order.append(row.activity_id)
             self.store.load_boq(boq_rows)
             self.store.restore_allocations(list(session.allocations))
             self.progress_file = progress_file

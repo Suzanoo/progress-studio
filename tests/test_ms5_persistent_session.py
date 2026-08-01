@@ -64,7 +64,7 @@ def test_session_write_is_json_and_has_expected_contract(tmp_path: Path) -> None
 
     payload = json.loads(target.read_text(encoding="utf-8"))
     assert payload["format"] == "progress-studio-mapping-session"
-    assert payload["version"] == 2
+    assert payload["version"] == 3
     assert payload["boq_sheet"] == "NKC2"
     assert payload["allocations"] == []
     assert not list(tmp_path.glob("*.tmp"))
@@ -169,7 +169,7 @@ def test_v1_session_is_migrated_to_current_version(tmp_path: Path) -> None:
 
     loaded = repository.load(target)
 
-    assert loaded.version == 2
+    assert loaded.version == 3
     assert loaded.progress.filename == "progress.xlsx"
     assert loaded.boq.filename == "boq.xlsx"
 

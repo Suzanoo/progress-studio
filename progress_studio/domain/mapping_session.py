@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from progress_studio.domain.mapping_models import AllocationRecord
+from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord
 
 
 SESSION_FORMAT = "progress-studio-mapping-session"
-SESSION_VERSION = 2
+SESSION_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,5 +30,6 @@ class MappingSessionData:
     boq_sheet: str
     allocations: tuple[AllocationRecord, ...]
     saved_at: str
+    supplemental_activities: tuple[ActivityRow, ...] = ()
     format: str = SESSION_FORMAT
     version: int = SESSION_VERSION

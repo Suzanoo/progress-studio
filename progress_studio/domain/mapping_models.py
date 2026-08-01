@@ -11,6 +11,13 @@ class ActivityRow:
     child_wbs: str
     description: str
     wbs_path: tuple[tuple[str, str], ...] = ()
+    origin: str = "workbook"
+    supplemental_wbs_code: str = ""
+    supplemental_wbs_name: str = ""
+
+    @property
+    def is_supplemental(self) -> bool:
+        return self.origin == "user_created"
 
     @property
     def search_text(self) -> str:

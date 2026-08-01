@@ -53,5 +53,6 @@ class WorkbookExportService:
             list(store.boq_by_id.values()),
             store.allocation_records(),
             validation,
+            activities=list(store.activities_by_id.values()),
             overwrite=overwrite,
         )

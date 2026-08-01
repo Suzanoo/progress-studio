@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from progress_studio.domain.export_models import ExportResult, ExportValidation
-from progress_studio.domain.mapping_models import AllocationRecord, BOQRow
+from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, BOQRow
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
@@ -22,6 +22,7 @@ CURRENCY_FORMAT = '#,##0.00'
 PERCENT_FORMAT = '0.00%'
 MAPPING_SHEET = 'BOQ Activity Mapping'
 SUMMARY_SHEET = 'Mapping Summary'
+EXTENSION_SHEET = 'ProgressStudio Extensions'
 
 
 def _headers(ws, row: int = 1) -> dict[str, int]:
@@ -60,6 +61,7 @@ class MappedWorkbookExporter:
         allocations: list[AllocationRecord],
         validation: ExportValidation,
         *,
+        activities: list[ActivityRow] | None = None,
         overwrite: bool = False,
     ) -> ExportResult:
         progress_file = Path(progress_file).resolve()
@@ -85,8 +87,13 @@ class MappedWorkbookExporter:
             try:
                 validate_progress_workbook_contract(workbook)
                 totals = self._allocation_totals(boq_rows, allocations)
-                amount_rows = self._write_main_amounts(workbook, totals, validation.allocated_amount)
-                self._write_amount_mapping(workbook, totals)
+                activities = activities or []
+                supplemental_ids = {row.activity_id for row in activities if row.is_supplemental}
+                main_totals = {key: value for key, value in totals.items() if key not in supplemental_ids}
+                supplemental_total = sum(value for key, value in totals.items() if key in supplemental_ids)
+                amount_rows = self._write_main_amounts(workbook, main_totals, validation.allocated_amount - supplemental_total)
+                self._write_amount_mapping(workbook, main_totals)
+                self._write_extension_sheet(workbook, activities, totals)
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
                 request_full_excel_recalculation(workbook)
@@ -99,6 +106,31 @@ class MappedWorkbookExporter:
         except Exception:
             temp_file.unlink(missing_ok=True)
             raise
+
+
+    @staticmethod
+    def _write_extension_sheet(workbook, activities: list[ActivityRow], totals: dict[str, float]) -> None:
+        _safe_remove_sheet(workbook, EXTENSION_SHEET)
+        supplemental = [row for row in activities if row.is_supplemental]
+        if not supplemental:
+            return
+        ws = workbook.create_sheet(EXTENSION_SHEET)
+        ws.append([
+            'Origin', 'Parent WBS', 'Supplemental WBS Code', 'Supplemental WBS Name',
+            'Activity ID', 'Activity Name', 'Mapped Amount', 'Export Contract',
+        ])
+        _style_header(ws)
+        for row in supplemental:
+            ws.append([
+                'Progress Studio', row.parent_wbs, row.supplemental_wbs_code,
+                row.supplemental_wbs_name, row.activity_id, row.description,
+                totals.get(row.activity_id, 0.0),
+                'Extension only - not inserted into source schedule hierarchy',
+            ])
+            ws.cell(ws.max_row, 7).number_format = CURRENCY_FORMAT
+        ws.freeze_panes = 'A2'
+        for index, width in enumerate((18, 18, 24, 32, 18, 45, 18, 55), start=1):
+            ws.column_dimensions[ws.cell(1, index).column_letter].width = width
 
     @staticmethod
     def _allocation_totals(boq_rows, allocations) -> dict[str, float]:

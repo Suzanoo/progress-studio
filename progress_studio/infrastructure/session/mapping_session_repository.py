@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 from typing import Any, Callable
 
-from progress_studio.domain.mapping_models import AllocationRecord
+from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord
 from progress_studio.infrastructure.platform_paths import user_data_dir
 
 from progress_studio.domain.mapping_session import (
@@ -72,8 +72,16 @@ def _migrate_v1_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
+def _migrate_v2_to_v3(payload: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(payload)
+    migrated.setdefault("supplemental_activities", [])
+    migrated["version"] = 3
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
+    2: _migrate_v2_to_v3,
 }
 
 
@@ -116,6 +124,7 @@ class MappingSessionRepository:
         boq_file: Path,
         boq_sheet: str,
         allocations: list[AllocationRecord],
+        supplemental_activities: list[ActivityRow] | None = None,
     ) -> MappingSessionData:
         return MappingSessionData(
             progress=fingerprint(progress_file),
@@ -123,6 +132,7 @@ class MappingSessionRepository:
             boq_sheet=boq_sheet,
             allocations=tuple(allocations),
             saved_at=datetime.now(timezone.utc).isoformat(),
+            supplemental_activities=tuple(supplemental_activities or ()),
         )
 
     def save(self, path: Path, session: MappingSessionData) -> Path:
@@ -135,6 +145,7 @@ class MappingSessionRepository:
             "boq": asdict(session.boq),
             "boq_sheet": session.boq_sheet,
             "allocations": [asdict(record) for record in session.allocations],
+            "supplemental_activities": [asdict(record) for record in session.supplemental_activities],
         }
         _atomic_json_write(path, payload)
         return path
@@ -157,6 +168,10 @@ class MappingSessionRepository:
             progress = WorkbookFingerprint(**payload["progress"])
             boq = WorkbookFingerprint(**payload["boq"])
             allocations = tuple(AllocationRecord(**item) for item in payload.get("allocations", []))
+            supplemental_activities = tuple(
+                ActivityRow(**{**item, "wbs_path": tuple(tuple(part) for part in item.get("wbs_path", ()))})
+                for item in payload.get("supplemental_activities", [])
+            )
             boq_sheet = str(payload["boq_sheet"]).strip()
             saved_at = str(payload["saved_at"])
         except (KeyError, TypeError, ValueError) as exc:
@@ -169,6 +184,7 @@ class MappingSessionRepository:
             boq_sheet=boq_sheet,
             allocations=allocations,
             saved_at=saved_at,
+            supplemental_activities=supplemental_activities,
         )
 
     @staticmethod

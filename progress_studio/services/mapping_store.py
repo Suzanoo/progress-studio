@@ -59,6 +59,51 @@ class MappingStore:
         self.activity_page = 1
         self.collapsed_wbs_paths.clear()
 
+
+    def add_supplemental_activity(
+        self, *, parent_path: tuple[tuple[str, str], ...], wbs_code: str,
+        wbs_name: str, activity_id: str, description: str
+    ) -> ActivityRow:
+        activity_id = activity_id.strip().upper()
+        wbs_code = wbs_code.strip()
+        wbs_name = wbs_name.strip()
+        description = description.strip()
+        if not activity_id or not description or not wbs_code or not wbs_name:
+            raise ValueError("WBS code, WBS name, Activity ID, and Activity name are required.")
+        if activity_id in self.activities_by_id:
+            raise ValueError(f"Activity ID already exists: {activity_id}")
+        existing_codes = {code for row in self.activities_by_id.values() for code, _ in row.wbs_path}
+        if wbs_code in existing_codes:
+            raise ValueError(f"WBS code already exists: {wbs_code}")
+        row = ActivityRow(
+            activity_id=activity_id,
+            parent_wbs=parent_path[-1][0] if parent_path else "",
+            child_wbs=wbs_code,
+            description=description,
+            wbs_path=parent_path + ((wbs_code, wbs_name),),
+            origin="user_created",
+            supplemental_wbs_code=wbs_code,
+            supplemental_wbs_name=wbs_name,
+        )
+        self.activities_by_id[activity_id] = row
+        self.activity_order.append(activity_id)
+        self.selected_activity_ids = {activity_id}
+        self.activity_page = 1
+        return row
+
+    def supplemental_activities(self) -> list[ActivityRow]:
+        return [self.activities_by_id[key] for key in self.activity_order if self.activities_by_id[key].is_supplemental]
+
+    def remove_supplemental_activity(self, activity_id: str) -> None:
+        row = self.activities_by_id.get(activity_id)
+        if row is None or not row.is_supplemental:
+            raise ValueError("Only activities created in Progress Studio can be removed.")
+        if any(assigned == activity_id for _, assigned in self.allocations):
+            raise ValueError("Unmap all BOQ items from this Activity before removing it.")
+        self.activities_by_id.pop(activity_id)
+        self.activity_order.remove(activity_id)
+        self.selected_activity_ids.discard(activity_id)
+
     def load_boq(self, rows: list[BOQRow]) -> None:
         self.boq_by_id = {row.key: row for row in rows}
         self.boq_order = [row.key for row in rows]
