@@ -1,5 +1,14 @@
 # Changelog
 
+## MS9.1 — Production desktop UI foundation
+
+- Rebuilt the desktop shell around the approved production mockup: menu bar, navigation sidebar, six-stage workflow header, mapping-first workspace, and application status bar.
+- Preserved the existing mapping, session, allocation, export, and workbook-generation behavior.
+- Centralized the visual design system in `presentation/gui/theme.py`.
+- Centralized new English-first interface text in `presentation/gui/strings.py` for future localization.
+- Fixed release-version drift between desktop settings and `progress_studio.version`.
+- Added MS9.1 architecture tests and a headless desktop launch smoke test.
+
 ## MS-6.1 — Excel export compatibility hotfix
 
 - Fixed Excel repair warning caused by duplicate worksheet and Table AutoFilters.

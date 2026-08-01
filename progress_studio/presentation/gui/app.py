@@ -14,6 +14,8 @@ from progress_studio.app.desktop import DesktopRunOptions, DesktopRunner
 from progress_studio.app.pipeline import PipelineEvent
 from progress_studio.config import SETTINGS
 from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
+from progress_studio.presentation.gui.theme import PALETTE, FONT_MONO, configure_styles
+from progress_studio.presentation.gui.strings import tr
 from progress_studio.infrastructure.layout_preferences import (
     LayoutPreferences,
     LayoutPreferencesRepository,
@@ -61,7 +63,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.title(f"{SETTINGS.title} Desktop {SETTINGS.version}")
         self.geometry("1050x720")
         self.minsize(900, 620)
-        self.configure(bg="#f4f6f8")
+        self.configure(bg=PALETTE.canvas)
 
         self.xml_var = tk.StringVar()
         self.cutoff_var = tk.StringVar(value="5 - Friday")
@@ -82,101 +84,118 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.after(100, self._drain_messages)
 
     def _configure_style(self) -> None:
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-        style.configure("Title.TLabel", font=("Segoe UI", 22, "bold"), background="#f4f6f8")
-        style.configure("Subtitle.TLabel", font=("Segoe UI", 10), foreground="#52606d", background="#f4f6f8")
-        style.configure("Card.TFrame", background="white", relief="solid", borderwidth=1)
-        style.configure("Card.TLabel", background="white")
-        style.configure("Section.TLabel", font=("Segoe UI", 12, "bold"), background="white")
-        style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"), padding=(18, 9))
-        style.configure("TProgressbar", thickness=18)
+        configure_styles(self)
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=22)
-        root.pack(fill="both", expand=True)
+        # Production shell: menu, sidebar, workflow stages, workspace and status bar.
+        self._build_menu()
 
-        ttk.Label(root, text="Progress Studio", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(
-            root,
-            text="Desktop workflow for Schedule XML → Progress workbook → OKD",
-            style="Subtitle.TLabel",
-        ).pack(anchor="w", pady=(2, 18))
+        shell = ttk.Frame(self, style="App.TFrame")
+        shell.pack(fill="both", expand=True)
+        shell.columnconfigure(1, weight=1)
+        shell.rowconfigure(0, weight=1)
 
-        workspace_header = ttk.Frame(root)
-        workspace_header.pack(fill="x", pady=(0, 6))
-        self.focus_mapping_button = ttk.Button(
-            workspace_header, text="Focus Mapping", command=self._toggle_generator
+        sidebar = ttk.Frame(shell, style="Sidebar.TFrame", width=190)
+        sidebar.grid(row=0, column=0, sticky="nsw")
+        sidebar.grid_propagate(False)
+        self._build_sidebar(sidebar)
+
+        main = ttk.Frame(shell, style="App.TFrame", padding=(10, 8, 10, 0))
+        main.grid(row=0, column=1, sticky="nsew")
+        main.rowconfigure(2, weight=1)
+        main.columnconfigure(0, weight=1)
+
+        topbar = ttk.Frame(main, style="Surface.TFrame", padding=(12, 8))
+        topbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        ttk.Label(topbar, text=tr("mapping_workspace"), style="Section.TLabel").pack(side="left")
+        ttk.Label(topbar, text=tr("project_default"), style="Muted.TLabel").pack(side="right", padx=(16, 0))
+        ttk.Button(topbar, text="EN", width=5).pack(side="right", padx=(8, 0))
+        ttk.Button(topbar, text="?", width=3).pack(side="right", padx=(8, 0))
+
+        stages = ttk.Frame(main, style="Surface.TFrame", padding=(8, 6))
+        stages.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        for index, label in enumerate(("1  Import", "2  Validate", "3  Mapping", "4  Allocation", "5  Review", "6  Export")):
+            style = "StageActive.TLabel" if index == 2 else "Stage.TLabel"
+            ttk.Label(stages, text=label, style=style).pack(side="left", fill="x", expand=True, padx=2)
+
+        self.content = ttk.Panedwindow(main, orient="horizontal")
+        self.content.grid(row=2, column=0, sticky="nsew")
+
+        self.generator_panel = ttk.Frame(self.content, style="Card.TFrame", padding=16)
+        self.workspace_panel = ttk.Frame(self.content, style="Card.TFrame", padding=8)
+        self.content.add(self.generator_panel, weight=3)
+        self.content.add(self.workspace_panel, weight=10)
+        self._build_generator_panel(self.generator_panel)
+        self._build_workspace_panel(self.workspace_panel)
+
+        status = ttk.Frame(main, style="Surface.TFrame")
+        status.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        ttk.Label(status, text="●  Ready", style="Status.TLabel", foreground=PALETTE.success).pack(side="left")
+        ttk.Label(status, text=f"Progress Studio {SETTINGS.version}  |  Database: Local", style="Status.TLabel").pack(side="right")
+
+    def _build_menu(self) -> None:
+        menu = tk.Menu(self)
+        for title in ("File", "Edit", "View", "Mapping", "AI Helper", "Tools", "Help"):
+            submenu = tk.Menu(menu, tearoff=False)
+            submenu.add_command(label=f"{title} commands")
+            menu.add_cascade(label=title, menu=submenu)
+        self.configure(menu=menu)
+
+    def _build_sidebar(self, sidebar: ttk.Frame) -> None:
+        ttk.Label(sidebar, text="  ◉  Progress Studio", style="SidebarTitle.TLabel").pack(fill="x", pady=(15, 18))
+        sections = (
+            ("DASHBOARD", (("⌂  " + tr("overview"), False),)),
+            ("MAPPING", (("▦  " + tr("mapping_workspace"), True), ("▤  " + tr("batch_mapping"), False), ("⚙  " + tr("mapping_rules"), False), ("◇  " + tr("mapping_memory"), False))),
+            ("DATA", (("▣  " + tr("boq_data"), False), ("↔  " + tr("progress_activities"), False))),
+            ("SETTINGS", (("⚙  " + tr("project_settings"), False), ("✦  " + tr("ai_settings"), False), ("⚙  " + tr("preferences"), False))),
         )
+        for heading, items in sections:
+            ttk.Label(sidebar, text=heading, style="Sidebar.TLabel", foreground="#9fb2c3").pack(fill="x", padx=12, pady=(9, 3))
+            for label, active in items:
+                ttk.Button(sidebar, text=label, style="SidebarActive.TButton" if active else "Sidebar.TButton").pack(fill="x", padx=7, pady=1)
+        ttk.Label(sidebar, text=f"\n  v{SETTINGS.version}", style="Sidebar.TLabel").pack(side="bottom", fill="x", pady=12)
+
+    def _build_generator_panel(self, left: ttk.Frame) -> None:
+        header = ttk.Frame(left, style="Surface.TFrame")
+        header.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 12))
+        ttk.Label(header, text=tr("generator"), style="Section.TLabel").pack(side="left")
+        self.focus_mapping_button = ttk.Button(header, text="Focus Mapping", command=self._toggle_generator)
         self.focus_mapping_button.pack(side="right")
 
-        self.content = ttk.Panedwindow(root, orient="horizontal")
-        self.content.pack(fill="both", expand=True)
-
-        self.generator_panel = ttk.Frame(self.content, style="Card.TFrame", padding=20)
-        self.workspace_panel = ttk.Frame(self.content, style="Card.TFrame", padding=12)
-        self.content.add(self.generator_panel, weight=5)
-        self.content.add(self.workspace_panel, weight=6)
-        left = self.generator_panel
-        right = self.workspace_panel
-
-        ttk.Label(left, text="1. Project input", style="Section.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
         ttk.Label(left, text="Schedule XML", style="Card.TLabel").grid(row=1, column=0, sticky="w")
-        entry = ttk.Entry(left, textvariable=self.xml_var)
-        entry.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 5))
+        ttk.Entry(left, textvariable=self.xml_var).grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
         ttk.Button(left, text="Browse...", command=self._browse_xml).grid(row=2, column=2, padx=(8, 0))
-        ttk.Label(left, text="The original XML is read-only. Output is created on Desktop.", style="Card.TLabel", foreground="#68737d").grid(row=3, column=0, columnspan=3, sticky="w")
-
-        ttk.Separator(left).grid(row=4, column=0, columnspan=3, sticky="ew", pady=18)
-        ttk.Label(left, text="2. Processing options", style="Section.TLabel").grid(row=5, column=0, columnspan=3, sticky="w", pady=(0, 12))
-
-        ttk.Label(left, text="Weekly cutoff day", style="Card.TLabel").grid(row=6, column=0, sticky="w", pady=5)
-        cutoff = ttk.Combobox(left, textvariable=self.cutoff_var, state="readonly", values=[f"{n} - {name}" for n, name in DAYS])
-        cutoff.grid(row=6, column=1, columnspan=2, sticky="ew", pady=5)
-
-        ttk.Label(left, text="Fallback amount / activity", style="Card.TLabel").grid(row=7, column=0, sticky="w", pady=5)
-        ttk.Entry(left, textvariable=self.amount_var).grid(row=7, column=1, columnspan=2, sticky="ew", pady=5)
-        ttk.Label(left, text="Used only when the XML contains no activity amount data.", style="Card.TLabel", foreground="#68737d").grid(row=8, column=1, columnspan=2, sticky="w")
-
-        ttk.Label(left, text="Plan distribution", style="Card.TLabel").grid(row=9, column=0, sticky="w", pady=(12, 5))
-        dist = ttk.Combobox(left, textvariable=self.distribution_var, state="readonly", values=["auto", "flat", "front", "back", "bell"])
-        dist.grid(row=9, column=1, columnspan=2, sticky="ew", pady=(12, 5))
-
-        ttk.Separator(left).grid(row=10, column=0, columnspan=3, sticky="ew", pady=18)
-        ttk.Label(left, text="3. Run", style="Section.TLabel").grid(row=11, column=0, columnspan=3, sticky="w", pady=(0, 12))
+        ttk.Label(left, text="Weekly cutoff day", style="Card.TLabel").grid(row=3, column=0, sticky="w", pady=(14, 5))
+        ttk.Combobox(left, textvariable=self.cutoff_var, state="readonly", values=[f"{n} - {name}" for n, name in DAYS]).grid(row=3, column=1, columnspan=2, sticky="ew", pady=(14, 5))
+        ttk.Label(left, text="Fallback amount / activity", style="Card.TLabel").grid(row=4, column=0, sticky="w", pady=5)
+        ttk.Entry(left, textvariable=self.amount_var).grid(row=4, column=1, columnspan=2, sticky="ew", pady=5)
+        ttk.Label(left, text="Plan distribution", style="Card.TLabel").grid(row=5, column=0, sticky="w", pady=5)
+        ttk.Combobox(left, textvariable=self.distribution_var, state="readonly", values=["auto", "flat", "front", "back", "bell"]).grid(row=5, column=1, columnspan=2, sticky="ew", pady=5)
         self.run_button = ttk.Button(left, text="Create Progress Workbook", style="Accent.TButton", command=self._start)
-        self.run_button.grid(row=12, column=0, columnspan=3, sticky="ew")
+        self.run_button.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(18, 0))
         self.open_file_button = ttk.Button(left, text="Open output workbook", command=self._open_output, state="disabled")
-        self.open_file_button.grid(row=13, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        self.open_file_button.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         self.open_folder_button = ttk.Button(left, text="Open output folder", command=self._open_folder, state="disabled")
-        self.open_folder_button.grid(row=14, column=0, columnspan=3, sticky="ew", pady=(8, 0))
-
+        self.open_folder_button.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        ttk.Separator(left).grid(row=9, column=0, columnspan=3, sticky="ew", pady=16)
+        ttk.Label(left, textvariable=self.step_var, style="Card.TLabel", wraplength=310).grid(row=10, column=0, columnspan=3, sticky="w")
+        ttk.Progressbar(left, variable=self.progress_var, maximum=100).grid(row=11, column=0, columnspan=3, sticky="ew", pady=(8, 4))
+        ttk.Label(left, textvariable=self.status_var, style="Muted.TLabel").grid(row=12, column=0, columnspan=3, sticky="w")
         left.columnconfigure(0, weight=1)
         left.columnconfigure(1, weight=1)
-        left.columnconfigure(2, weight=0)
 
-        ttk.Label(right, text="Progress", style="Section.TLabel").pack(anchor="w")
-        ttk.Label(right, textvariable=self.step_var, style="Card.TLabel", wraplength=380).pack(anchor="w", pady=(8, 8))
-        ttk.Progressbar(right, variable=self.progress_var, maximum=100).pack(fill="x")
-        ttk.Label(right, textvariable=self.status_var, style="Card.TLabel", foreground="#52606d").pack(anchor="w", pady=(5, 15))
-        ttk.Separator(right).pack(fill="x", pady=(0, 12))
+    def _build_workspace_panel(self, right: ttk.Frame) -> None:
         details = ttk.Notebook(right)
         details.pack(fill="both", expand=True)
-
-        log_tab = ttk.Frame(details, padding=6)
-        mapping_tab = ttk.Frame(details, padding=0)
-        details.add(log_tab, text="Activity log")
-        details.add(mapping_tab, text="Amount Mapping")
-
+        mapping_tab = ttk.Frame(details, padding=0, style="Surface.TFrame")
+        log_tab = ttk.Frame(details, padding=6, style="Surface.TFrame")
+        details.add(mapping_tab, text=tr("mapping_workspace"))
+        details.add(log_tab, text=tr("activity_log"))
         self.amount_mapping = AmountMappingFrame(mapping_tab)
         self.amount_mapping.pack(fill="both", expand=True)
-
-        log_frame = ttk.Frame(log_tab)
+        log_frame = ttk.Frame(log_tab, style="Surface.TFrame")
         log_frame.pack(fill="both", expand=True)
-        self.log = tk.Text(log_frame, wrap="word", font=("Consolas", 9), borderwidth=0, bg="#101820", fg="#d6e3ea", insertbackground="white")
+        self.log = tk.Text(log_frame, wrap="word", font=(FONT_MONO, 9), borderwidth=0, bg="#101820", fg="#d6e3ea", insertbackground="white")
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=scrollbar.set)
         self.log.pack(side="left", fill="both", expand=True)

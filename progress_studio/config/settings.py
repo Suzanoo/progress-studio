@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from progress_studio.version import __version__
+
 
 @dataclass(frozen=True)
 class Settings:
     title: str = "Progress Studio"
-    version: str = "2.0.4"
+    version: str = __version__
     output_root_name: str = "Progress_Studio_Output"
     default_activity_amount: float = 100_000.0
     default_cutoff_day: str = "5"
