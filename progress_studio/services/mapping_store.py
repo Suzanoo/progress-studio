@@ -110,7 +110,7 @@ class MappingStore:
         new_order: list[str] = []
         supplemental_wbs: list[SupplementalWBS] = []
 
-        for node in self.working_tree.nodes():
+        for _depth, node in self.working_tree.walk():
             if node.kind is WorkingNodeKind.WBS:
                 if node.origin is WorkingNodeOrigin.USER_CREATED:
                     path = self._path_for_wbs_node(node.node_id)
@@ -228,6 +228,36 @@ class MappingStore:
             return False
         self._sync_from_working_tree()
         return True
+
+    def indent_selected_node(self) -> WorkingTreeNode:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        self._capture_tree_edit()
+        try:
+            updated = self.working_tree.indent(node.node_id)
+            self.selected_node_id = updated.node_id
+            self._sync_from_working_tree()
+            return updated
+        except Exception:
+            snapshot = self._tree_undo_stack.pop()
+            self.working_tree = WorkingScheduleTree(list(snapshot))
+            raise
+
+    def outdent_selected_node(self) -> WorkingTreeNode:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        self._capture_tree_edit()
+        try:
+            updated = self.working_tree.outdent(node.node_id)
+            self.selected_node_id = updated.node_id
+            self._sync_from_working_tree()
+            return updated
+        except Exception:
+            snapshot = self._tree_undo_stack.pop()
+            self.working_tree = WorkingScheduleTree(list(snapshot))
+            raise
 
     def reparent_selected_node(self, parent_node_id: str) -> WorkingTreeNode:
         node = self.selected_working_node()

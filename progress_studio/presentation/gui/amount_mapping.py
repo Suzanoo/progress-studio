@@ -121,6 +121,8 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Button(activity_header, text="Delete", command=self._delete_progress_node).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Up", command=lambda: self._move_progress_node(-1)).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Down", command=lambda: self._move_progress_node(1)).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Indent", command=self._indent_progress_node).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Outdent", command=self._outdent_progress_node).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Move...", command=self._reparent_progress_node).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Undo edit", command=self._undo_tree_edit).pack(side="left", padx=(8, 0))
         ttk.Button(activity_header, text="Redo edit", command=self._redo_tree_edit).pack(side="left", padx=(4, 0))
@@ -266,6 +268,10 @@ class AmountMappingFrame(ttk.Frame):
             top.bind(sequence, lambda _event: self._undo(), add="+")
         for sequence in ("<Control-f>", "<Command-f>"):
             top.bind(sequence, self._focus_search, add="+")
+        top.bind("<Alt-Up>", lambda _event: self._move_progress_node(-1), add="+")
+        top.bind("<Alt-Down>", lambda _event: self._move_progress_node(1), add="+")
+        top.bind("<Alt-Right>", lambda _event: self._indent_progress_node(), add="+")
+        top.bind("<Alt-Left>", lambda _event: self._outdent_progress_node(), add="+")
         top.bind("<Delete>", self._keyboard_unmap, add="+")
         top.bind("<BackSpace>", self._keyboard_unmap, add="+")
 
@@ -643,6 +649,28 @@ class AmountMappingFrame(ttk.Frame):
         except ValueError as exc:
             messagebox.showerror("Progress tree", str(exc))
 
+    def _indent_progress_node(self) -> None:
+        try:
+            self.store.indent_selected_node()
+            self._render_activities()
+            self._render_boq()
+            self._update_summary()
+            self._autosave_session()
+            self._notify("Progress node indented")
+        except ValueError as exc:
+            messagebox.showerror("Progress tree", str(exc))
+
+    def _outdent_progress_node(self) -> None:
+        try:
+            self.store.outdent_selected_node()
+            self._render_activities()
+            self._render_boq()
+            self._update_summary()
+            self._autosave_session()
+            self._notify("Progress node outdented")
+        except ValueError as exc:
+            messagebox.showerror("Progress tree", str(exc))
+
     def _reparent_progress_node(self) -> None:
         node = self.store.selected_working_node()
         if node is None:
@@ -723,71 +751,97 @@ class AmountMappingFrame(ttk.Frame):
         self._render_boq()
 
     def _render_activities(self) -> None:
+        """Render the recursive working tree in model order.
+
+        WBS and Activity rows now come from one tree walk. Created Activities
+        therefore appear below their selected parent instead of being appended
+        after the workbook-derived flat activity list.
+        """
         self.activity_tree.delete(*self.activity_tree.get_children())
         self._wbs_header_paths.clear()
         page = self.store.activity_page_data()
-        previous_path: tuple[tuple[str, str], ...] = ()
-        header_counter = 0
+        page_activity_ids = set(page.ids)
+        query_active = bool(self.store.activity_query.strip())
 
-        for activity_id in page.ids:
-            row = self.store.activities_by_id[activity_id]
+        relevant_node_ids: set[str] = set()
+        for activity_id in page_activity_ids:
+            node = self.store.working_tree.find_activity(activity_id)
+            if node is None:
+                continue
+            relevant_node_ids.add(node.node_id)
+            relevant_node_ids.update(item.node_id for item in self.store.working_tree.path_for(node.node_id))
 
-            # Repeat the full hierarchy at the start of every page and only
-            # insert the levels that change between consecutive activities.
-            common = 0
-            for old_level, new_level in zip(previous_path, row.wbs_path):
-                if old_level != new_level:
-                    break
-                common += 1
-            for level, (code, name) in enumerate(row.wbs_path[common:], start=common + 1):
-                header_counter += 1
-                indent = "    " * (level - 1)
-                path_key = self.store.wbs_path_key(row.wbs_path, level)
-                header_id = f"__wbs__{page.number}_{header_counter}_{code}"
-                self._wbs_header_paths[header_id] = tuple(row.wbs_path[:level])
-                collapsed = path_key in self.store.collapsed_wbs_paths
+        # Keep user-created WBS nodes visible even before they receive their
+        # first Activity, so the editor remains usable as a true tree editor.
+        for node in self.store.working_tree_nodes():
+            if node.kind.value == "wbs" and node.origin.value == "user_created":
+                relevant_node_ids.add(node.node_id)
+                relevant_node_ids.update(item.node_id for item in self.store.working_tree.path_for(node.node_id))
+
+        rendered_activities = 0
+
+        def visit(parent_id: str | None, depth: int, ancestor_collapsed: bool = False) -> None:
+            nonlocal rendered_activities
+            for node in self.store.working_tree.children(parent_id):
+                if node.node_id not in relevant_node_ids:
+                    continue
+                if ancestor_collapsed and not query_active:
+                    continue
+
+                if node.kind.value == "wbs":
+                    path = tuple(
+                        (item.code, item.name)
+                        for item in self.store.working_tree.path_for(node.node_id)
+                        if item.kind.value == "wbs"
+                    )
+                    path_key = self.store.wbs_path_key(path)
+                    collapsed = path_key in self.store.collapsed_wbs_paths
+                    header_id = f"__wbs__{node.node_id}"
+                    self._wbs_header_paths[header_id] = path
+                    indent = "    " * max(depth - 1, 0)
+                    self.activity_tree.insert(
+                        "",
+                        "end",
+                        iid=header_id,
+                        values=("", f"{indent}{'▶' if collapsed else '▼'} {node.code}", node.name, ""),
+                        tags=(
+                            f"wbs_level_{min(depth, 3)}",
+                            "wbs_header",
+                            "selected_wbs" if node.node_id == self.store.selected_node_id else "",
+                        ),
+                    )
+                    visit(node.node_id, depth + 1, ancestor_collapsed=collapsed and not query_active)
+                    continue
+
+                if node.code not in page_activity_ids:
+                    continue
+                row = self.store.activities_by_id.get(node.code)
+                if row is None:
+                    continue
+                check = "☑" if node.code in self.store.selected_activity_ids else "☐"
+                indent = "    " * max(depth - 1, 0)
                 self.activity_tree.insert(
                     "",
                     "end",
-                    iid=header_id,
-                    values=("", f"{indent}{'▶' if collapsed else '▼'} {code}", name, ""),
-                    tags=(f"wbs_level_{min(level, 3)}", "wbs_header", "selected_wbs" if tuple(row.wbs_path[:level]) == self.store.selected_wbs_path else ""),
-                )
-
-            if self.store.is_activity_visible(activity_id) or self.store.activity_query.strip():
-                check = "☑" if activity_id in self.store.selected_activity_ids else "☐"
-                activity_indent = "    " * len(row.wbs_path)
-                self.activity_tree.insert(
-                    "",
-                    "end",
-                    iid=activity_id,
+                    iid=node.code,
                     values=(
                         check,
-                        f"{activity_indent}{row.activity_id}",
-                        row.description,
-                        f"{self.store.activity_amount(activity_id):,.2f}",
+                        f"{indent}{node.code}",
+                        node.name,
+                        f"{self.store.activity_amount(node.code):,.2f}",
                     ),
+                    tags=("selected_activity",) if node.node_id == self.store.selected_node_id else (),
                 )
-            previous_path = row.wbs_path
+                rendered_activities += 1
 
-        represented_paths = set(self._wbs_header_paths.values())
-        for node in sorted(
-            self.store.supplemental_wbs_nodes,
-            key=lambda item: (tuple(code for code, _ in item.path), len(item.path)),
-        ):
-            if node.path in represented_paths:
-                continue
-            level = len(node.path)
-            header_counter += 1
-            header_id = f"__wbs__created_{header_counter}_{node.code}"
-            self._wbs_header_paths[header_id] = node.path
-            indent = "    " * (level - 1)
-            path_key = self.store.wbs_path_key(node.path)
-            collapsed = path_key in self.store.collapsed_wbs_paths
-            self.activity_tree.insert("", "end", iid=header_id, values=("", f"{indent}{'▶' if collapsed else '▼'} {node.code}", node.name, ""), tags=(f"wbs_level_{min(level, 3)}", "wbs_header", "selected_wbs" if node.path == self.store.selected_wbs_path else ""))
-
-        self.activity_empty_var.set("" if page.total else ("No matching activities" if self.progress_file else "No Progress workbook loaded"))
-        self.activity_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
+        visit(None, 1)
+        self.activity_empty_var.set(
+            "" if rendered_activities else
+            ("No matching activities" if self.progress_file else "No Progress workbook loaded")
+        )
+        self.activity_page_var.set(
+            f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}"
+        )
 
     def _boq_values(self, key: str) -> tuple[str, ...]:
         row = self.store.boq_by_id[key]

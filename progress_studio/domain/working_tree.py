@@ -189,11 +189,40 @@ class WorkingScheduleTree:
         return self._nodes.get(node_id)
 
     def children(self, node_id: str | None) -> tuple[WorkingTreeNode, ...]:
-        return tuple(
+        children = [
             self._nodes[child_id]
             for child_id in self._children.get(node_id, ())
             if not self._nodes[child_id].deleted
-        )
+        ]
+        return tuple(sorted(children, key=lambda item: (item.order, item.node_id)))
+
+    def walk(self, node_id: str | None = None) -> tuple[tuple[int, WorkingTreeNode], ...]:
+        """Return nodes in recursive pre-order display sequence.
+
+        The working tree, not a flattened activity list, is the single source
+        of truth for presentation and export ordering.
+        """
+        rows: list[tuple[int, WorkingTreeNode]] = []
+
+        def visit(parent_id: str | None, depth: int) -> None:
+            for child in self.children(parent_id):
+                rows.append((depth, child))
+                visit(child.node_id, depth + 1)
+
+        visit(node_id, 1)
+        return tuple(rows)
+
+    def depth(self, node_id: str) -> int:
+        path = self.path_for(node_id)
+        return sum(1 for node in path if node.kind is WorkingNodeKind.WBS)
+
+    def _active_child_ids(self, parent_id: str | None) -> list[str]:
+        return [node.node_id for node in self.children(parent_id)]
+
+    def _rewrite_sibling_order(self, parent_id: str | None, ordered_ids: list[str]) -> None:
+        for index, child_id in enumerate(ordered_ids):
+            self._nodes[child_id] = replace(self._nodes[child_id], order=index)
+        self._children[parent_id] = list(ordered_ids)
 
     def find_wbs_by_path(
         self, path: tuple[tuple[str, str], ...]
@@ -305,7 +334,8 @@ class WorkingScheduleTree:
             for node in self._nodes.values()
         ):
             raise ValueError(f"WBS code already exists: {code}")
-        order = max((node.order for node in self._nodes.values()), default=-1) + 1
+        siblings = self.children(parent_id)
+        order = max((node.order for node in siblings), default=-1) + 1
         node = WorkingTreeNode(
             node_id=self.created_node_id(),
             kind=kind,
@@ -370,20 +400,74 @@ class WorkingScheduleTree:
         node = self.get(node_id)
         if node is None or node.deleted or offset == 0:
             return False
-        siblings = [
-            self._nodes[item_id]
-            for item_id in self._children.get(node.parent_id, ())
-            if not self._nodes[item_id].deleted
-        ]
-        siblings.sort(key=lambda item: item.order)
-        index = next((i for i, item in enumerate(siblings) if item.node_id == node_id), -1)
-        target = index + (-1 if offset < 0 else 1)
-        if index < 0 or target < 0 or target >= len(siblings):
+        sibling_ids = self._active_child_ids(node.parent_id)
+        try:
+            index = sibling_ids.index(node_id)
+        except ValueError:
             return False
-        other = siblings[target]
-        self.replace(replace(node, order=other.order))
-        self.replace(replace(other, order=node.order))
+        target = index + (-1 if offset < 0 else 1)
+        if target < 0 or target >= len(sibling_ids):
+            return False
+        sibling_ids[index], sibling_ids[target] = sibling_ids[target], sibling_ids[index]
+        self._rewrite_sibling_order(node.parent_id, sibling_ids)
         return True
+
+    def indent(self, node_id: str, *, max_wbs_depth: int = 4) -> WorkingTreeNode:
+        """Move a node under its previous WBS sibling, matching BOQ Tree behavior."""
+        node = self.get(node_id)
+        if node is None or node.deleted:
+            raise ValueError("The selected node is not available.")
+        sibling_ids = self._active_child_ids(node.parent_id)
+        try:
+            index = sibling_ids.index(node_id)
+        except ValueError as exc:
+            raise ValueError("The selected node is not in the working tree.") from exc
+        if index == 0:
+            raise ValueError("The first node has no previous sibling to indent under.")
+        previous = self.get(sibling_ids[index - 1])
+        if previous is None or previous.kind is not WorkingNodeKind.WBS:
+            raise ValueError("Indent requires the previous sibling to be a WBS node.")
+        if node.kind is WorkingNodeKind.WBS and self.depth(previous.node_id) >= max_wbs_depth:
+            raise ValueError(f"Maximum supported WBS depth is {max_wbs_depth}.")
+
+        sibling_ids.pop(index)
+        self._rewrite_sibling_order(node.parent_id, sibling_ids)
+        child_ids = self._active_child_ids(previous.node_id)
+        child_ids.append(node_id)
+        updated = replace(node, parent_id=previous.node_id, order=len(child_ids) - 1)
+        self._nodes[node_id] = updated
+        self._children.setdefault(previous.node_id, [])
+        self._rewrite_sibling_order(previous.node_id, child_ids)
+        return updated
+
+    def outdent(self, node_id: str) -> WorkingTreeNode:
+        """Move a node directly after its current parent in the grandparent list."""
+        node = self.get(node_id)
+        if node is None or node.deleted:
+            raise ValueError("The selected node is not available.")
+        parent = self.get(node.parent_id) if node.parent_id else None
+        if parent is None:
+            raise ValueError("The node is already at the working-tree root.")
+        grandparent_id = parent.parent_id
+        if node.kind is WorkingNodeKind.ACTIVITY and grandparent_id is None:
+            raise ValueError("An Activity must remain under a WBS node.")
+
+        current_ids = self._active_child_ids(parent.node_id)
+        if node_id not in current_ids:
+            raise ValueError("The selected node is not in the working tree.")
+        current_ids.remove(node_id)
+        self._rewrite_sibling_order(parent.node_id, current_ids)
+
+        outer_ids = self._active_child_ids(grandparent_id)
+        try:
+            parent_index = outer_ids.index(parent.node_id)
+        except ValueError as exc:
+            raise ValueError("The parent WBS is not in the working tree.") from exc
+        outer_ids.insert(parent_index + 1, node_id)
+        updated = replace(node, parent_id=grandparent_id, order=parent_index + 1)
+        self._nodes[node_id] = updated
+        self._rewrite_sibling_order(grandparent_id, outer_ids)
+        return updated
 
     def soft_delete(self, node_id: str) -> tuple[WorkingTreeNode, ...]:
         node = self.get(node_id)
