@@ -130,20 +130,25 @@ class MappingStore:
             raise ValueError("WBS code, WBS name, Activity ID, and Activity name are required.")
         if activity_id in self.activities_by_id:
             raise ValueError(f"Activity ID already exists: {activity_id}")
-        existing_codes = {code for row in self.activities_by_id.values() for code, _ in row.wbs_path}
-        if wbs_code in existing_codes:
-            raise ValueError(f"WBS code already exists: {wbs_code}")
+        # Activities are created *under* an existing WBS, so the selected
+        # parent WBS code is expected to already exist.  Uniqueness belongs
+        # to Activity ID, not to the parent WBS code.
         if parent_path and tuple(parent_path) not in self.all_wbs_paths():
             raise ValueError("The selected parent WBS no longer exists.")
+        # Backward-compatible behavior: callers may either pass the selected
+        # WBS itself (create Activity directly under it), or pass a new WBS
+        # code/name to create the Activity under that supplemental leaf.
+        direct_parent = bool(parent_path) and wbs_code == parent_path[-1][0]
+        activity_path = tuple(parent_path) if direct_parent else tuple(parent_path) + ((wbs_code, wbs_name),)
         row = ActivityRow(
             activity_id=activity_id,
-            parent_wbs=parent_path[-1][0] if parent_path else "",
-            child_wbs=wbs_code,
+            parent_wbs=activity_path[-1][0] if activity_path else "",
+            child_wbs=activity_path[-1][0] if activity_path else wbs_code,
             description=description,
-            wbs_path=parent_path,
+            wbs_path=activity_path,
             origin="user_created",
-            supplemental_wbs_code=parent_path[-1][0] if parent_path else wbs_code,
-            supplemental_wbs_name=parent_path[-1][1] if parent_path else wbs_name,
+            supplemental_wbs_code=activity_path[-1][0] if activity_path else wbs_code,
+            supplemental_wbs_name=activity_path[-1][1] if activity_path else wbs_name,
         )
         self.activities_by_id[activity_id] = row
         self.activity_order.append(activity_id)

@@ -536,7 +536,16 @@ class AmountMappingFrame(ttk.Frame):
         if description is None:
             return
         try:
-            self.store.add_supplemental_activity(parent_path=parent_path, wbs_code=parent_path[-1][0], wbs_name=parent_path[-1][1], activity_id=activity_id, description=description)
+            self.store.add_supplemental_activity(
+                parent_path=parent_path,
+                wbs_code=parent_path[-1][0],
+                wbs_name=parent_path[-1][1],
+                activity_id=activity_id,
+                description=description,
+            )
+            # Keep the parent visible and select the newly created Activity.
+            self.store.selected_wbs_path = ()
+            self.store.collapsed_wbs_paths.discard(self.store.wbs_path_key(parent_path))
             self._render_activities()
             self._update_summary()
             self._autosave_session()
@@ -646,7 +655,10 @@ class AmountMappingFrame(ttk.Frame):
             previous_path = row.wbs_path
 
         represented_paths = set(self._wbs_header_paths.values())
-        for node in self.store.supplemental_wbs_nodes:
+        for node in sorted(
+            self.store.supplemental_wbs_nodes,
+            key=lambda item: (tuple(code for code, _ in item.path), len(item.path)),
+        ):
             if node.path in represented_paths:
                 continue
             level = len(node.path)
