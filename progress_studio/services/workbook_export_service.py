@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from progress_studio.domain.export_models import ExportResult, ExportValidation
 from progress_studio.domain.mapping_models import AllocationRecord, BOQRow, MappingStatus
@@ -46,6 +47,7 @@ class WorkbookExportService:
         store: MappingStore,
         *,
         overwrite: bool = False,
+        progress_callback: Callable[[str, str, bool], None] | None = None,
     ) -> ExportResult:
         validation = self.validate(store)
         return self.exporter.export(
@@ -58,4 +60,5 @@ class WorkbookExportService:
             supplemental_wbs=list(store.supplemental_wbs_nodes),
             working_tree_nodes=list(store.working_tree_nodes()),
             overwrite=overwrite,
+            progress_callback=progress_callback,
         )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Callable
 import shutil
 import tempfile
 
@@ -76,9 +77,17 @@ class WorkbookGenerationService:
         cutoff_day: str = "Friday",
         distribution_method: str = "auto",
         amounts: dict[str, float] | None = None,
+        progress_callback: Callable[[str, str, bool], None] | None = None,
     ) -> WorkbookGenerationResult:
         output_file = Path(output_file)
+
+        def report(step: str, message: str, complete: bool = False) -> None:
+            if progress_callback is not None:
+                progress_callback(step, message, complete)
+
+        report("read", "Reading working schedule...")
         rows = source.activities()
+        report("read", f"Read {len(rows):,} schedule rows.", True)
         amounts = {key.strip().upper(): float(value) for key, value in (amounts or {}).items()}
         with tempfile.TemporaryDirectory(prefix="progress-studio-generate-") as temp_dir_text:
             temp_dir = Path(temp_dir_text)
@@ -89,19 +98,38 @@ class WorkbookGenerationService:
             progress = temp_dir / "05_progress.xlsx"
             distributed = temp_dir / "06_distributed.xlsx"
 
+            report("main", "Building main schedule...")
             self.writer.write(imported, Path("working-tree"), source.project_name, rows)
             self.schedule.prepare(imported, scheduled)
+            report("main", "Main schedule built.", True)
+
+            report("timescale", "Building timescale...")
             self.timescale.build(scheduled, timescaled, cutoff_day)
+            report("timescale", "Timescale built.", True)
+
+            report("mapping", "Applying mapped amounts...")
             self._write_amount_mapping(timescaled, amounts)
             self.amount.apply_mapping(timescaled, amount_mapped)
+            report("mapping", "Mapped amounts applied.", True)
+
+            report("progress", "Building progress sheets...")
             self.progress.build(amount_mapped, progress)
+            report("progress", "Progress sheets built.", True)
+
+            report("distribution", "Generating plan distribution...")
             distribution = self.distribution.generate(
                 progress,
                 distributed,
                 method=distribution_method,
                 debug=False,
             )
+            report("distribution", "Plan distribution generated.", True)
+
+            report("okd", "Building OKD sheets...")
             self.okd.build(distributed, distributed)
+            report("okd", "OKD sheets built.", True)
+
+            report("finalize", "Writing final workbook...")
             output_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(distributed, output_file)
 

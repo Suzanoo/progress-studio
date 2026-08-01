@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 from copy import copy
+from collections.abc import Callable
 
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -69,6 +70,7 @@ class MappedWorkbookExporter:
         supplemental_wbs: list[SupplementalWBS] | None = None,
         working_tree_nodes: list[WorkingTreeNode] | None = None,
         overwrite: bool = False,
+        progress_callback: Callable[[str, str, bool], None] | None = None,
     ) -> ExportResult:
         progress_file = Path(progress_file).resolve()
         output_file = Path(output_file).resolve()
@@ -110,12 +112,16 @@ class MappedWorkbookExporter:
                     cutoff_day=cutoff_day,
                     distribution_method="auto",
                     amounts=totals,
+                    progress_callback=progress_callback,
                 )
                 amount_rows = generation.activity_count
             else:
                 shutil.copy2(progress_file, temp_file)
                 amount_rows = 0
 
+            if progress_callback is not None and not can_generate:
+                for step, message in (("read", "Source workbook loaded."), ("main", "Main schedule prepared."), ("timescale", "Existing timescale preserved."), ("mapping", "Mapped amounts prepared."), ("progress", "Existing progress sheets preserved."), ("distribution", "Existing distribution preserved."), ("okd", "Existing OKD sheets preserved.")):
+                    progress_callback(step, message, True)
             workbook = load_workbook(temp_file)
             try:
                 validate_progress_workbook_contract(workbook)
@@ -134,6 +140,8 @@ class MappedWorkbookExporter:
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
                 request_full_excel_recalculation(workbook)
                 workbook.save(temp_file)
+                if progress_callback is not None:
+                    progress_callback("finalize", "Workbook finalized.", True)
             finally:
                 workbook.close()
             validate_xlsx_tables(temp_file)

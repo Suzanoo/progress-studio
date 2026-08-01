@@ -14,6 +14,7 @@ from progress_studio.infrastructure.layout_preferences import (
 )
 from progress_studio.infrastructure.platform_paths import user_data_dir
 from progress_studio.presentation.gui.theme import PALETTE
+from progress_studio.presentation.gui.generation_progress import GenerationProgressDialog
 from progress_studio.infrastructure.session import (
     MappingSessionRepository,
     RecentSessionRepository,
@@ -1256,11 +1257,24 @@ class AmountMappingFrame(ttk.Frame):
         )
         if not selected:
             return
+        dialog = GenerationProgressDialog(self)
+
+        def report(step: str, message: str, complete: bool) -> None:
+            if complete:
+                dialog.complete_step(step, message)
+            else:
+                dialog.update_step(step, message)
+
         try:
-            self._busy(True)
+            self._busy(True, "Generating workbook...")
             result = self.export_service.export(
-                self.progress_file, Path(selected), self.store, overwrite=True
+                self.progress_file,
+                Path(selected),
+                self.store,
+                overwrite=True,
+                progress_callback=report,
             )
+            dialog.complete_step("finalize", "Workbook generated successfully.")
             self._notify("Workbook exported")
             messagebox.showinfo(
                 "Export complete",
@@ -1269,6 +1283,8 @@ class AmountMappingFrame(ttk.Frame):
                 f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}",
             )
         except Exception as exc:
+            dialog.fail(f"Generation failed: {exc}")
             messagebox.showerror("Export mapped workbook", str(exc))
         finally:
+            dialog.close()
             self._busy(False)
