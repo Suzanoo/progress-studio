@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import shutil
 import tempfile
+from copy import copy
 
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -13,6 +14,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from progress_studio.domain.export_models import ExportResult, ExportValidation
 from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, BOQRow, SupplementalWBS
+from progress_studio.domain.working_tree import WorkingNodeKind, WorkingNodeOrigin, WorkingTreeNode, WorkingScheduleTree
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
@@ -63,6 +65,7 @@ class MappedWorkbookExporter:
         *,
         activities: list[ActivityRow] | None = None,
         supplemental_wbs: list[SupplementalWBS] | None = None,
+        working_tree_nodes: list[WorkingTreeNode] | None = None,
         overwrite: bool = False,
     ) -> ExportResult:
         progress_file = Path(progress_file).resolve()
@@ -92,7 +95,12 @@ class MappedWorkbookExporter:
                 supplemental_ids = {row.activity_id for row in activities if row.is_supplemental}
                 main_totals = {key: value for key, value in totals.items() if key not in supplemental_ids}
                 supplemental_total = sum(value for key, value in totals.items() if key in supplemental_ids)
-                amount_rows = self._write_main_amounts(workbook, main_totals, validation.allocated_amount - supplemental_total)
+                if working_tree_nodes and self._supports_main_rebuild(workbook):
+                    amount_rows = self._rebuild_main_from_working_tree(
+                        workbook, working_tree_nodes, totals
+                    )
+                else:
+                    amount_rows = self._write_main_amounts(workbook, main_totals, validation.allocated_amount - supplemental_total)
                 self._write_amount_mapping(workbook, main_totals)
                 self._write_extension_sheet(workbook, activities, totals, supplemental_wbs or [])
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
@@ -108,6 +116,218 @@ class MappedWorkbookExporter:
             temp_file.unlink(missing_ok=True)
             raise
 
+
+
+    @staticmethod
+    def _supports_main_rebuild(workbook) -> bool:
+        if 'main' not in workbook.sheetnames:
+            return False
+        try:
+            find_header(
+                workbook['main'],
+                ['Row Type', 'WBS', 'Description', 'P/A', 'Activity ID',
+                 'Outline Level', 'Plan Start', 'Plan Finish', 'Amount'],
+            )
+            return True
+        except ValueError:
+            # Legacy/minimal test workbooks keep the MS6 amount-update path.
+            return False
+
+    @staticmethod
+    def _copy_row_style(ws, source_row: int, target_row: int) -> None:
+        for col in range(1, ws.max_column + 1):
+            source = ws.cell(source_row, col)
+            target = ws.cell(target_row, col)
+            if source.has_style:
+                target._style = copy(source._style)
+            if source.number_format:
+                target.number_format = source.number_format
+            target.alignment = copy(source.alignment)
+            target.font = copy(source.font)
+            target.fill = copy(source.fill)
+            target.border = copy(source.border)
+            target.protection = copy(source.protection)
+        ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
+
+    @classmethod
+    def _rebuild_main_from_working_tree(
+        cls, workbook, nodes: list[WorkingTreeNode], totals: dict[str, float]
+    ) -> int:
+        """Rebuild only the editable `main` schedule tree.
+
+        User-created activities intentionally receive blank Plan Start/Finish
+        cells. This is a supported draft state: the user completes dates in the
+        exported main sheet before regenerating downstream progress sheets.
+        """
+        ws = workbook['main']
+        header_row, headers = find_header(
+            ws, ['Row Type', 'WBS', 'Description', 'P/A', 'Activity ID', 'Outline Level', 'Plan Start', 'Plan Finish', 'Amount']
+        )
+        row_type_col = headers['row type']
+        wbs_col = headers['wbs']
+        desc_col = headers['description']
+        pa_col = headers['p/a']
+        activity_col = headers['activity id']
+        outline_col = headers['outline level']
+        amount_col = headers['amount']
+
+        original_activity_rows: dict[str, tuple[int, int]] = {}
+        original_wbs_rows: dict[tuple[tuple[str, str], ...], tuple[int, int]] = {}
+        path_stack: list[tuple[str, str]] = []
+        project_plan = project_actual = None
+        wbs_template = activity_template = None
+        for row in range(header_row + 1, ws.max_row + 1):
+            pa = str(ws.cell(row, pa_col).value or '').strip().upper()
+            if pa != 'P':
+                continue
+            row_type = normalize_header(ws.cell(row, row_type_col).value)
+            if row_type == 'project summary':
+                project_plan, project_actual = row, row + 1
+            elif row_type == 'wbs':
+                wbs_template = wbs_template or row
+                level = int(ws.cell(row, outline_col).value or 0)
+                code = str(ws.cell(row, wbs_col).value or '').strip()
+                name = str(ws.cell(row, desc_col).value or '').strip()
+                path_stack = path_stack[: max(level - 1, 0)]
+                path_stack.append((code, name))
+                original_wbs_rows[tuple(path_stack)] = (row, row + 1)
+            elif row_type == 'activity':
+                activity_template = activity_template or row
+                activity_id = str(ws.cell(row, activity_col).value or '').strip().upper()
+                if activity_id:
+                    original_activity_rows[activity_id] = (row, row + 1)
+
+        if project_plan is None or project_actual is None or wbs_template is None or activity_template is None:
+            raise ValueError('The main worksheet does not contain reusable Project/WBS/Activity row templates.')
+
+        # Snapshot source cells before deleting rows.
+        max_col = ws.max_column
+        source_values = {
+            row: [ws.cell(row, col).value for col in range(1, max_col + 1)]
+            for row in range(header_row + 1, ws.max_row + 1)
+        }
+        source_styles = {}
+        for key, row in [('project_p', project_plan), ('project_a', project_actual), ('wbs_p', wbs_template), ('wbs_a', wbs_template + 1), ('act_p', activity_template), ('act_a', activity_template + 1)]:
+            source_styles[key] = [copy(ws.cell(row, col)._style) for col in range(1, max_col + 1)]
+
+        project_p_values = list(source_values[project_plan])
+        project_a_values = list(source_values[project_actual])
+        ws.delete_rows(header_row + 1, ws.max_row - header_row)
+
+        def append_pair(kind: str, plan_values: list, actual_values: list) -> tuple[int, int]:
+            plan_row = ws.max_row + 1
+            ws.append(plan_values)
+            actual_row = ws.max_row + 1
+            ws.append(actual_values)
+            for col in range(1, max_col + 1):
+                ws.cell(plan_row, col)._style = copy(source_styles[f'{kind}_p'][col - 1])
+                ws.cell(actual_row, col)._style = copy(source_styles[f'{kind}_a'][col - 1])
+            return plan_row, actual_row
+
+        project_plan_row, project_actual_row = append_pair('project', project_p_values, project_a_values)
+        tree = WorkingScheduleTree(nodes)
+        node_rows: list[tuple[int, WorkingTreeNode, int, int]] = []
+        activity_counter_by_parent: dict[str, int] = defaultdict(int)
+
+        for depth, node in tree.walk():
+            if node.deleted:
+                continue
+            if node.kind is WorkingNodeKind.WBS:
+                source_pair = original_wbs_rows.get(node.source_path)
+                if source_pair:
+                    plan_values = list(source_values[source_pair[0]])
+                    actual_values = list(source_values[source_pair[1]])
+                else:
+                    plan_values = [None] * max_col
+                    actual_values = [None] * max_col
+                plan_values[row_type_col - 1] = 'WBS'
+                plan_values[wbs_col - 1] = node.code
+                plan_values[desc_col - 1] = node.name
+                plan_values[pa_col - 1] = 'P'
+                plan_values[activity_col - 1] = None
+                plan_values[outline_col - 1] = depth
+                actual_values[row_type_col - 1] = None
+                actual_values[wbs_col - 1] = None
+                actual_values[desc_col - 1] = None
+                actual_values[pa_col - 1] = 'A'
+                actual_values[activity_col - 1] = None
+                actual_values[outline_col - 1] = None
+                if node.origin is WorkingNodeOrigin.USER_CREATED:
+                    for col_name in ('plan start', 'plan finish', 'actual start', 'actual finish'):
+                        if col_name in headers:
+                            plan_values[headers[col_name] - 1] = None
+                    for col in range(18, max_col + 1):
+                        plan_values[col - 1] = None
+                        actual_values[col - 1] = None
+                pr, ar = append_pair('wbs', plan_values, actual_values)
+            else:
+                source_pair = original_activity_rows.get(node.source_activity_id.strip().upper())
+                if source_pair:
+                    plan_values = list(source_values[source_pair[0]])
+                    actual_values = list(source_values[source_pair[1]])
+                else:
+                    plan_values = [None] * max_col
+                    actual_values = [None] * max_col
+                parent = tree.get(node.parent_id) if node.parent_id else None
+                parent_code = parent.code if parent else ''
+                activity_counter_by_parent[node.parent_id or ''] += 1
+                activity_wbs = f'{parent_code}.{activity_counter_by_parent[node.parent_id or ""]}' if parent_code else str(activity_counter_by_parent[node.parent_id or ''])
+                plan_values[row_type_col - 1] = 'Activity'
+                plan_values[wbs_col - 1] = activity_wbs
+                plan_values[desc_col - 1] = node.name
+                plan_values[pa_col - 1] = 'P'
+                plan_values[activity_col - 1] = node.code
+                plan_values[outline_col - 1] = depth
+                plan_values[amount_col - 1] = totals.get(node.code.strip().upper(), 0.0)
+                actual_values[row_type_col - 1] = None
+                actual_values[wbs_col - 1] = None
+                actual_values[desc_col - 1] = None
+                actual_values[pa_col - 1] = 'A'
+                actual_values[activity_col - 1] = node.code
+                actual_values[outline_col - 1] = None
+                actual_values[amount_col - 1] = f'={get_column_letter(amount_col)}{ws.max_row + 1}'
+                if node.origin is WorkingNodeOrigin.USER_CREATED:
+                    # Draft dates are deliberately blank and downstream weekly
+                    # distributions are not generated in this milestone.
+                    for col_name in ('plan start', 'plan finish', 'actual start', 'actual finish'):
+                        if col_name in headers:
+                            plan_values[headers[col_name] - 1] = None
+                            actual_values[headers[col_name] - 1] = None
+                    for col in range(18, max_col + 1):
+                        plan_values[col - 1] = None
+                        actual_values[col - 1] = None
+                pr, ar = append_pair('act', plan_values, actual_values)
+            node_rows.append((depth, node, pr, ar))
+
+        amount_letter = get_column_letter(amount_col)
+        row_type_letter = get_column_letter(row_type_col)
+        pa_letter = get_column_letter(pa_col)
+        for index in range(len(node_rows) - 1, -1, -1):
+            depth, node, plan_row, actual_row = node_rows[index]
+            if node.kind is WorkingNodeKind.ACTIVITY:
+                ws.cell(actual_row, amount_col).value = f'={amount_letter}{plan_row}'
+                continue
+            end_row = plan_row
+            for child_depth, _child, child_plan, child_actual in node_rows[index + 1:]:
+                if child_depth <= depth:
+                    break
+                end_row = child_actual
+            ws.cell(plan_row, amount_col).value = 0 if end_row <= plan_row else (
+                f'=SUMIFS(${amount_letter}${plan_row + 1}:${amount_letter}${end_row},'
+                f'${row_type_letter}${plan_row + 1}:${row_type_letter}${end_row},"Activity",'
+                f'${pa_letter}${plan_row + 1}:${pa_letter}${end_row},"P")'
+            )
+            ws.cell(actual_row, amount_col).value = f'={amount_letter}{plan_row}'
+
+        last_row = ws.max_row
+        ws.cell(project_plan_row, amount_col).value = (
+            f'=SUMIFS(${amount_letter}${project_plan_row + 2}:${amount_letter}${last_row},'
+            f'${row_type_letter}${project_plan_row + 2}:${row_type_letter}${last_row},"Activity",'
+            f'${pa_letter}${project_plan_row + 2}:${pa_letter}${last_row},"P")'
+        )
+        ws.cell(project_actual_row, amount_col).value = f'={amount_letter}{project_plan_row}'
+        ws.auto_filter.ref = f'A{header_row}:{get_column_letter(max_col)}{last_row}'
+        return sum(1 for _d, node, _p, _a in node_rows if node.kind is WorkingNodeKind.ACTIVITY)
 
     @staticmethod
     def _write_extension_sheet(workbook, activities: list[ActivityRow], totals: dict[str, float], supplemental_wbs: list[SupplementalWBS]) -> None:

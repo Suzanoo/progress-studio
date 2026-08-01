@@ -4,6 +4,7 @@ from pathlib import Path
 
 from progress_studio.domain.export_models import ExportResult, ExportValidation
 from progress_studio.domain.mapping_models import AllocationRecord, BOQRow, MappingStatus
+from progress_studio.domain.working_tree import WorkingTreeNode
 from progress_studio.infrastructure.excel.mapped_workbook_exporter import MappedWorkbookExporter
 from progress_studio.services.mapping_store import MappingStore
 
@@ -55,5 +56,6 @@ class WorkbookExportService:
             validation,
             activities=list(store.activities_by_id.values()),
             supplemental_wbs=list(store.supplemental_wbs_nodes),
+            working_tree_nodes=list(store.working_tree_nodes()),
             overwrite=overwrite,
         )
