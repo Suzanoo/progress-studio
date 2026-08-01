@@ -46,6 +46,8 @@ class MappingStore:
         self.boq_wbs3 = ""
         self._boq_ids_by_wbs2: dict[str, list[str]] = {}
         self._boq_ids_by_wbs23: dict[tuple[str, str], list[str]] = {}
+        self.boq_selection_anchor: str | None = None
+        self.collapsed_wbs_paths: set[tuple[str, ...]] = set()
 
     def load_activities(self, rows: list[ActivityRow]) -> None:
         self.activities_by_id = {row.activity_id: row for row in rows}
@@ -55,6 +57,7 @@ class MappingStore:
         self.selected_boq_ids.clear()
         self._undo_stack.clear()
         self.activity_page = 1
+        self.collapsed_wbs_paths.clear()
 
     def load_boq(self, rows: list[BOQRow]) -> None:
         self.boq_by_id = {row.key: row for row in rows}
@@ -68,14 +71,67 @@ class MappingStore:
         self.boq_wbs3 = ""
         self.allocations.clear()
         self.selected_boq_ids.clear()
+        self.boq_selection_anchor = None
         self._undo_stack.clear()
         self.boq_page = 1
 
+    @staticmethod
+    def wbs_path_key(path: tuple[tuple[str, str], ...], level: int | None = None) -> tuple[str, ...]:
+        items = path if level is None else path[:level]
+        return tuple(code for code, _name in items)
+
+    def toggle_wbs(self, path_key: tuple[str, ...]) -> None:
+        if path_key in self.collapsed_wbs_paths:
+            self.collapsed_wbs_paths.remove(path_key)
+        else:
+            self.collapsed_wbs_paths.add(path_key)
+        self.activity_page = 1
+
+    def collapse_all_wbs(self) -> None:
+        self.collapsed_wbs_paths = {
+            self.wbs_path_key(row.wbs_path, level)
+            for row in self.activities_by_id.values()
+            for level in range(1, len(row.wbs_path) + 1)
+        }
+        self.activity_page = 1
+
+    def expand_all_wbs(self) -> None:
+        self.collapsed_wbs_paths.clear()
+        self.activity_page = 1
+
+    def is_activity_visible(self, activity_id: str) -> bool:
+        row = self.activities_by_id[activity_id]
+        return not any(
+            self.wbs_path_key(row.wbs_path, level) in self.collapsed_wbs_paths
+            for level in range(1, len(row.wbs_path) + 1)
+        )
+
     def _filtered_activity_ids(self) -> list[str]:
         query = self.activity_query.strip().lower()
-        if not query:
-            return self.activity_order
-        return [key for key in self.activity_order if query in self.activities_by_id[key].search_text]
+        candidates = self.activity_order if not query else [
+            key for key in self.activity_order
+            if query in self.activities_by_id[key].search_text
+        ]
+        # Search results always expand their parent context. In normal browsing,
+        # retain one representative Activity per collapsed subtree so the UI
+        # can still render the WBS header while hiding its descendants.
+        if query or not self.collapsed_wbs_paths:
+            return list(candidates)
+        result: list[str] = []
+        represented: set[tuple[str, ...]] = set()
+        for key in candidates:
+            row = self.activities_by_id[key]
+            collapsed_prefix = next((
+                self.wbs_path_key(row.wbs_path, level)
+                for level in range(1, len(row.wbs_path) + 1)
+                if self.wbs_path_key(row.wbs_path, level) in self.collapsed_wbs_paths
+            ), None)
+            if collapsed_prefix is None:
+                result.append(key)
+            elif collapsed_prefix not in represented:
+                represented.add(collapsed_prefix)
+                result.append(key)
+        return result
 
     def boq_wbs2_values(self) -> tuple[str, ...]:
         return tuple(sorted(value for value in self._boq_ids_by_wbs2 if value))
@@ -129,11 +185,49 @@ class MappingStore:
         else:
             self.selected_activity_ids = {activity_id}
 
-    def toggle_boq(self, key: str) -> None:
+    def toggle_boq(self, key: str, *, additive: bool = True) -> None:
+        if not additive:
+            self.selected_boq_ids.clear()
         if key in self.selected_boq_ids:
             self.selected_boq_ids.remove(key)
         else:
             self.selected_boq_ids.add(key)
+        self.boq_selection_anchor = key
+
+    def select_boq_range(self, key: str) -> tuple[str, ...]:
+        filtered = self._filtered_boq_ids()
+        if key not in filtered:
+            return ()
+        if self.boq_selection_anchor not in filtered:
+            self.toggle_boq(key)
+            return (key,)
+        start = filtered.index(self.boq_selection_anchor)
+        end = filtered.index(key)
+        selected = tuple(filtered[min(start, end): max(start, end) + 1])
+        self.selected_boq_ids.update(selected)
+        return selected
+
+    def select_boq_page(self) -> tuple[str, ...]:
+        ids = self.boq_page_data().ids
+        self.selected_boq_ids.update(ids)
+        if ids:
+            self.boq_selection_anchor = ids[-1]
+        return ids
+
+    def select_all_filtered_boq(self) -> tuple[str, ...]:
+        ids = tuple(self._filtered_boq_ids())
+        self.selected_boq_ids.update(ids)
+        if ids:
+            self.boq_selection_anchor = ids[-1]
+        return ids
+
+    def clear_boq_selection(self) -> None:
+        self.selected_boq_ids.clear()
+        self.boq_selection_anchor = None
+
+    @property
+    def selected_boq_amount(self) -> float:
+        return sum(self.boq_by_id[key].amount for key in self.selected_boq_ids if key in self.boq_by_id)
 
     @staticmethod
     def _validate_share(share_percent: float) -> float:

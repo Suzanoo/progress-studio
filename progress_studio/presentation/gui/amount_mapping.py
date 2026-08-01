@@ -48,6 +48,8 @@ class AmountMappingFrame(ttk.Frame):
         self.share_var = tk.StringVar(value="100")
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
+        self.boq_selection_var = tk.StringVar(value="Selected 0 items | 0.00")
+        self._wbs_header_paths: dict[str, tuple[str, ...]] = {}
         self.session_status_var = tk.StringVar(value="Session: not saved")
         self.operation_status_var = tk.StringVar(value="Ready")
         self.activity_empty_var = tk.StringVar(value="No Progress workbook loaded")
@@ -129,7 +131,11 @@ class AmountMappingFrame(ttk.Frame):
         self.body.add(left, weight=1)
         self.body.add(right, weight=1)
 
-        ttk.Label(left, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        activity_header = ttk.Frame(left)
+        activity_header.pack(fill="x")
+        ttk.Label(activity_header, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(side="left")
+        ttk.Button(activity_header, text="Expand all", command=self._expand_all_wbs).pack(side="right")
+        ttk.Button(activity_header, text="Collapse all", command=self._collapse_all_wbs).pack(side="right", padx=(0, 4))
         self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
         self.activity_empty_label.pack(fill="x", pady=(12, 4))
         self._build_search(left, self.activity_filter, self._apply_activity_filter)
@@ -159,6 +165,12 @@ class AmountMappingFrame(ttk.Frame):
         self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
         self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
+        selection_row = ttk.Frame(right)
+        selection_row.pack(fill="x", pady=(0, 4))
+        ttk.Button(selection_row, text="Select page", command=self._select_boq_page).pack(side="left")
+        ttk.Button(selection_row, text="Select all filtered", command=self._select_all_filtered_boq).pack(side="left", padx=(4, 0))
+        ttk.Button(selection_row, text="Clear selection", command=self._clear_boq_selection).pack(side="left", padx=(4, 0))
+        ttk.Label(selection_row, textvariable=self.boq_selection_var, foreground="#52606d").pack(side="right")
         self.boq_tree = self._tree(
             right,
             (
@@ -490,6 +502,7 @@ class AmountMappingFrame(ttk.Frame):
 
     def _render_activities(self) -> None:
         self.activity_tree.delete(*self.activity_tree.get_children())
+        self._wbs_header_paths.clear()
         page = self.store.activity_page_data()
         previous_path: tuple[tuple[str, str], ...] = ()
         header_counter = 0
@@ -507,28 +520,32 @@ class AmountMappingFrame(ttk.Frame):
             for level, (code, name) in enumerate(row.wbs_path[common:], start=common + 1):
                 header_counter += 1
                 indent = "    " * (level - 1)
+                path_key = self.store.wbs_path_key(row.wbs_path, level)
                 header_id = f"__wbs__{page.number}_{header_counter}_{code}"
+                self._wbs_header_paths[header_id] = path_key
+                collapsed = path_key in self.store.collapsed_wbs_paths
                 self.activity_tree.insert(
                     "",
                     "end",
                     iid=header_id,
-                    values=("", f"{indent}▾ {code}", name, ""),
+                    values=("", f"{indent}{'▶' if collapsed else '▼'} {code}", name, ""),
                     tags=(f"wbs_level_{min(level, 3)}", "wbs_header"),
                 )
 
-            check = "☑" if activity_id in self.store.selected_activity_ids else "☐"
-            activity_indent = "    " * len(row.wbs_path)
-            self.activity_tree.insert(
-                "",
-                "end",
-                iid=activity_id,
-                values=(
-                    check,
-                    f"{activity_indent}{row.activity_id}",
-                    row.description,
-                    f"{self.store.activity_amount(activity_id):,.2f}",
-                ),
-            )
+            if self.store.is_activity_visible(activity_id) or self.store.activity_query.strip():
+                check = "☑" if activity_id in self.store.selected_activity_ids else "☐"
+                activity_indent = "    " * len(row.wbs_path)
+                self.activity_tree.insert(
+                    "",
+                    "end",
+                    iid=activity_id,
+                    values=(
+                        check,
+                        f"{activity_indent}{row.activity_id}",
+                        row.description,
+                        f"{self.store.activity_amount(activity_id):,.2f}",
+                    ),
+                )
             previous_path = row.wbs_path
 
         self.activity_empty_var.set("" if page.total else ("No matching activities" if self.progress_file else "No Progress workbook loaded"))
@@ -556,6 +573,7 @@ class AmountMappingFrame(ttk.Frame):
             self.boq_tree.insert("", "end", iid=key, values=self._boq_values(key))
         self.boq_empty_var.set("" if page.total else ("No matching BOQ items" if self.boq_sheet else "No BOQ worksheet loaded"))
         self.boq_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
+        self._update_boq_selection_status()
 
     def _refresh_changed_rows(self, change) -> None:
         """Update visible rows only; the memory store remains the source of truth."""
@@ -570,17 +588,23 @@ class AmountMappingFrame(ttk.Frame):
                     f"{self.store.activity_amount(activity_id):,.2f}",
                 )
         self._update_summary()
+        self._update_boq_selection_status()
 
     def _activity_click(self, event) -> str | None:
-        if self.activity_tree.identify_region(event.x, event.y) != "cell" or self.activity_tree.identify_column(event.x) != "#1":
+        if self.activity_tree.identify_region(event.x, event.y) != "cell":
             return None
         item = self.activity_tree.identify_row(event.y)
+        if item in self._wbs_header_paths:
+            self.store.toggle_wbs(self._wbs_header_paths[item])
+            self._render_activities()
+            return "break"
+        if self.activity_tree.identify_column(event.x) != "#1":
+            return None
         if item and item in self.store.activities_by_id:
             previous = set(self.store.selected_activity_ids)
             self.store.toggle_activity(item)
             for activity_id in previous | self.store.selected_activity_ids:
                 if self.activity_tree.exists(activity_id):
-                    row = self.store.activities_by_id[activity_id]
                     self.activity_tree.set(activity_id, "check", "☑" if activity_id in self.store.selected_activity_ids else "☐")
         return "break"
 
@@ -588,10 +612,45 @@ class AmountMappingFrame(ttk.Frame):
         if self.boq_tree.identify_region(event.x, event.y) != "cell" or self.boq_tree.identify_column(event.x) != "#1":
             return None
         item = self.boq_tree.identify_row(event.y)
-        if item:
-            self.store.toggle_boq(item)
-            self.boq_tree.set(item, "check", "☑" if item in self.store.selected_boq_ids else "☐")
+        if not item:
+            return "break"
+        previous = set(self.store.selected_boq_ids)
+        shift = bool(event.state & 0x0001)
+        additive = bool(event.state & 0x0004) or bool(event.state & 0x0008)
+        if shift:
+            self.store.select_boq_range(item)
+        else:
+            self.store.toggle_boq(item, additive=additive)
+        for key in previous | self.store.selected_boq_ids:
+            if self.boq_tree.exists(key):
+                self.boq_tree.set(key, "check", "☑" if key in self.store.selected_boq_ids else "☐")
+        self._update_boq_selection_status()
         return "break"
+
+    def _update_boq_selection_status(self) -> None:
+        self.boq_selection_var.set(
+            f"Selected {len(self.store.selected_boq_ids):,} items | {self.store.selected_boq_amount:,.2f}"
+        )
+
+    def _select_boq_page(self) -> None:
+        self.store.select_boq_page()
+        self._render_boq()
+
+    def _select_all_filtered_boq(self) -> None:
+        self.store.select_all_filtered_boq()
+        self._render_boq()
+
+    def _clear_boq_selection(self) -> None:
+        self.store.clear_boq_selection()
+        self._render_boq()
+
+    def _collapse_all_wbs(self) -> None:
+        self.store.collapse_all_wbs()
+        self._render_activities()
+
+    def _expand_all_wbs(self) -> None:
+        self.store.expand_all_wbs()
+        self._render_activities()
 
     def _activity_prev(self) -> None:
         self.store.activity_page -= 1
@@ -609,8 +668,21 @@ class AmountMappingFrame(ttk.Frame):
         self.store.boq_page += 1
         self._render_boq()
 
+    def _confirm_batch_mapping(self, action: str) -> bool:
+        count = len(self.store.selected_boq_ids)
+        if count < 50:
+            return True
+        activity_id = next(iter(self.store.selected_activity_ids), "")
+        return messagebox.askyesno(
+            "Amount Mapping",
+            f"{action} {count:,} BOQ items for {activity_id}?\n"
+            f"Selected amount: {self.store.selected_boq_amount:,.2f}",
+        )
+
     def _map(self) -> None:
         try:
+            if not self._confirm_batch_mapping("Map"):
+                return
             change = self.store.map_selected(self.share_var.get())
             self._refresh_changed_rows(change)
             self._autosave_session()
@@ -620,6 +692,8 @@ class AmountMappingFrame(ttk.Frame):
 
     def _unmap(self) -> None:
         try:
+            if not self._confirm_batch_mapping("Unmap"):
+                return
             change = self.store.unmap_selected()
             self._refresh_changed_rows(change)
             self._autosave_session()
