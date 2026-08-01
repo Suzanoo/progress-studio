@@ -41,7 +41,7 @@ class Ms6AcceptanceTests(unittest.TestCase):
             self.assertFalse(any(ROOT.glob(f"{number:02d}_*.py")))
 
     def test_bootstrap_uses_okd_step_not_legacy_adapter(self):
-        text = (ROOT / "progress_studio/app/bootstrap.py").read_text()
+        text = (ROOT / "progress_studio/app/bootstrap.py").read_text(encoding="utf-8")
         self.assertIn("OkdStep(OkdService())", text)
         self.assertNotIn("LegacyPipelineStep", text)
 
@@ -50,11 +50,11 @@ class Ms6AcceptanceTests(unittest.TestCase):
 
     def test_no_subprocess_in_application_package(self):
         for path in (ROOT / "progress_studio").rglob("*.py"):
-            self.assertNotIn("subprocess", path.read_text(), str(path))
+            self.assertNotIn("subprocess", path.read_text(encoding="utf-8"), str(path))
 
     def test_no_thai_in_source(self):
         for path in (ROOT / "progress_studio").rglob("*.py"):
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             self.assertFalse(any("\u0e00" <= ch <= "\u0e7f" for ch in text), str(path))
 
     def test_end_to_end_steps_create_okd_sheets(self):
