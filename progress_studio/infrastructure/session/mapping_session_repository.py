@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 from typing import Any, Callable
 
-from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord
+from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, SupplementalWBS
 from progress_studio.infrastructure.platform_paths import user_data_dir
 
 from progress_studio.domain.mapping_session import (
@@ -79,9 +79,17 @@ def _migrate_v2_to_v3(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_v3_to_v4(payload: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(payload)
+    migrated.setdefault("supplemental_wbs", [])
+    migrated["version"] = 4
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
+    3: _migrate_v3_to_v4,
 }
 
 
@@ -125,6 +133,7 @@ class MappingSessionRepository:
         boq_sheet: str,
         allocations: list[AllocationRecord],
         supplemental_activities: list[ActivityRow] | None = None,
+        supplemental_wbs: list[SupplementalWBS] | None = None,
     ) -> MappingSessionData:
         return MappingSessionData(
             progress=fingerprint(progress_file),
@@ -133,6 +142,7 @@ class MappingSessionRepository:
             allocations=tuple(allocations),
             saved_at=datetime.now(timezone.utc).isoformat(),
             supplemental_activities=tuple(supplemental_activities or ()),
+            supplemental_wbs=tuple(supplemental_wbs or ()),
         )
 
     def save(self, path: Path, session: MappingSessionData) -> Path:
@@ -146,6 +156,7 @@ class MappingSessionRepository:
             "boq_sheet": session.boq_sheet,
             "allocations": [asdict(record) for record in session.allocations],
             "supplemental_activities": [asdict(record) for record in session.supplemental_activities],
+            "supplemental_wbs": [asdict(record) for record in session.supplemental_wbs],
         }
         _atomic_json_write(path, payload)
         return path
@@ -172,6 +183,10 @@ class MappingSessionRepository:
                 ActivityRow(**{**item, "wbs_path": tuple(tuple(part) for part in item.get("wbs_path", ()))})
                 for item in payload.get("supplemental_activities", [])
             )
+            supplemental_wbs = tuple(
+                SupplementalWBS(**{**item, "parent_path": tuple(tuple(part) for part in item.get("parent_path", ()))})
+                for item in payload.get("supplemental_wbs", [])
+            )
             boq_sheet = str(payload["boq_sheet"]).strip()
             saved_at = str(payload["saved_at"])
         except (KeyError, TypeError, ValueError) as exc:
@@ -185,6 +200,7 @@ class MappingSessionRepository:
             allocations=allocations,
             saved_at=saved_at,
             supplemental_activities=supplemental_activities,
+            supplemental_wbs=supplemental_wbs,
         )
 
     @staticmethod

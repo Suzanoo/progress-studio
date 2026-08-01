@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from progress_studio.domain.export_models import ExportResult, ExportValidation
-from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, BOQRow
+from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, BOQRow, SupplementalWBS
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
@@ -62,6 +62,7 @@ class MappedWorkbookExporter:
         validation: ExportValidation,
         *,
         activities: list[ActivityRow] | None = None,
+        supplemental_wbs: list[SupplementalWBS] | None = None,
         overwrite: bool = False,
     ) -> ExportResult:
         progress_file = Path(progress_file).resolve()
@@ -93,7 +94,7 @@ class MappedWorkbookExporter:
                 supplemental_total = sum(value for key, value in totals.items() if key in supplemental_ids)
                 amount_rows = self._write_main_amounts(workbook, main_totals, validation.allocated_amount - supplemental_total)
                 self._write_amount_mapping(workbook, main_totals)
-                self._write_extension_sheet(workbook, activities, totals)
+                self._write_extension_sheet(workbook, activities, totals, supplemental_wbs or [])
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
                 request_full_excel_recalculation(workbook)
@@ -109,27 +110,29 @@ class MappedWorkbookExporter:
 
 
     @staticmethod
-    def _write_extension_sheet(workbook, activities: list[ActivityRow], totals: dict[str, float]) -> None:
+    def _write_extension_sheet(workbook, activities: list[ActivityRow], totals: dict[str, float], supplemental_wbs: list[SupplementalWBS]) -> None:
         _safe_remove_sheet(workbook, EXTENSION_SHEET)
         supplemental = [row for row in activities if row.is_supplemental]
-        if not supplemental:
+        if not supplemental and not supplemental_wbs:
             return
         ws = workbook.create_sheet(EXTENSION_SHEET)
         ws.append([
-            'Origin', 'Parent WBS', 'Supplemental WBS Code', 'Supplemental WBS Name',
+            'Node Type', 'Origin', 'Parent WBS', 'Supplemental WBS Code', 'Supplemental WBS Name',
             'Activity ID', 'Activity Name', 'Mapped Amount', 'Export Contract',
         ])
         _style_header(ws)
+        for node in supplemental_wbs:
+            ws.append(['WBS', 'Progress Studio', ' / '.join(code for code, _ in node.parent_path), node.code, node.name, '', '', 0.0, 'Editable extension hierarchy'])
         for row in supplemental:
             ws.append([
-                'Progress Studio', row.parent_wbs, row.supplemental_wbs_code,
+                'Activity', 'Progress Studio', row.parent_wbs, row.supplemental_wbs_code,
                 row.supplemental_wbs_name, row.activity_id, row.description,
                 totals.get(row.activity_id, 0.0),
                 'Extension only - not inserted into source schedule hierarchy',
             ])
-            ws.cell(ws.max_row, 7).number_format = CURRENCY_FORMAT
+            ws.cell(ws.max_row, 8).number_format = CURRENCY_FORMAT
         ws.freeze_panes = 'A2'
-        for index, width in enumerate((18, 18, 24, 32, 18, 45, 18, 55), start=1):
+        for index, width in enumerate((14, 18, 22, 24, 32, 18, 45, 18, 55), start=1):
             ws.column_dimensions[ws.cell(1, index).column_letter].width = width
 
     @staticmethod

@@ -49,7 +49,7 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
         self.boq_selection_var = tk.StringVar(value="Selected 0 items | 0.00")
-        self._wbs_header_paths: dict[str, tuple[str, ...]] = {}
+        self._wbs_header_paths: dict[str, tuple[tuple[str, str], ...]] = {}
         self.session_status_var = tk.StringVar(value="Session: not saved")
         self.operation_status_var = tk.StringVar(value="Ready")
         self.activity_empty_var = tk.StringVar(value="No Progress workbook loaded")
@@ -134,8 +134,10 @@ class AmountMappingFrame(ttk.Frame):
         activity_header = ttk.Frame(left)
         activity_header.pack(fill="x")
         ttk.Label(activity_header, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(side="left")
-        ttk.Button(activity_header, text="Add WBS + Activity", command=self._add_supplemental_activity).pack(side="left", padx=(8, 0))
-        ttk.Button(activity_header, text="Remove created", command=self._remove_supplemental_activity).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Add WBS", command=self._add_supplemental_wbs).pack(side="left", padx=(8, 0))
+        ttk.Button(activity_header, text="Add Activity", command=self._add_supplemental_activity).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Edit", command=self._edit_progress_node).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text="Delete", command=self._delete_progress_node).pack(side="left", padx=(4, 0))
         ttk.Button(activity_header, text="Expand all", command=self._expand_all_wbs).pack(side="right")
         ttk.Button(activity_header, text="Collapse all", command=self._collapse_all_wbs).pack(side="right", padx=(0, 4))
         self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
@@ -150,6 +152,7 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_tree.tag_configure("wbs_level_1", font=("Segoe UI", 9, "bold"))
         self.activity_tree.tag_configure("wbs_level_2", font=("Segoe UI", 9, "bold"))
         self.activity_tree.tag_configure("wbs_level_3", font=("Segoe UI", 9, "bold"))
+        self.activity_tree.tag_configure("selected_wbs", background="#dcecff")
         self.activity_tree.bind("<Button-1>", self._activity_click)
         self._build_pager(left, self.activity_page_var, self._activity_prev, self._activity_next)
 
@@ -492,65 +495,97 @@ class AmountMappingFrame(ttk.Frame):
         self.store.boq_page = 1
         self._render_boq()
 
+    def _selected_parent_path(self) -> tuple[tuple[str, str], ...]:
+        if self.store.selected_wbs_path:
+            return self.store.selected_wbs_path
+        selected = next(iter(self.store.selected_activity_ids), "")
+        row = self.store.activities_by_id.get(selected)
+        return row.wbs_path if row else ()
+
+    def _add_supplemental_wbs(self) -> None:
+        if not self.store.activities_by_id:
+            messagebox.showwarning("Progress tree", "Load a Progress workbook first.")
+            return
+        parent_path = self._selected_parent_path()
+        code = simpledialog.askstring("Add WBS", "WBS code:", parent=self)
+        if code is None:
+            return
+        name = simpledialog.askstring("Add WBS", "WBS name:", parent=self)
+        if name is None:
+            return
+        try:
+            self.store.add_supplemental_wbs(parent_path=parent_path, code=code, name=name)
+            self._render_activities()
+            self._autosave_session()
+            self._notify("WBS created. It is selected for the next sub-WBS or Activity.")
+        except ValueError as exc:
+            messagebox.showerror("Progress tree", str(exc))
+
     def _add_supplemental_activity(self) -> None:
         if not self.store.activities_by_id:
-            messagebox.showwarning("Supplemental structure", "Load a Progress workbook first.")
+            messagebox.showwarning("Progress tree", "Load a Progress workbook first.")
             return
-        selected = next(iter(self.store.selected_activity_ids), "")
-        selected_row = self.store.activities_by_id.get(selected)
-        parent_path = selected_row.wbs_path if selected_row else ()
-        parent_label = " / ".join(f"{code} {name}" for code, name in parent_path) or "Project root"
-        if not messagebox.askokcancel(
-            "Create supplemental WBS",
-            f"Parent context:\n{parent_label}\n\n"
-            "This structure is stored in the session and exported to the "
-            "ProgressStudio Extensions worksheet. It does not rewrite the source schedule hierarchy.",
-        ):
+        parent_path = self._selected_parent_path()
+        if not parent_path:
+            messagebox.showwarning("Progress tree", "Select a WBS first.")
             return
-        wbs_code = simpledialog.askstring("Supplemental WBS", "WBS code (must be unique):", parent=self)
-        if wbs_code is None:
-            return
-        wbs_name = simpledialog.askstring("Supplemental WBS", "WBS name:", parent=self)
-        if wbs_name is None:
-            return
-        activity_id = simpledialog.askstring("Supplemental Activity", "Activity ID (must be unique):", parent=self)
+        activity_id = simpledialog.askstring("Add Activity", "Activity ID (must be unique):", parent=self)
         if activity_id is None:
             return
-        description = simpledialog.askstring("Supplemental Activity", "Activity name:", parent=self)
+        description = simpledialog.askstring("Add Activity", "Activity name:", parent=self)
         if description is None:
             return
         try:
-            self.store.add_supplemental_activity(
-                parent_path=parent_path, wbs_code=wbs_code, wbs_name=wbs_name,
-                activity_id=activity_id, description=description,
-            )
+            self.store.add_supplemental_activity(parent_path=parent_path, wbs_code=parent_path[-1][0], wbs_name=parent_path[-1][1], activity_id=activity_id, description=description)
             self._render_activities()
             self._update_summary()
             self._autosave_session()
-            self._notify("Supplemental WBS and Activity created")
+            self._notify("Activity created")
         except ValueError as exc:
-            messagebox.showerror("Supplemental structure", str(exc))
+            messagebox.showerror("Progress tree", str(exc))
 
-    def _remove_supplemental_activity(self) -> None:
-        selected = next(iter(self.store.selected_activity_ids), "")
-        if not selected:
-            messagebox.showwarning("Supplemental structure", "Select a created Activity first.")
-            return
-        try:
-            row = self.store.activities_by_id[selected]
-            if not row.is_supplemental:
-                raise ValueError("Original Progress Activities cannot be removed here.")
-            if not messagebox.askyesno(
-                "Remove supplemental Activity",
-                f"Remove {row.activity_id} - {row.description}?",
-            ):
+    def _edit_progress_node(self) -> None:
+        path = self.store.selected_wbs_path
+        if path:
+            node = next((item for item in self.store.supplemental_wbs_nodes if item.path == path), None)
+            if node is None:
+                messagebox.showwarning("Progress tree", "Original WBS nodes are read-only.")
                 return
-            self.store.remove_supplemental_activity(selected)
-            self._render_activities()
-            self._autosave_session()
-            self._notify("Supplemental Activity removed")
+            code = simpledialog.askstring("Edit WBS", "WBS code:", initialvalue=node.code, parent=self)
+            if code is None:
+                return
+            name = simpledialog.askstring("Edit WBS", "WBS name:", initialvalue=node.name, parent=self)
+            if name is None:
+                return
+            try:
+                self.store.edit_supplemental_wbs(path, code=code, name=name)
+            except ValueError as exc:
+                messagebox.showerror("Progress tree", str(exc)); return
+        else:
+            selected = next(iter(self.store.selected_activity_ids), "")
+            row = self.store.activities_by_id.get(selected)
+            if row is None or not row.is_supplemental:
+                messagebox.showwarning("Progress tree", "Select a WBS or created Activity to edit.")
+                return
+            description = simpledialog.askstring("Edit Activity", "Activity name:", initialvalue=row.description, parent=self)
+            if description is None:
+                return
+            from dataclasses import replace
+            self.store.activities_by_id[selected] = replace(row, description=description.strip())
+        self._render_activities(); self._autosave_session(); self._notify("Progress tree updated")
+
+    def _delete_progress_node(self) -> None:
+        try:
+            if self.store.selected_wbs_path:
+                self.store.remove_supplemental_wbs(self.store.selected_wbs_path)
+            else:
+                selected = next(iter(self.store.selected_activity_ids), "")
+                if not selected:
+                    raise ValueError("Select a created WBS or Activity first.")
+                self.store.remove_supplemental_activity(selected)
+            self._render_activities(); self._autosave_session(); self._notify("Created node removed")
         except ValueError as exc:
-            messagebox.showerror("Supplemental structure", str(exc))
+            messagebox.showerror("Progress tree", str(exc))
 
     def _apply_activity_filter(self) -> None:
         self.store.activity_query = self.activity_filter.get()
@@ -584,14 +619,14 @@ class AmountMappingFrame(ttk.Frame):
                 indent = "    " * (level - 1)
                 path_key = self.store.wbs_path_key(row.wbs_path, level)
                 header_id = f"__wbs__{page.number}_{header_counter}_{code}"
-                self._wbs_header_paths[header_id] = path_key
+                self._wbs_header_paths[header_id] = tuple(row.wbs_path[:level])
                 collapsed = path_key in self.store.collapsed_wbs_paths
                 self.activity_tree.insert(
                     "",
                     "end",
                     iid=header_id,
                     values=("", f"{indent}{'▶' if collapsed else '▼'} {code}", name, ""),
-                    tags=(f"wbs_level_{min(level, 3)}", "wbs_header"),
+                    tags=(f"wbs_level_{min(level, 3)}", "wbs_header", "selected_wbs" if tuple(row.wbs_path[:level]) == self.store.selected_wbs_path else ""),
                 )
 
             if self.store.is_activity_visible(activity_id) or self.store.activity_query.strip():
@@ -609,6 +644,19 @@ class AmountMappingFrame(ttk.Frame):
                     ),
                 )
             previous_path = row.wbs_path
+
+        represented_paths = set(self._wbs_header_paths.values())
+        for node in self.store.supplemental_wbs_nodes:
+            if node.path in represented_paths:
+                continue
+            level = len(node.path)
+            header_counter += 1
+            header_id = f"__wbs__created_{header_counter}_{node.code}"
+            self._wbs_header_paths[header_id] = node.path
+            indent = "    " * (level - 1)
+            path_key = self.store.wbs_path_key(node.path)
+            collapsed = path_key in self.store.collapsed_wbs_paths
+            self.activity_tree.insert("", "end", iid=header_id, values=("", f"{indent}{'▶' if collapsed else '▼'} {node.code}", node.name, ""), tags=(f"wbs_level_{min(level, 3)}", "wbs_header", "selected_wbs" if node.path == self.store.selected_wbs_path else ""))
 
         self.activity_empty_var.set("" if page.total else ("No matching activities" if self.progress_file else "No Progress workbook loaded"))
         self.activity_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
@@ -657,7 +705,10 @@ class AmountMappingFrame(ttk.Frame):
             return None
         item = self.activity_tree.identify_row(event.y)
         if item in self._wbs_header_paths:
-            self.store.toggle_wbs(self._wbs_header_paths[item])
+            path = self._wbs_header_paths[item]
+            self.store.select_wbs(path)
+            self.store.selected_activity_ids.clear()
+            self.store.toggle_wbs(self.store.wbs_path_key(path))
             self._render_activities()
             return "break"
         if self.activity_tree.identify_column(event.x) != "#1":
@@ -822,6 +873,7 @@ class AmountMappingFrame(ttk.Frame):
             self.boq_sheet,
             self.store.allocation_records(),
             self.store.supplemental_activities(),
+            self.store.supplemental_wbs_nodes,
         )
         saved = self.session_repository.save(path, session)
         self.session_file = saved
@@ -949,6 +1001,7 @@ class AmountMappingFrame(ttk.Frame):
             boq_rows = self.service.read_boq(boq_file, session.boq_sheet)
 
             self.store.load_activities(activities)
+            self.store.supplemental_wbs_nodes = list(session.supplemental_wbs)
             for row in session.supplemental_activities:
                 self.store.activities_by_id[row.activity_id] = row
                 self.store.activity_order.append(row.activity_id)

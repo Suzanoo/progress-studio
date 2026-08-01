@@ -29,6 +29,18 @@ class ActivityRow:
 
 
 @dataclass(frozen=True, slots=True)
+class SupplementalWBS:
+    code: str
+    name: str
+    parent_path: tuple[tuple[str, str], ...] = ()
+    origin: str = "user_created"
+
+    @property
+    def path(self) -> tuple[tuple[str, str], ...]:
+        return self.parent_path + ((self.code, self.name),)
+
+
+@dataclass(frozen=True, slots=True)
 class BOQRow:
     key: str
     source_sheet: str

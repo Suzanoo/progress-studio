@@ -54,5 +54,6 @@ class WorkbookExportService:
             store.allocation_records(),
             validation,
             activities=list(store.activities_by_id.values()),
+            supplemental_wbs=list(store.supplemental_wbs_nodes),
             overwrite=overwrite,
         )

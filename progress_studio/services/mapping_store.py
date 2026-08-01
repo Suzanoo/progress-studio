@@ -8,6 +8,7 @@ from progress_studio.domain.mapping_models import (
     BOQRow,
     MappingChange,
     MappingStatus,
+    SupplementalWBS,
 )
 
 
@@ -48,6 +49,8 @@ class MappingStore:
         self._boq_ids_by_wbs23: dict[tuple[str, str], list[str]] = {}
         self.boq_selection_anchor: str | None = None
         self.collapsed_wbs_paths: set[tuple[str, ...]] = set()
+        self.supplemental_wbs_nodes: list[SupplementalWBS] = []
+        self.selected_wbs_path: tuple[tuple[str, str], ...] = ()
 
     def load_activities(self, rows: list[ActivityRow]) -> None:
         self.activities_by_id = {row.activity_id: row for row in rows}
@@ -58,7 +61,62 @@ class MappingStore:
         self._undo_stack.clear()
         self.activity_page = 1
         self.collapsed_wbs_paths.clear()
+        self.selected_wbs_path = ()
 
+    def all_wbs_paths(self) -> list[tuple[tuple[str, str], ...]]:
+        paths = {tuple(row.wbs_path[:level]) for row in self.activities_by_id.values() for level in range(1, len(row.wbs_path)+1)}
+        paths.update(node.path for node in self.supplemental_wbs_nodes)
+        return sorted(paths, key=lambda path: (len(path), tuple(code for code, _ in path)))
+
+    def select_wbs(self, path: tuple[tuple[str, str], ...]) -> None:
+        self.selected_wbs_path = tuple(path)
+
+    def add_supplemental_wbs(self, *, parent_path: tuple[tuple[str, str], ...], code: str, name: str) -> SupplementalWBS:
+        code, name = code.strip(), name.strip()
+        if not code or not name:
+            raise ValueError("WBS code and WBS name are required.")
+        if any(code == item_code for path in self.all_wbs_paths() for item_code, _ in path):
+            raise ValueError(f"WBS code already exists: {code}")
+        if parent_path and tuple(parent_path) not in self.all_wbs_paths():
+            raise ValueError("The selected parent WBS no longer exists.")
+        node = SupplementalWBS(code=code, name=name, parent_path=tuple(parent_path))
+        self.supplemental_wbs_nodes.append(node)
+        self.selected_wbs_path = node.path
+        return node
+
+    def edit_supplemental_wbs(self, path: tuple[tuple[str, str], ...], *, code: str, name: str) -> SupplementalWBS:
+        index = next((i for i, node in enumerate(self.supplemental_wbs_nodes) if node.path == tuple(path)), -1)
+        if index < 0:
+            raise ValueError("Only WBS nodes created in Progress Studio can be edited.")
+        old = self.supplemental_wbs_nodes[index]
+        code, name = code.strip(), name.strip()
+        if not code or not name:
+            raise ValueError("WBS code and WBS name are required.")
+        if code != old.code and any(code == item_code for candidate in self.all_wbs_paths() for item_code, _ in candidate):
+            raise ValueError(f"WBS code already exists: {code}")
+        replacement = SupplementalWBS(code=code, name=name, parent_path=old.parent_path)
+        old_path, new_path = old.path, replacement.path
+        self.supplemental_wbs_nodes[index] = replacement
+        for i, node in enumerate(list(self.supplemental_wbs_nodes)):
+            if node.parent_path[:len(old_path)] == old_path:
+                self.supplemental_wbs_nodes[i] = SupplementalWBS(node.code, node.name, new_path + node.parent_path[len(old_path):])
+        for activity_id, row in list(self.activities_by_id.items()):
+            if row.wbs_path[:len(old_path)] == old_path:
+                from dataclasses import replace
+                self.activities_by_id[activity_id] = replace(row, wbs_path=new_path + row.wbs_path[len(old_path):], parent_wbs=(new_path + row.wbs_path[len(old_path):])[-1][0])
+        self.selected_wbs_path = new_path
+        return replacement
+
+    def remove_supplemental_wbs(self, path: tuple[tuple[str, str], ...]) -> None:
+        node = next((node for node in self.supplemental_wbs_nodes if node.path == tuple(path)), None)
+        if node is None:
+            raise ValueError("Only WBS nodes created in Progress Studio can be removed.")
+        if any(other.parent_path[:len(path)] == tuple(path) for other in self.supplemental_wbs_nodes if other is not node):
+            raise ValueError("Remove child WBS nodes first.")
+        if any(row.wbs_path[:len(path)] == tuple(path) for row in self.activities_by_id.values()):
+            raise ValueError("Remove or move Activities under this WBS first.")
+        self.supplemental_wbs_nodes.remove(node)
+        self.selected_wbs_path = node.parent_path
 
     def add_supplemental_activity(
         self, *, parent_path: tuple[tuple[str, str], ...], wbs_code: str,
@@ -75,15 +133,17 @@ class MappingStore:
         existing_codes = {code for row in self.activities_by_id.values() for code, _ in row.wbs_path}
         if wbs_code in existing_codes:
             raise ValueError(f"WBS code already exists: {wbs_code}")
+        if parent_path and tuple(parent_path) not in self.all_wbs_paths():
+            raise ValueError("The selected parent WBS no longer exists.")
         row = ActivityRow(
             activity_id=activity_id,
             parent_wbs=parent_path[-1][0] if parent_path else "",
             child_wbs=wbs_code,
             description=description,
-            wbs_path=parent_path + ((wbs_code, wbs_name),),
+            wbs_path=parent_path,
             origin="user_created",
-            supplemental_wbs_code=wbs_code,
-            supplemental_wbs_name=wbs_name,
+            supplemental_wbs_code=parent_path[-1][0] if parent_path else wbs_code,
+            supplemental_wbs_name=parent_path[-1][1] if parent_path else wbs_name,
         )
         self.activities_by_id[activity_id] = row
         self.activity_order.append(activity_id)
