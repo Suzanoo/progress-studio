@@ -208,6 +208,8 @@ class AmountMappingFrame(ttk.Frame):
         self.layout_preferences = LayoutPreferences(
             mapping_inputs_collapsed=self.inputs_collapsed,
             generator_collapsed=self.layout_preferences.generator_collapsed,
+            sidebar_collapsed=self.layout_preferences.sidebar_collapsed,
+            focus_mapping=False,
             mapping_sash=sash,
         )
         try:

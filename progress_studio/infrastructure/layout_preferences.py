@@ -8,8 +8,10 @@ from pathlib import Path
 @dataclass
 class LayoutPreferences:
     mapping_inputs_collapsed: bool = False
-    generator_collapsed: bool = False
+    generator_collapsed: bool = True
     mapping_sash: int | None = None
+    sidebar_collapsed: bool = False
+    focus_mapping: bool = False
 
 
 class LayoutPreferencesRepository:
@@ -23,7 +25,9 @@ class LayoutPreferencesRepository:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             return LayoutPreferences(
                 mapping_inputs_collapsed=bool(payload.get("mapping_inputs_collapsed", False)),
-                generator_collapsed=bool(payload.get("generator_collapsed", False)),
+                generator_collapsed=bool(payload.get("generator_collapsed", True)),
+                sidebar_collapsed=bool(payload.get("sidebar_collapsed", False)),
+                focus_mapping=bool(payload.get("focus_mapping", False)),
                 mapping_sash=self._optional_int(payload.get("mapping_sash")),
             )
         except (OSError, ValueError, TypeError, json.JSONDecodeError):

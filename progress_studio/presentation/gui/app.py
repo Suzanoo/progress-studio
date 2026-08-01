@@ -75,11 +75,16 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.layout_repository = LayoutPreferencesRepository()
         self.layout_preferences = self.layout_repository.load()
         self.generator_collapsed = self.layout_preferences.generator_collapsed
+        self.sidebar_collapsed = self.layout_preferences.sidebar_collapsed
+        self.focus_mapping = False
 
         self._configure_style()
         self._build_ui()
         self.after_idle(self._maximize_window)
         self.after_idle(lambda: self._set_generator_collapsed(self.generator_collapsed, persist=False))
+        self.after_idle(lambda: self._set_sidebar_collapsed(self.sidebar_collapsed, persist=False))
+        self.bind("<F11>", lambda _event: self._toggle_focus_mapping())
+        self.bind("<Escape>", lambda _event: self._exit_focus_mapping())
         self.protocol("WM_DELETE_WINDOW", self._close_application)
         self.after(100, self._drain_messages)
 
@@ -95,24 +100,30 @@ class ProgressStudioDesktopApp(tk.Tk):
         shell.columnconfigure(1, weight=1)
         shell.rowconfigure(0, weight=1)
 
-        sidebar = ttk.Frame(shell, style="Sidebar.TFrame", width=190)
-        sidebar.grid(row=0, column=0, sticky="nsw")
-        sidebar.grid_propagate(False)
-        self._build_sidebar(sidebar)
+        self.shell = shell
+        self.sidebar = ttk.Frame(shell, style="Sidebar.TFrame", width=190)
+        self.sidebar.grid(row=0, column=0, sticky="nsw")
+        self.sidebar.grid_propagate(False)
+        self._build_sidebar(self.sidebar)
 
         main = ttk.Frame(shell, style="App.TFrame", padding=(10, 8, 10, 0))
         main.grid(row=0, column=1, sticky="nsew")
         main.rowconfigure(2, weight=1)
         main.columnconfigure(0, weight=1)
 
-        topbar = ttk.Frame(main, style="Surface.TFrame", padding=(12, 8))
+        self.main_frame = main
+        self.topbar = ttk.Frame(main, style="Surface.TFrame", padding=(12, 8))
+        topbar = self.topbar
         topbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        ttk.Button(topbar, text="☰", width=3, command=self._toggle_sidebar).pack(side="left", padx=(0, 8))
         ttk.Label(topbar, text=tr("mapping_workspace"), style="Section.TLabel").pack(side="left")
+        ttk.Button(topbar, text="Focus Mapping", command=self._toggle_focus_mapping).pack(side="left", padx=(12, 0))
         ttk.Label(topbar, text=tr("project_default"), style="Muted.TLabel").pack(side="right", padx=(16, 0))
         ttk.Button(topbar, text="EN", width=5).pack(side="right", padx=(8, 0))
         ttk.Button(topbar, text="?", width=3).pack(side="right", padx=(8, 0))
 
-        stages = ttk.Frame(main, style="Surface.TFrame", padding=(8, 6))
+        self.stages = ttk.Frame(main, style="Surface.TFrame", padding=(8, 6))
+        stages = self.stages
         stages.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         for index, label in enumerate(("1  Import", "2  Validate", "3  Mapping", "4  Allocation", "5  Review", "6  Export")):
             style = "StageActive.TLabel" if index == 2 else "Stage.TLabel"
@@ -128,14 +139,30 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._build_generator_panel(self.generator_panel)
         self._build_workspace_panel(self.workspace_panel)
 
-        status = ttk.Frame(main, style="Surface.TFrame")
+        self.status_bar = ttk.Frame(main, style="Surface.TFrame")
+        status = self.status_bar
         status.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(status, text="●  Ready", style="Status.TLabel", foreground=PALETTE.success).pack(side="left")
         ttk.Label(status, text=f"Progress Studio {SETTINGS.version}  |  Database: Local", style="Status.TLabel").pack(side="right")
 
     def _build_menu(self) -> None:
         menu = tk.Menu(self)
-        for title in ("File", "Edit", "View", "Mapping", "AI Helper", "Tools", "Help"):
+        file_menu = tk.Menu(menu, tearoff=False)
+        file_menu.add_command(label="Exit", command=self._close_application)
+        menu.add_cascade(label="File", menu=file_menu)
+
+        edit_menu = tk.Menu(menu, tearoff=False)
+        edit_menu.add_command(label="Edit commands")
+        menu.add_cascade(label="Edit", menu=edit_menu)
+
+        view_menu = tk.Menu(menu, tearoff=False)
+        view_menu.add_command(label="Toggle Sidebar", command=self._toggle_sidebar)
+        view_menu.add_command(label="Toggle Workbook Generator", command=self._toggle_generator)
+        view_menu.add_separator()
+        view_menu.add_command(label="Focus Mapping    F11", command=self._toggle_focus_mapping)
+        menu.add_cascade(label="View", menu=view_menu)
+
+        for title in ("Mapping", "AI Helper", "Tools", "Help"):
             submenu = tk.Menu(menu, tearoff=False)
             submenu.add_command(label=f"{title} commands")
             menu.add_cascade(label=title, menu=submenu)
@@ -210,6 +237,44 @@ class ProgressStudioDesktopApp(tk.Tk):
             height = self.winfo_screenheight()
             self.geometry(f"{width}x{height}+0+0")
 
+
+    def _toggle_sidebar(self) -> None:
+        self._set_sidebar_collapsed(not self.sidebar_collapsed)
+
+    def _set_sidebar_collapsed(self, collapsed: bool, persist: bool = True) -> None:
+        self.sidebar_collapsed = collapsed
+        if collapsed:
+            self.sidebar.grid_remove()
+        else:
+            self.sidebar.grid()
+        if persist:
+            self._save_layout_preferences()
+
+    def _toggle_focus_mapping(self) -> None:
+        if self.focus_mapping:
+            self._exit_focus_mapping()
+            return
+        self.focus_mapping = True
+        self._focus_restore = (self.sidebar_collapsed, self.generator_collapsed)
+        self._set_sidebar_collapsed(True, persist=False)
+        self._set_generator_collapsed(True, persist=False)
+        self.topbar.grid_remove()
+        self.stages.grid_remove()
+        self.status_bar.grid_remove()
+
+    def _exit_focus_mapping(self) -> None:
+        if not self.focus_mapping:
+            return
+        self.focus_mapping = False
+        self.topbar.grid()
+        self.stages.grid()
+        self.status_bar.grid()
+        sidebar_collapsed, generator_collapsed = getattr(
+            self, "_focus_restore", (self.sidebar_collapsed, self.generator_collapsed)
+        )
+        self._set_sidebar_collapsed(sidebar_collapsed, persist=False)
+        self._set_generator_collapsed(generator_collapsed, persist=False)
+
     def _toggle_generator(self) -> None:
         self._set_generator_collapsed(not self.generator_collapsed)
 
@@ -232,6 +297,8 @@ class ProgressStudioDesktopApp(tk.Tk):
         preferences = LayoutPreferences(
             mapping_inputs_collapsed=current.mapping_inputs_collapsed,
             generator_collapsed=self.generator_collapsed,
+            sidebar_collapsed=self.sidebar_collapsed,
+            focus_mapping=False,
             mapping_sash=current.mapping_sash,
         )
         try:
