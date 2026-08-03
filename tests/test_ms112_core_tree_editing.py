@@ -103,3 +103,16 @@ def test_session_v6_round_trips_working_tree(tmp_path: Path) -> None:
     restored = make_store()
     restored.restore_working_tree(loaded.working_tree_nodes)
     assert restored.activities_by_id["A1000"].wbs_path[-1][1] == "Structure Revised"
+
+
+def test_renamed_activity_remains_resolvable_and_visible_in_tree_model() -> None:
+    store = make_store()
+    store.toggle_activity("A1000")
+    node_id = store.selected_node_id
+    store.edit_selected_node(code="A1005", name="Concrete Works")
+
+    renamed = store.working_tree.find_activity("A1005")
+    assert renamed is not None
+    assert renamed.node_id == node_id
+    assert "A1005" in store.activity_page_data().ids
+    assert store.selected_activity_ids == {"A1005"}

@@ -244,13 +244,33 @@ class WorkingScheduleTree:
         )[0]
 
     def find_activity(self, activity_id: str) -> WorkingTreeNode | None:
+        """Find an active Activity by its current display ID.
+
+        ``source_activity_id`` intentionally keeps the workbook identity so
+        exports can preserve the original schedule row after a rename.  UI,
+        mapping, pagination, and selection must instead resolve the current
+        editable Activity ID stored in ``code``.  Falling back to the source
+        ID keeps older projects and workbook-origin lookups compatible.
+        """
         normalized = activity_id.strip().upper()
+        current = next(
+            (
+                node
+                for node in self._nodes.values()
+                if node.kind is WorkingNodeKind.ACTIVITY
+                and node.code.strip().upper() == normalized
+                and not node.deleted
+            ),
+            None,
+        )
+        if current is not None:
+            return current
         return next(
             (
                 node
                 for node in self._nodes.values()
                 if node.kind is WorkingNodeKind.ACTIVITY
-                and node.source_activity_id.upper() == normalized
+                and node.source_activity_id.strip().upper() == normalized
                 and not node.deleted
             ),
             None,
