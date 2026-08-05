@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
 import tempfile
 from typing import Any, Callable
+
+from openpyxl import load_workbook
 
 from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, SupplementalWBS
 from progress_studio.domain.working_tree import (
@@ -45,6 +47,67 @@ def _atomic_json_write(path: Path, payload: object) -> None:
         raise
 
 
+def _normalise_cell_value(value: object) -> str:
+    """Return a deterministic representation for workbook identity hashing."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat(timespec="microseconds")
+    if isinstance(value, (date, time)):
+        return value.isoformat()
+    if isinstance(value, float):
+        return format(value, ".17g")
+    if isinstance(value, bytes):
+        return value.hex()
+    return str(value)
+
+
+def semantic_fingerprint(path: Path) -> str:
+    """Hash workbook meaning rather than the XLSX/ZIP byte stream.
+
+    Excel commonly rewrites package metadata, style tables and ZIP ordering even
+    when worksheet data is unchanged. Those changes must not break project
+    relinking. This digest intentionally covers sheet order/names and every
+    non-empty cell's coordinate, data type, formula or value. Formatting, file
+    timestamps, calculation caches and document metadata are ignored.
+    """
+    keep_vba = path.suffix.lower() == ".xlsm"
+    try:
+        workbook = load_workbook(
+            path, read_only=True, data_only=False, keep_links=False, keep_vba=keep_vba
+        )
+    except Exception as exc:
+        raise SessionValidationError(
+            f"Workbook cannot be opened as an Excel file: {path}"
+        ) from exc
+
+    digest = hashlib.sha256()
+    try:
+        digest.update(b"progress-studio-workbook-identity-v1\0")
+        for sheet in workbook.worksheets:
+            digest.update(b"S\0")
+            digest.update(sheet.title.encode("utf-8", errors="surrogatepass"))
+            digest.update(b"\0")
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    digest.update(b"C\0")
+                    digest.update(cell.coordinate.encode("ascii"))
+                    digest.update(b"\0")
+                    digest.update(str(cell.data_type or "").encode("ascii", errors="ignore"))
+                    digest.update(b"\0")
+                    digest.update(
+                        _normalise_cell_value(cell.value).encode(
+                            "utf-8", errors="surrogatepass"
+                        )
+                    )
+                    digest.update(b"\0")
+    finally:
+        workbook.close()
+    return digest.hexdigest()
+
+
 def fingerprint(path: Path) -> WorkbookFingerprint:
     path = Path(path).expanduser().resolve()
     if not path.is_file():
@@ -54,12 +117,28 @@ def fingerprint(path: Path) -> WorkbookFingerprint:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     stat = path.stat()
+
+    semantic_sha256 = ""
+    identity_kind = "binary-sha256"
+    if path.suffix.lower() in {".xlsx", ".xlsm"}:
+        try:
+            semantic_sha256 = semantic_fingerprint(path)
+        except SessionValidationError:
+            # Preserve compatibility with legacy tests and corrupted/non-Excel
+            # files carrying an Excel suffix. The binary fingerprint remains
+            # available and validation stays strict.
+            semantic_sha256 = ""
+        else:
+            identity_kind = "excel-semantic-v1"
+
     return WorkbookFingerprint(
         path=str(path),
         filename=path.name,
         size=stat.st_size,
         modified_ns=stat.st_mtime_ns,
         sha256=digest.hexdigest(),
+        semantic_sha256=semantic_sha256,
+        identity_kind=identity_kind,
     )
 
 
@@ -129,12 +208,25 @@ def _migrate_v5_to_v6(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_v6_to_v7(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep legacy binary fingerprints; new saves gain semantic identities."""
+    migrated = dict(payload)
+    for key in ("progress", "boq"):
+        workbook = dict(migrated.get(key) or {})
+        workbook.setdefault("semantic_sha256", "")
+        workbook.setdefault("identity_kind", "binary-sha256")
+        migrated[key] = workbook
+    migrated["version"] = 7
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
     4: _migrate_v4_to_v5,
     5: _migrate_v5_to_v6,
+    6: _migrate_v6_to_v7,
 }
 
 
@@ -268,8 +360,10 @@ class MappingSessionRepository:
         """Return a verified workbook path.
 
         The saved absolute path is tried by default. A user-selected candidate may be
-        supplied when the workbook was moved or renamed. Only identical SHA-256 content
-        is accepted; changed workbooks are never merged automatically.
+        supplied when the workbook was moved or renamed. New sessions use a stable
+        Excel semantic identity, so harmless re-saves and formatting changes are
+        accepted while worksheet data changes are rejected. Legacy sessions retain
+        strict SHA-256 verification until they are saved again.
         """
         path = Path(candidate).expanduser().resolve() if candidate else saved.saved_path
         try:
@@ -281,11 +375,20 @@ class MappingSessionRepository:
                     "Browse for the moved or renamed workbook to continue."
                 ) from exc
             raise
-        if current.sha256 != saved.sha256:
+        if saved.has_semantic_identity and current.has_semantic_identity:
+            matches = current.semantic_sha256 == saved.semantic_sha256
+        else:
+            # Sessions created before v7 do not contain enough information to
+            # verify a changed binary safely, so they retain strict SHA-256
+            # behaviour. Re-saving the project upgrades it for future relinks.
+            matches = current.sha256 == saved.sha256
+
+        if not matches:
             source = "selected workbook" if candidate else "workbook at the saved location"
             raise SessionValidationError(
-                f"The {source} does not match the session copy: {saved.filename}. "
-                "Progress Studio will not merge a changed workbook automatically."
+                f"The {source} does not match the project workbook: {saved.filename}. "
+                "Progress Studio will not merge workbook data from another version "
+                "or project automatically."
             )
         return path
 

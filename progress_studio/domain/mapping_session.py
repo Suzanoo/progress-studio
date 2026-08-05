@@ -8,7 +8,7 @@ from progress_studio.domain.working_tree import WorkingTreeNode
 
 
 SESSION_FORMAT = "progress-studio-mapping-session"
-SESSION_VERSION = 6
+SESSION_VERSION = 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,10 +18,19 @@ class WorkbookFingerprint:
     size: int
     modified_ns: int
     sha256: str
+    # Version 7 adds a stable, workbook-aware identity. It hashes worksheet
+    # names, cell coordinates, formulas and values, while deliberately ignoring
+    # ZIP metadata, formatting and other binary details changed by Excel saves.
+    semantic_sha256: str = ""
+    identity_kind: str = "binary-sha256"
 
     @property
     def saved_path(self) -> Path:
         return Path(self.path)
+
+    @property
+    def has_semantic_identity(self) -> bool:
+        return bool(self.semantic_sha256)
 
 
 @dataclass(frozen=True, slots=True)

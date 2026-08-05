@@ -64,7 +64,7 @@ def test_session_write_is_json_and_has_expected_contract(tmp_path: Path) -> None
 
     payload = json.loads(target.read_text(encoding="utf-8"))
     assert payload["format"] == "progress-studio-mapping-session"
-    assert payload["version"] == 6
+    assert payload["version"] == 7
     assert payload["boq_sheet"] == "NKC2"
     assert payload["allocations"] == []
     assert not list(tmp_path.glob("*.tmp"))
@@ -169,7 +169,7 @@ def test_v1_session_is_migrated_to_current_version(tmp_path: Path) -> None:
 
     loaded = repository.load(target)
 
-    assert loaded.version == 6
+    assert loaded.version == 7
     assert loaded.progress.filename == "progress.xlsx"
     assert loaded.boq.filename == "boq.xlsx"
 
@@ -205,3 +205,108 @@ def test_future_session_version_is_rejected_with_clear_message(tmp_path: Path) -
     )
     with pytest.raises(SessionValidationError, match="supports up to version"):
         MappingSessionRepository().load(target)
+
+
+def test_excel_resave_and_formatting_change_keeps_semantic_identity(tmp_path: Path) -> None:
+    from openpyxl import Workbook, load_workbook
+
+    progress = tmp_path / "progress.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "main"
+    sheet.append(["Activity ID", "Activity Name", "Amount"])
+    sheet.append(["A1000", "Foundation", 1000.0])
+    workbook.save(progress)
+
+    repository = MappingSessionRepository()
+    saved = repository.create(progress, progress, "main", []).progress
+
+    # Excel/openpyxl rewrites the package and formatting, but the worksheet data
+    # used by the project remains identical.
+    workbook = load_workbook(progress)
+    workbook["main"].column_dimensions["B"].width = 42
+    workbook["main"].freeze_panes = "A2"
+    workbook.save(progress)
+
+    assert repository.validate_workbook(saved) == progress.resolve()
+
+
+def test_excel_cell_data_change_is_rejected_by_semantic_identity(tmp_path: Path) -> None:
+    from openpyxl import Workbook, load_workbook
+
+    progress = tmp_path / "progress.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "main"
+    sheet.append(["Activity ID", "Activity Name"])
+    sheet.append(["A1000", "Foundation"])
+    workbook.save(progress)
+
+    repository = MappingSessionRepository()
+    saved = repository.create(progress, progress, "main", []).progress
+
+    workbook = load_workbook(progress)
+    workbook["main"]["B2"] = "Changed foundation"
+    workbook.save(progress)
+
+    with pytest.raises(SessionValidationError, match="does not match"):
+        repository.validate_workbook(saved)
+
+
+def test_excel_workbook_can_be_moved_renamed_and_resaved(tmp_path: Path) -> None:
+    from openpyxl import Workbook, load_workbook
+
+    original = tmp_path / "progress.xlsx"
+    workbook = Workbook()
+    workbook.active["A1"] = "Project Alpha"
+    workbook.save(original)
+
+    repository = MappingSessionRepository()
+    saved = repository.create(original, original, "Sheet", []).progress
+    moved = tmp_path / "archive" / "renamed-progress.xlsx"
+    moved.parent.mkdir()
+    original.replace(moved)
+
+    workbook = load_workbook(moved)
+    workbook.active.sheet_view.showGridLines = False
+    workbook.save(moved)
+
+    assert repository.validate_workbook(saved, moved) == moved.resolve()
+
+
+def test_v6_session_migrates_with_legacy_strict_fingerprint(tmp_path: Path) -> None:
+    progress = write_workbook_placeholder(tmp_path / "progress.xlsx", b"legacy-not-real-xlsx")
+    repository = MappingSessionRepository()
+    current = repository.create(progress, progress, "Project", [])
+    payload = {
+        "format": current.format,
+        "version": 6,
+        "saved_at": current.saved_at,
+        "progress": {
+            "path": current.progress.path,
+            "filename": current.progress.filename,
+            "size": current.progress.size,
+            "modified_ns": current.progress.modified_ns,
+            "sha256": current.progress.sha256,
+        },
+        "boq": {
+            "path": current.boq.path,
+            "filename": current.boq.filename,
+            "size": current.boq.size,
+            "modified_ns": current.boq.modified_ns,
+            "sha256": current.boq.sha256,
+        },
+        "boq_sheet": "Project",
+        "allocations": [],
+        "supplemental_activities": [],
+        "supplemental_wbs": [],
+        "working_tree_nodes": [],
+    }
+    target = tmp_path / "legacy-v6.progressstudio"
+    target.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = repository.load(target)
+
+    assert loaded.version == 7
+    assert loaded.progress.semantic_sha256 == ""
+    assert repository.validate_workbook(loaded.progress) == progress.resolve()

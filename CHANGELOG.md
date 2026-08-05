@@ -1,5 +1,14 @@
 # Changelog
 
+## MS-P1.1 — Workbook Identity & Safe Relink
+
+- Replaced binary-only workbook matching for new projects with a stable Excel semantic identity.
+- Allowed moved, renamed, re-saved, and formatting-only workbook changes to relink safely.
+- Continued rejecting worksheet data or formula changes that may invalidate mappings.
+- Preserved strict SHA-256 validation for legacy project sessions until they are saved again.
+- Upgraded the mapping session schema from version 6 to version 7 with automatic migration.
+- Updated relink guidance and added regression tests for Excel re-save, formatting, rename, mismatch, and legacy sessions.
+
 ## MS9.1 — Production desktop UI foundation
 
 - Rebuilt the desktop shell around the approved production mockup: menu bar, navigation sidebar, six-stage workflow header, mapping-first workspace, and application status bar.

@@ -1177,7 +1177,7 @@ class AmountMappingFrame(ttk.Frame):
                 f"{workbook_label} workbook cannot be verified at its saved location.\n\n"
                 f"Saved file: {saved.filename}\n\n"
                 "Browse for the moved or renamed workbook?\n"
-                "Only an identical workbook will be accepted.",
+                "The same project workbook will be accepted even after a harmless Excel re-save.",
             )
             if not browse:
                 raise original_error
