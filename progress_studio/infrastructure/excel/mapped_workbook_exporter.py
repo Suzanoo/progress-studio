@@ -20,6 +20,7 @@ from progress_studio.infrastructure.excel.xlsx_package_validator import validate
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
 from progress_studio.infrastructure.excel.calculation_policy import request_full_excel_recalculation
+from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
 
@@ -138,6 +139,7 @@ class MappedWorkbookExporter:
                 self._write_extension_sheet(workbook, activities, totals, supplemental_wbs or [])
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
+                apply_activity_data_wbs_hierarchy(workbook['main'])
                 request_full_excel_recalculation(workbook)
                 workbook.save(temp_file)
                 if progress_callback is not None:
