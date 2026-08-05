@@ -1,22 +1,12 @@
 from __future__ import annotations
 
 from copy import copy
-from dataclasses import dataclass
+from openpyxl.styles import Font, PatternFill
 
-from openpyxl.styles import Border, Font, PatternFill, Side
-
-
-@dataclass(frozen=True)
-class ActivityDataPalette:
-    """Colors used only by the Activity Data section of the main sheet."""
-
-    wbs_level_1_fill: str = "F4B183"
-    wbs_level_2_fill: str = "F8CBAD"
-    font_color: str = "000000"
-    separator_color: str = "C65911"
-
-
-DEFAULT_ACTIVITY_DATA_PALETTE = ActivityDataPalette()
+from progress_studio.infrastructure.excel.export_theme import (
+    ActivityDataPalette,
+    DEFAULT_ACTIVITY_DATA_PALETTE,
+)
 
 
 def _normalized(value: object) -> str:
@@ -70,7 +60,6 @@ def apply_activity_data_wbs_hierarchy(
     last_data_col = _activity_data_last_column(ws, header_row)
     level_1_fill = PatternFill("solid", fgColor=palette.wbs_level_1_fill)
     level_2_fill = PatternFill("solid", fgColor=palette.wbs_level_2_fill)
-    medium_top = Side(style="medium", color=palette.separator_color)
 
     previous_wbs_level: int | None = None
     for row in range(first_data_row, ws.max_row + 1):
@@ -104,18 +93,3 @@ def apply_activity_data_wbs_hierarchy(
                 strike=cell.font.strike,
                 color=palette.font_color,
             )
-            if level == 1:
-                old = cell.border
-                cell.border = Border(
-                    left=copy(old.left),
-                    right=copy(old.right),
-                    top=medium_top,
-                    bottom=copy(old.bottom),
-                    diagonal=copy(old.diagonal),
-                    diagonal_direction=old.diagonal_direction,
-                    diagonalUp=old.diagonalUp,
-                    diagonalDown=old.diagonalDown,
-                    outline=old.outline,
-                    vertical=copy(old.vertical),
-                    horizontal=copy(old.horizontal),
-                )

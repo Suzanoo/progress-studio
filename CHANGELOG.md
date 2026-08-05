@@ -222,3 +222,10 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Renamed the desktop input from Primavera XML to Schedule XML.
 - Kept the former `PrimaveraXmlReader` as a compatibility adapter.
 - Isolated XML parsing and validation from the existing workbook, mapping, session, and export pipeline.
+
+## MS-P1.3 Combined Theme Refactor
+
+- Restored WBS level color hierarchy in the main-sheet timescale from the original MS-P1.3 build.
+- Kept the separate WBS level hierarchy in the Activity Data section.
+- Removed the dark top border from WBS level 1 Activity Data rows.
+- Centralized export color configuration in `progress_studio/infrastructure/excel/export_theme.py`.

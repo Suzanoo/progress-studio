@@ -115,3 +115,24 @@ Run the test suite with:
 ```bash
 pytest
 ```
+
+## Excel export theme configuration
+
+The exported `main` sheet uses one central theme configuration file:
+
+```text
+progress_studio/infrastructure/excel/export_theme.py
+```
+
+It contains two independent palettes:
+
+- `TimescalePalette` — Project, WBS level 1, WBS level 2, Plan/Actual, and S-curve colors in the timescale section.
+- `ActivityDataPalette` — WBS level 1 and WBS level 2 colors in the Activity Data section.
+
+The Activity Data formatter is implemented in:
+
+```text
+progress_studio/infrastructure/excel/activity_data_theme.py
+```
+
+Activity Data styling changes fill and font only. It does not add or replace row borders, and it does not modify timescale cells.

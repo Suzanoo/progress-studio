@@ -18,8 +18,10 @@ except ImportError as exc:
         "openpyxl was not found.\nInstall it with: pip install openpyxl"
     ) from exc
 
+from progress_studio.infrastructure.excel.export_theme import DEFAULT_TIMESCALE_PALETTE
 
-SCRIPT_VERSION = "6.3-acc-actual-cutoff-fix"
+
+SCRIPT_VERSION = "6.4-wbs-level-color-hierarchy"
 DEFAULT_SHEET = "main"
 HEADER_ROW = 4
 FIRST_DATA_ROW = 5
@@ -48,18 +50,23 @@ def solid_fill(rgb: str) -> PatternFill:
     )
 
 
-# Activity input colors
-ACTIVITY_PLAN_FILL = solid_fill("#DDEBF7")
-ACTIVITY_ACTUAL_FILL = solid_fill("#E2F0D9")
+# Export colors are configured in export_theme.py.
+_TIMESCALE = DEFAULT_TIMESCALE_PALETTE
+ACTIVITY_PLAN_FILL = solid_fill(_TIMESCALE.activity_plan_fill)
+ACTIVITY_ACTUAL_FILL = solid_fill(_TIMESCALE.activity_actual_fill)
+PROJECT_PLAN_FILL = solid_fill(_TIMESCALE.project_plan_fill)
+PROJECT_ACTUAL_FILL = solid_fill(_TIMESCALE.project_actual_fill)
+WBS_LEVEL1_PLAN_FILL = solid_fill(_TIMESCALE.wbs_level_1_plan_fill)
+WBS_LEVEL1_ACTUAL_FILL = solid_fill(_TIMESCALE.wbs_level_1_actual_fill)
+WBS_LEVEL2_PLAN_FILL = solid_fill(_TIMESCALE.wbs_level_2_plan_fill)
+WBS_LEVEL2_ACTUAL_FILL = solid_fill(_TIMESCALE.wbs_level_2_actual_fill)
 
-# WBS / Project calculated colors
-WBS_PLAN_FILL = solid_fill("#5B9BD5")
-WBS_ACTUAL_FILL = solid_fill("#70AD47")
-
-# S-Curve summary colors
-SCURVE_PLAN_FILL = solid_fill("#9DC3E6")
-SCURVE_ACTUAL_FILL = solid_fill("#A9D18E")
-SCURVE_ACC_FILL = solid_fill("#D9EAD3")
+# Backward-compatible aliases used by S-Curve styling.
+WBS_PLAN_FILL = WBS_LEVEL2_PLAN_FILL
+WBS_ACTUAL_FILL = WBS_LEVEL2_ACTUAL_FILL
+SCURVE_PLAN_FILL = solid_fill(_TIMESCALE.scurve_plan_fill)
+SCURVE_ACTUAL_FILL = solid_fill(_TIMESCALE.scurve_actual_fill)
+SCURVE_ACC_FILL = solid_fill(_TIMESCALE.scurve_acc_fill)
 
 
 def normalize_header(value: object) -> str:
@@ -608,6 +615,7 @@ def add_progress_conditional_formatting(
     row_type_col: int,
     activity_id_col: int,
     pa_col: int,
+    outline_level_col: int,
     last_progress_row: int,
 ) -> None:
     start_letter = get_column_letter(timescale_cols[0])
@@ -615,6 +623,7 @@ def add_progress_conditional_formatting(
     row_type_letter = get_column_letter(row_type_col)
     activity_id_letter = get_column_letter(activity_id_col)
     pa_letter = get_column_letter(pa_col)
+    outline_level_letter = get_column_letter(outline_level_col)
     target = f"{start_letter}{FIRST_DATA_ROW}:{end_letter}{last_progress_row}"
     first_week = start_letter
 
@@ -630,27 +639,61 @@ def add_progress_conditional_formatting(
             fill=ACTIVITY_ACTUAL_FILL,
             stopIfTrue=True,
         ),
-        # Use dark colors for WBS and Project Summary rows.
+        # Project summary: darkest band.
         FormulaRule(
-            formula=[f'AND(OR(${row_type_letter}{FIRST_DATA_ROW}="WBS",${row_type_letter}{FIRST_DATA_ROW}="Project Summary"),${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'],
-            fill=WBS_PLAN_FILL,
+            formula=[f'AND(${row_type_letter}{FIRST_DATA_ROW}="Project Summary",${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'],
+            fill=PROJECT_PLAN_FILL,
             font=Font(color="FFFFFFFF", bold=True),
             stopIfTrue=True,
         ),
         FormulaRule(
-            # WBS/Project Actual rows have no Row Type.
-            # Read Row Type from the Plan row immediately above.
             formula=[
-                f'AND('
-                f'OR('
-                f'${row_type_letter}{FIRST_DATA_ROW - 1}="WBS",'
-                f'${row_type_letter}{FIRST_DATA_ROW - 1}="Project Summary"'
-                f'),'
-                f'${pa_letter}{FIRST_DATA_ROW}="A",'
-                f'{first_week}{FIRST_DATA_ROW}<>""'
-                f')'
+                f'AND(${row_type_letter}{FIRST_DATA_ROW - 1}="Project Summary",'
+                f'${pa_letter}{FIRST_DATA_ROW}="A",{first_week}{FIRST_DATA_ROW}<>"")'
             ],
-            fill=WBS_ACTUAL_FILL,
+            fill=PROJECT_ACTUAL_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        # WBS level 1: parent WBS (1, 2, 3, ...).
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW}=1,'
+                f'${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL1_PLAN_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW - 1}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW - 1}=1,'
+                f'${pa_letter}{FIRST_DATA_ROW}="A",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL1_ACTUAL_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        # WBS level 2 and deeper: lighter than the parent WBS.
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW}>=2,'
+                f'${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL2_PLAN_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW - 1}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW - 1}>=2,'
+                f'${pa_letter}{FIRST_DATA_ROW}="A",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL2_ACTUAL_FILL,
             font=Font(color="FFFFFFFF", bold=True),
             stopIfTrue=True,
         ),
@@ -886,6 +929,7 @@ def prepare_progress_and_scurve(wb, ws) -> tuple[int, int, int, int, int]:
         row_type_col,
         activity_id_col,
         pa_col,
+        outline_level_col,
         last_activity_data_row,
     )
     add_percent_complete_warning(

@@ -29,6 +29,8 @@ def test_activity_data_hierarchy_colors_only_data_section():
     project_fill = ws.cell(5, 1).fill.fgColor.rgb
     activity_fill = ws.cell(10, 1).fill.fgColor.rgb
     timescale_fill = ws.cell(6, 7).fill.fgColor.rgb
+    level_1_border = tuple(side.style for side in (ws.cell(6, 1).border.left, ws.cell(6, 1).border.right, ws.cell(6, 1).border.top, ws.cell(6, 1).border.bottom))
+    level_2_border = tuple(side.style for side in (ws.cell(8, 1).border.left, ws.cell(8, 1).border.right, ws.cell(8, 1).border.top, ws.cell(8, 1).border.bottom))
 
     apply_activity_data_wbs_hierarchy(ws)
 
@@ -36,8 +38,8 @@ def test_activity_data_hierarchy_colors_only_data_section():
     assert ws.cell(7, 1).fill.fgColor.rgb.endswith("F4B183")
     assert ws.cell(8, 1).fill.fgColor.rgb.endswith("F8CBAD")
     assert ws.cell(9, 1).fill.fgColor.rgb.endswith("F8CBAD")
-    assert ws.cell(6, 1).border.top.style == "medium"
-    assert ws.cell(8, 1).border.top.style != "medium"
+    assert tuple(side.style for side in (ws.cell(6, 1).border.left, ws.cell(6, 1).border.right, ws.cell(6, 1).border.top, ws.cell(6, 1).border.bottom)) == level_1_border
+    assert tuple(side.style for side in (ws.cell(8, 1).border.left, ws.cell(8, 1).border.right, ws.cell(8, 1).border.top, ws.cell(8, 1).border.bottom)) == level_2_border
     assert ws.cell(5, 1).fill.fgColor.rgb == project_fill
     assert ws.cell(10, 1).fill.fgColor.rgb == activity_fill
     assert ws.cell(6, 7).fill.fgColor.rgb == timescale_fill
