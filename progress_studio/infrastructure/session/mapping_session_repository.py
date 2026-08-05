@@ -263,6 +263,11 @@ def _migrate_payload(payload: dict[str, Any]) -> dict[str, Any]:
 class MappingSessionRepository:
     """Persist mapping allocations as a small, atomic JSON sidecar."""
 
+    @staticmethod
+    def fingerprint(path: Path) -> WorkbookFingerprint:
+        """Compute a workbook identity at an explicit load/relink boundary."""
+        return fingerprint(path)
+
     def create(
         self,
         progress_file: Path,
@@ -272,10 +277,19 @@ class MappingSessionRepository:
         supplemental_activities: list[ActivityRow] | None = None,
         supplemental_wbs: list[SupplementalWBS] | None = None,
         working_tree_nodes: list[WorkingTreeNode] | None = None,
+        progress_fingerprint: WorkbookFingerprint | None = None,
+        boq_fingerprint: WorkbookFingerprint | None = None,
     ) -> MappingSessionData:
+        """Build session data, reusing identities already verified in memory.
+
+        Workbook hashing is intentionally optional here. Interactive callers cache
+        identities when a workbook is loaded or relinked, so high-frequency
+        autosaves only serialize the small project JSON. Non-GUI callers retain
+        the safe legacy behaviour by omitting the cached fingerprints.
+        """
         return MappingSessionData(
-            progress=fingerprint(progress_file),
-            boq=fingerprint(boq_file),
+            progress=progress_fingerprint or fingerprint(progress_file),
+            boq=boq_fingerprint or fingerprint(boq_file),
             boq_sheet=boq_sheet,
             allocations=tuple(allocations),
             saved_at=datetime.now(timezone.utc).isoformat(),

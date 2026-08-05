@@ -1,5 +1,13 @@
 # Changelog
 
+## MS-P1.2 — Cached Workbook Identity
+
+- Cache Progress and BOQ workbook identities at load/relink boundaries.
+- Autosave now writes only the project JSON and no longer reopens or hashes Excel workbooks on every mapping action.
+- Manual Save and Save As reuse the verified in-memory identities.
+- Preserve safe relink and workbook mismatch protection from MS-P1.1.
+- Add regression coverage proving cached session creation performs no workbook fingerprinting.
+
 ## MS-P1.1 — Workbook Identity & Safe Relink
 
 - Replaced binary-only workbook matching for new projects with a stable Excel semantic identity.

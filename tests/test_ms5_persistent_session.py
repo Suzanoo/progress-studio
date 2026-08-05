@@ -310,3 +310,29 @@ def test_v6_session_migrates_with_legacy_strict_fingerprint(tmp_path: Path) -> N
     assert loaded.version == 7
     assert loaded.progress.semantic_sha256 == ""
     assert repository.validate_workbook(loaded.progress) == progress.resolve()
+
+
+def test_create_reuses_cached_workbook_fingerprints(tmp_path: Path, monkeypatch) -> None:
+    progress = write_workbook_placeholder(tmp_path / "progress.xlsx", b"progress")
+    boq = write_workbook_placeholder(tmp_path / "boq.xlsx", b"boq")
+    repository = MappingSessionRepository()
+    progress_identity = repository.fingerprint(progress)
+    boq_identity = repository.fingerprint(boq)
+
+    import progress_studio.infrastructure.session.mapping_session_repository as module
+
+    def unexpected_fingerprint(_path: Path):
+        raise AssertionError("cached autosave must not hash workbooks again")
+
+    monkeypatch.setattr(module, "fingerprint", unexpected_fingerprint)
+    session = repository.create(
+        progress,
+        boq,
+        "Project",
+        [],
+        progress_fingerprint=progress_identity,
+        boq_fingerprint=boq_identity,
+    )
+
+    assert session.progress == progress_identity
+    assert session.boq == boq_identity

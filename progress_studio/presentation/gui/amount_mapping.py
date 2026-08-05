@@ -39,6 +39,8 @@ class AmountMappingFrame(ttk.Frame):
         self.progress_file: Path | None = None
         self.boq_file: Path | None = None
         self.boq_sheet: str | None = None
+        self._progress_fingerprint: WorkbookFingerprint | None = None
+        self._boq_fingerprint: WorkbookFingerprint | None = None
         self.progress_path_var = tk.StringVar(value="No Progress workbook loaded")
         self.boq_path_var = tk.StringVar(value="No BOQ workbook loaded")
         self.boq_sheet_var = tk.StringVar()
@@ -430,6 +432,7 @@ class AmountMappingFrame(ttk.Frame):
         try:
             self._busy(True)
             rows = self.service.read_activities(self.progress_file)
+            self._progress_fingerprint = self.session_repository.fingerprint(self.progress_file)
             self.store.load_activities(rows)
             self.progress_path_var.set(str(self.progress_file))
             self._render_activities()
@@ -439,6 +442,7 @@ class AmountMappingFrame(ttk.Frame):
                 self._set_inputs_collapsed(True)
         except Exception as exc:
             self.progress_file = None
+            self._progress_fingerprint = None
             self.progress_path_var.set("No Progress workbook loaded")
             messagebox.showerror("Amount Mapping", str(exc))
         finally:
@@ -459,6 +463,7 @@ class AmountMappingFrame(ttk.Frame):
             if not sheet_names:
                 raise ValueError("The selected BOQ workbook has no worksheets.")
             self.boq_file = candidate
+            self._boq_fingerprint = self.session_repository.fingerprint(candidate)
             self.boq_sheet = None
             self.boq_path_var.set(str(candidate))
             self.boq_sheet_combo.configure(values=sheet_names, state="readonly")
@@ -1081,6 +1086,8 @@ class AmountMappingFrame(ttk.Frame):
             self.store.supplemental_activities(),
             self.store.supplemental_wbs_nodes,
             list(self.store.working_tree_nodes()),
+            progress_fingerprint=self._progress_fingerprint,
+            boq_fingerprint=self._boq_fingerprint,
         )
         saved = self.session_repository.save(path, session)
         self.session_file = saved
@@ -1198,6 +1205,9 @@ class AmountMappingFrame(ttk.Frame):
             session = self.session_repository.load(session_path)
             progress_file = self._resolve_session_workbook(session.progress, "Progress")
             boq_file = self._resolve_session_workbook(session.boq, "BOQ")
+            # Resolve/verify once, then keep identities in memory for lightweight autosave.
+            self._progress_fingerprint = self.session_repository.fingerprint(progress_file)
+            self._boq_fingerprint = self.session_repository.fingerprint(boq_file)
 
             activities = self.service.read_activities(progress_file)
             sheet_names = self.service.list_boq_sheets(boq_file)
