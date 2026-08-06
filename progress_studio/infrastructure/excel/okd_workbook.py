@@ -936,6 +936,36 @@ def build_progress_table_sheet(
     return verify_progress_table_links(ws, weeks, table_rows)
 
 
+def build_progress_views_from_source(wb, source_ws) -> tuple[int, int, int, int]:
+    """Build both ``progress`` and ``progress_table`` from the current main sheet.
+
+    This is the shared pre-mapping workbook contract.  The final OKD step may
+    call the same builders again as a deterministic refresh after distribution.
+    """
+    headers = get_headers(source_ws)
+    weeks = find_week_columns(source_ws, wb.epoch)
+    activities, table_items = read_schedule_items(
+        source_ws, headers, weeks, wb.epoch
+    )
+    table_rows = build_table_rows(table_items, activities, len(weeks))
+    build_progress_sheet(wb, source_ws, headers, weeks, activities)
+    table_rows_count, checked_links = build_progress_table_sheet(
+        wb, source_ws, headers, weeks, table_rows
+    )
+    return len(activities), len(weeks), table_rows_count, checked_links
+
+
+def build_progress_table_from_source(wb, source_ws) -> tuple[int, int]:
+    """Backward-compatible helper that rebuilds only ``progress_table``."""
+    headers = get_headers(source_ws)
+    weeks = find_week_columns(source_ws, wb.epoch)
+    activities, table_items = read_schedule_items(
+        source_ws, headers, weeks, wb.epoch
+    )
+    table_rows = build_table_rows(table_items, activities, len(weeks))
+    return build_progress_table_sheet(wb, source_ws, headers, weeks, table_rows)
+
+
 def update_info_sheet(wb, activities_count: int, weeks_count: int) -> None:
     ws = wb["Info"] if "Info" in wb.sheetnames else wb.create_sheet("Info")
     start = ws.max_row + 2 if ws.max_row else 1

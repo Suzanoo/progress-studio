@@ -6,6 +6,7 @@ from progress_studio.config import WORKBOOK_SCHEMA
 from progress_studio.domain.progress import ProgressBuildResult
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.okd_workbook import build_progress_views_from_source
 from progress_studio.infrastructure.excel.progress_workbook import (
     find_sheet,
     prepare_progress_and_scurve,
@@ -39,11 +40,21 @@ class ProgressService:
             ws = find_sheet(wb, WORKBOOK_SCHEMA.main_sheet)
             values = prepare_progress_and_scurve(wb, ws)
 
-            # The workbook is already useful before BOQ mapping. Apply the same
-            # Activity Data hierarchy theme used by mapped exports and create the
-            # Dashboard as soon as progress/progress_table become available.
+            # Pre-mapping workbook contract: progress, progress_table, theme, and
+            # Dashboard must all exist immediately after the progress stage.
+            # The final OKD step may rebuild progress_table later, but it is a
+            # refresh of an existing sheet rather than the first creation.
+            build_progress_views_from_source(wb, ws)
             apply_activity_data_wbs_hierarchy(ws)
             build_dashboard(wb, project_name=self._project_name(ws))
+
+            required = {"progress", "progress_table", "Dashboard", "Dashboard_Data"}
+            missing = sorted(required.difference(wb.sheetnames))
+            if missing:
+                raise RuntimeError(
+                    "Progress stage did not create required workbook sheets: "
+                    + ", ".join(missing)
+                )
 
             wb.calculation.calcMode = "auto"
             wb.calculation.fullCalcOnLoad = True

@@ -1,44 +1,44 @@
 from pathlib import Path
+import shutil
 
-from openpyxl import Workbook, load_workbook
-
-
-def _source_workbook(path: Path) -> None:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "main"
-    ws.append([])
-    ws.append([])
-    ws.append([])
-    ws.append(["Row Type", "WBS", "Description", "P/A", "Activity ID", "Outline Level"])
-    ws.append(["Project Summary", "", "Demo Project", "P", "", 0])
-    ws.append(["", "", "", "A", "", ""])
-    wb.save(path)
-    wb.close()
+from openpyxl import load_workbook
 
 
-def test_progress_service_creates_dashboard_and_theme_before_mapping(tmp_path, monkeypatch):
+def test_progress_service_creates_table_theme_and_dashboard_before_mapping(tmp_path, monkeypatch):
     from progress_studio.services.progress_service import ProgressService
     import progress_studio.services.progress_service as module
 
     source = tmp_path / "source.xlsx"
     output = tmp_path / "progress.xlsx"
-    _source_workbook(source)
+    shutil.copyfile(Path("example/golden/progress.xlsx"), source)
 
-    calls = []
+    # Reproduce the real lifecycle bug: the progress builder creates only the
+    # progress sheet. progress_table must be created by ProgressService itself,
+    # not faked by this test and not deferred to the OKD step.
     def fake_prepare(workbook, ws):
+        if "progress" in workbook.sheetnames:
+            del workbook["progress"]
+        if "progress_table" in workbook.sheetnames:
+            del workbook["progress_table"]
         progress = workbook.create_sheet("progress")
         progress.append(["project_start", "project_finish", "week_start", "plan", "actual"])
-        progress.append([None, None, None, 0, 0])
-        table = workbook.create_sheet("progress_table")
-        table.append(["WBS", "Activities", "Amount", "P/A", "%Progress"])
+        progress.append([None, None, ws.cell(4, 13).value, 0, 0])
         return (0, 0, 0, 0, 0)
+
+    calls = []
     monkeypatch.setattr(module, "prepare_progress_and_scurve", fake_prepare)
-    monkeypatch.setattr(module, "apply_activity_data_wbs_hierarchy", lambda ws: calls.append("theme"))
+    original_theme = module.apply_activity_data_wbs_hierarchy
     original_dashboard = module.build_dashboard
+
+    def wrapped_theme(ws):
+        calls.append("theme")
+        return original_theme(ws)
+
     def wrapped_dashboard(workbook, *, project_name=None):
         calls.append("dashboard")
         return original_dashboard(workbook, project_name=project_name)
+
+    monkeypatch.setattr(module, "apply_activity_data_wbs_hierarchy", wrapped_theme)
     monkeypatch.setattr(module, "build_dashboard", wrapped_dashboard)
 
     ProgressService().build(source, output)
@@ -47,8 +47,16 @@ def test_progress_service_creates_dashboard_and_theme_before_mapping(tmp_path, m
     result = load_workbook(output, data_only=False)
     try:
         assert result.sheetnames[0] == "Dashboard"
-        assert result["Dashboard"]["C5"].value == "Demo Project"
-        assert "Dashboard_Data" in result.sheetnames
+        assert {"Dashboard_Data", "progress", "progress_table"}.issubset(result.sheetnames)
+        assert result["progress_table"].max_row > 1
+        assert result["Dashboard"]["C5"].value not in (None, "")
+        # WBS hierarchy theme is already present in the pre-mapping main sheet.
+        main = result["main"]
+        wbs_row = next(
+            row for row in range(5, main.max_row + 1)
+            if str(main.cell(row, 1).value or "").strip().lower() == "wbs"
+        )
+        assert main.cell(wbs_row, 1).fill.fill_type == "solid"
     finally:
         result.close()
 
