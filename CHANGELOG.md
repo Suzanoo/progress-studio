@@ -1,3 +1,12 @@
+## MS-P1.8 — Dashboard Data and Theme Refactor
+
+- Fixed blank `Dashboard_Data` when `progress.week_start` contains worksheet-reference formulas.
+- Added dynamic progress-header discovery and date parsing.
+- Added a clear generation error when weekly dashboard data cannot be built.
+- Cleaned up Dashboard controls and initialized the cutoff date with a real value.
+- Added editable Dashboard theme config at `progress_studio/config/dashboard_theme.json`.
+- Dashboard remains generated before BOQ mapping.
+
 # Changelog
 
 ## MS-P1.6 — Excel Dashboard

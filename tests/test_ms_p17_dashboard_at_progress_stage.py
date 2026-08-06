@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 import shutil
 
 from openpyxl import load_workbook
@@ -22,7 +23,7 @@ def test_progress_service_creates_table_theme_and_dashboard_before_mapping(tmp_p
             del workbook["progress_table"]
         progress = workbook.create_sheet("progress")
         progress.append(["project_start", "project_finish", "week_start", "plan", "actual"])
-        progress.append([None, None, ws.cell(4, 13).value, 0, 0])
+        progress.append([None, None, date(2026, 1, 2), 0, 0])
         return (0, 0, 0, 0, 0)
 
     calls = []

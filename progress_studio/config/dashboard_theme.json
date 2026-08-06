@@ -1,0 +1,26 @@
+{
+  "name": "simple_corporate",
+  "font": "Aptos",
+  "colors": {
+    "navy": "17365D",
+    "blue": "2F75B5",
+    "green": "70AD47",
+    "red": "C00000",
+    "amber": "BF9000",
+    "light_blue": "EAF2F8",
+    "light_green": "EAF4E3",
+    "light_red": "FCE8E6",
+    "light_amber": "FFF4D6",
+    "light_gray": "F3F4F6",
+    "border": "D9DEE7",
+    "text": "1F2937",
+    "muted": "667085",
+    "white": "FFFFFF"
+  },
+  "layout": {
+    "title": "PROGRESS STUDIO DASHBOARD",
+    "activity_rows": 8,
+    "chart_height": 8.0,
+    "chart_width": 20.5
+  }
+}

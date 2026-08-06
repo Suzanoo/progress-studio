@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime
+import json
+import re
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -31,6 +33,50 @@ MUTED = "667085"
 WHITE = "FFFFFF"
 
 
+def _load_dashboard_theme() -> dict:
+    path = Path(__file__).resolve().parents[2] / "config" / "dashboard_theme.json"
+    defaults = {
+        "font": "Aptos",
+        "colors": {
+            "navy": NAVY, "blue": BLUE, "green": GREEN, "red": RED,
+            "amber": AMBER, "light_blue": LIGHT_BLUE, "light_green": LIGHT_GREEN,
+            "light_red": LIGHT_RED, "light_amber": LIGHT_AMBER,
+            "light_gray": LIGHT_GRAY, "border": BORDER, "text": TEXT,
+            "muted": MUTED, "white": WHITE,
+        },
+        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "activity_rows": 8, "chart_height": 8.0, "chart_width": 20.5},
+    }
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return defaults
+    result = defaults.copy()
+    result["colors"] = {**defaults["colors"], **loaded.get("colors", {})}
+    result["layout"] = {**defaults["layout"], **loaded.get("layout", {})}
+    result["font"] = loaded.get("font", defaults["font"])
+    return result
+
+
+_THEME = _load_dashboard_theme()
+_FONT = _THEME["font"]
+_COLORS = _THEME["colors"]
+_LAYOUT = _THEME["layout"]
+NAVY = _COLORS["navy"]
+BLUE = _COLORS["blue"]
+GREEN = _COLORS["green"]
+RED = _COLORS["red"]
+AMBER = _COLORS["amber"]
+LIGHT_BLUE = _COLORS["light_blue"]
+LIGHT_GREEN = _COLORS["light_green"]
+LIGHT_RED = _COLORS["light_red"]
+LIGHT_AMBER = _COLORS["light_amber"]
+LIGHT_GRAY = _COLORS["light_gray"]
+BORDER = _COLORS["border"]
+TEXT = _COLORS["text"]
+MUTED = _COLORS["muted"]
+WHITE = _COLORS["white"]
+
+
 def _solid(color: str) -> PatternFill:
     return PatternFill("solid", fgColor=color)
 
@@ -45,7 +91,53 @@ def _as_date(value):
         return value.date()
     if isinstance(value, date):
         return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(text, fmt).date()
+            except ValueError:
+                continue
     return None
+
+
+def _as_number(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip().replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalise_header(value) -> str:
+    return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
+
+
+def _progress_columns(progress_ws) -> dict[str, int]:
+    aliases = {
+        "date": {"weekstart", "weeklydate", "date", "period", "week"},
+        "plan": {"plan", "weeklyplan", "planned", "plannedprogress"},
+        "actual": {"actual", "weeklyactual", "actualprogress"},
+    }
+    result: dict[str, int] = {}
+    for col in range(1, progress_ws.max_column + 1):
+        key = _normalise_header(progress_ws.cell(1, col).value)
+        for role, names in aliases.items():
+            if key in names and role not in result:
+                result[role] = col
+    missing = [role for role in ("date", "plan", "actual") if role not in result]
+    if missing:
+        headers = [str(progress_ws.cell(1, c).value or "") for c in range(1, progress_ws.max_column + 1)]
+        raise RuntimeError(
+            "Dashboard data source is missing required progress columns "
+            f"{missing}. Found headers: {headers}"
+        )
+    return result
 
 
 def _month_end(value: date) -> date:
@@ -57,12 +149,31 @@ def _remove(workbook, name: str) -> None:
         del workbook[name]
 
 
-def _progress_rows(progress_ws) -> list[tuple[int, date]]:
+def _resolve_reference(workbook, value):
+    if not isinstance(value, str) or not value.startswith("="):
+        return value
+    match = re.fullmatch(r"='?([^'!]+)'?!\$?([A-Z]+)\$?(\d+)", value.strip())
+    if not match:
+        return value
+    sheet_name, column, row = match.groups()
+    if sheet_name not in workbook.sheetnames:
+        return value
+    return workbook[sheet_name][f"{column}{row}"].value
+
+
+def _progress_rows(workbook, progress_ws) -> list[tuple[int, date]]:
+    columns = _progress_columns(progress_ws)
     result: list[tuple[int, date]] = []
     for row in range(2, progress_ws.max_row + 1):
-        value = _as_date(progress_ws.cell(row, 3).value)
-        if value is not None:
-            result.append((row, value))
+        raw_date = _resolve_reference(workbook, progress_ws.cell(row, columns["date"]).value)
+        week_date = _as_date(raw_date)
+        if week_date is None:
+            continue
+        result.append((row, week_date))
+    if not result:
+        raise RuntimeError(
+            "Dashboard generation failed: progress sheet contains no usable weekly dates."
+        )
     return result
 
 
@@ -76,17 +187,33 @@ def _monthly_groups(rows: list[tuple[int, date]]) -> list[tuple[date, list[int]]
     ]
 
 
+def _normalise_percent(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return value / 100.0 if abs(value) > 1 else value
+
+
+def _source_percent_formula(progress_ws, row: int, col: int) -> str | float | None:
+    value = progress_ws.cell(row, col).value
+    numeric = _as_number(value)
+    if numeric is not None:
+        return _normalise_percent(numeric)
+    column_letter = progress_ws.cell(1, col).column_letter
+    return f'''=IF('{PROGRESS_SHEET}'!{column_letter}{row}="","",'{PROGRESS_SHEET}'!{column_letter}{row}/100)'''
+
+
 def _build_data_sheet(workbook, progress_ws) -> None:
     _remove(workbook, DATA_SHEET)
     ws = workbook.create_sheet(DATA_SHEET)
-    rows = _progress_rows(progress_ws)
+    columns = _progress_columns(progress_ws)
+    rows = _progress_rows(workbook, progress_ws)
     months = _monthly_groups(rows)
 
     ws.append(["Weekly Date", "Weekly Plan", "Weekly Actual", "Monthly Date", "Monthly Plan", "Monthly Actual", "Display Date", "Display Plan", "Display Actual"])
     for output_row, (source_row, week_date) in enumerate(rows, start=2):
-        ws.cell(output_row, 1, f"='{PROGRESS_SHEET}'!C{source_row}")
-        ws.cell(output_row, 2, f"='{PROGRESS_SHEET}'!D{source_row}/100")
-        ws.cell(output_row, 3, f"=IF('{PROGRESS_SHEET}'!E{source_row}=\"\",\"\",'{PROGRESS_SHEET}'!E{source_row}/100)")
+        ws.cell(output_row, 1, week_date)
+        ws.cell(output_row, 2, _source_percent_formula(progress_ws, source_row, columns["plan"]))
+        ws.cell(output_row, 3, _source_percent_formula(progress_ws, source_row, columns["actual"]))
         ws.cell(output_row, 1).number_format = "dd/mm/yyyy"
         ws.cell(output_row, 2).number_format = "0.00%"
         ws.cell(output_row, 3).number_format = "0.00%"
@@ -94,14 +221,15 @@ def _build_data_sheet(workbook, progress_ws) -> None:
     for output_row, (month_date, source_rows) in enumerate(months, start=2):
         last_row = source_rows[-1]
         ws.cell(output_row, 4, month_date)
-        ws.cell(output_row, 5, f"='{PROGRESS_SHEET}'!D{last_row}/100")
-        actual_refs = ",".join(f"'{PROGRESS_SHEET}'!E{row}" for row in source_rows)
+        ws.cell(output_row, 5, _source_percent_formula(progress_ws, last_row, columns["plan"]))
+        actual_letter = progress_ws.cell(1, columns["actual"]).column_letter
+        actual_refs = ",".join(f"'{PROGRESS_SHEET}'!{actual_letter}{row}" for row in source_rows)
         ws.cell(output_row, 6, f'=IF(COUNT({actual_refs})=0,"",LOOKUP(2,1/(({actual_refs})<>""),({actual_refs}))/100)')
         ws.cell(output_row, 4).number_format = "mmm-yyyy"
         ws.cell(output_row, 5).number_format = "0.00%"
         ws.cell(output_row, 6).number_format = "0.00%"
 
-    display_count = max(len(rows), len(months), 1)
+    display_count = max(len(rows), len(months))
     for output_row in range(2, display_count + 2):
         weekly_row = output_row if output_row <= len(rows) + 1 else None
         monthly_row = output_row if output_row <= len(months) + 1 else None
@@ -111,13 +239,15 @@ def _build_data_sheet(workbook, progress_ws) -> None:
         monthly_date = f"D{monthly_row}" if monthly_row else '""'
         monthly_plan = f"E{monthly_row}" if monthly_row else '""'
         monthly_actual = f"F{monthly_row}" if monthly_row else '""'
-        ws.cell(output_row, 7, f'=IF(Dashboard!$D$5="Weekly",{weekly_date},{monthly_date})')
-        ws.cell(output_row, 8, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$H$5),"",IF(Dashboard!$D$5="Weekly",{weekly_plan},{monthly_plan}))')
-        ws.cell(output_row, 9, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$H$5),"",IF(Dashboard!$D$5="Weekly",{weekly_actual},{monthly_actual}))')
+        ws.cell(output_row, 7, f'=IF(Dashboard!$G$5="Weekly",{weekly_date},{monthly_date})')
+        ws.cell(output_row, 8, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$J$5),"",IF(Dashboard!$G$5="Weekly",{weekly_plan},{monthly_plan}))')
+        ws.cell(output_row, 9, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$J$5),"",IF(Dashboard!$G$5="Weekly",{weekly_actual},{monthly_actual}))')
         ws.cell(output_row, 7).number_format = "dd/mm/yyyy"
         ws.cell(output_row, 8).number_format = "0.00%"
         ws.cell(output_row, 9).number_format = "0.00%"
 
+    if ws.max_row < 2 or ws["A2"].value is None:
+        raise RuntimeError("Dashboard generation failed: Dashboard_Data contains no weekly rows.")
     ws.sheet_state = "hidden"
 
 
@@ -125,7 +255,7 @@ def _merge_title(ws, cell_range: str, value: str, size: int = 12) -> None:
     ws.merge_cells(cell_range)
     cell = ws[cell_range.split(":")[0]]
     cell.value = value
-    cell.font = Font(bold=True, size=size, color=TEXT)
+    cell.font = Font(name=_FONT, bold=True, size=size, color=TEXT)
     cell.alignment = Alignment(vertical="center")
 
 
@@ -143,10 +273,10 @@ def _kpi(ws, title_range: str, value_range: str, title: str, formula: str, fill:
     title_cell = ws[title_range.split(":")[0]]
     value_cell = ws[value_range.split(":")[0]]
     title_cell.value = title
-    title_cell.font = Font(size=9, color=MUTED)
+    title_cell.font = Font(name=_FONT, size=9, color=MUTED)
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
     value_cell.value = formula
-    value_cell.font = Font(size=18, bold=True, color=color)
+    value_cell.font = Font(name=_FONT, size=18, bold=True, color=color)
     value_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     value_cell.number_format = number_format
 
@@ -167,8 +297,8 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws.row_dimensions[row].height = 20
 
     ws.merge_cells("B2:L2")
-    ws["B2"] = "PROGRESS STUDIO DASHBOARD"
-    ws["B2"].font = Font(size=20, bold=True, color=NAVY)
+    ws["B2"] = _LAYOUT["title"]
+    ws["B2"].font = Font(name=_FONT, size=20, bold=True, color=NAVY)
     ws["B2"].alignment = Alignment(vertical="center")
     ws.row_dimensions[2].height = 30
 
@@ -176,43 +306,45 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     _style_box(ws, "B5:L6", LIGHT_GRAY)
     ws["B5"] = "Project"
     ws["C5"] = project_name or "Project"
-    ws["C5"].font = Font(bold=True, color=TEXT)
+    ws["C5"].font = Font(name=_FONT, bold=True, color=TEXT)
     ws["B6"] = "Data source"
     ws["C6"] = "Live formulas from progress / progress_table"
-    ws["C6"].font = Font(size=9, color=MUTED)
-    ws["D5"] = "Weekly"
+    ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
     ws["F5"] = "View"
-    ws["G5"] = "Weekly / Monthly"
-    ws["H5"] = f"='{DATA_SHEET}'!A{max(2, workbook[DATA_SHEET].max_row)}"
-    ws["J5"] = "Cutoff Date"
-    ws["K5"] = "Select date"
-    ws["H5"].number_format = "dd/mm/yyyy"
-    ws["D5"].font = Font(bold=True, color=NAVY)
-    ws["H5"].font = Font(bold=True, color=NAVY)
+    ws.merge_cells("G5:H5")
+    ws["G5"] = "Weekly"
+    ws["I5"] = "Cutoff Date"
+    ws.merge_cells("J5:L5")
+    ws["J5"] = workbook[DATA_SHEET].cell(workbook[DATA_SHEET].max_row, 1).value
+    ws["J5"].number_format = "dd/mm/yyyy"
+    ws["G5"].font = Font(name=_FONT, bold=True, color=NAVY)
+    ws["J5"].font = Font(name=_FONT, bold=True, color=NAVY)
+    ws["G5"].alignment = Alignment(horizontal="center")
+    ws["J5"].alignment = Alignment(horizontal="center")
 
     view_validation = DataValidation(type="list", formula1='"Weekly,Monthly"', allow_blank=False)
     ws.add_data_validation(view_validation)
-    view_validation.add(ws["D5"])
-    last_week_row = max(2, len(_progress_rows(workbook[PROGRESS_SHEET])) + 1)
+    view_validation.add(ws["G5"])
+    last_week_row = max(2, len(_progress_rows(workbook, workbook[PROGRESS_SHEET])) + 1)
     cutoff_validation = DataValidation(type="list", formula1=f"'{DATA_SHEET}'!$A$2:$A${last_week_row}", allow_blank=False)
     ws.add_data_validation(cutoff_validation)
-    cutoff_validation.add(ws["H5"])
+    cutoff_validation.add(ws["J5"])
 
     _merge_title(ws, "B8:L8", "KPI SUMMARY", 11)
     _kpi(ws, "B9:D9", "B10:D11", "PLANNED PROGRESS", '=IFERROR(LOOKUP(2,1/(Dashboard_Data!$H$2:$H$200<>""),Dashboard_Data!$H$2:$H$200),0)', LIGHT_BLUE, BLUE)
     _kpi(ws, "F9:H9", "F10:H11", "ACTUAL PROGRESS", '=IFERROR(LOOKUP(2,1/(Dashboard_Data!$I$2:$I$200<>""),Dashboard_Data!$I$2:$I$200),0)', LIGHT_GREEN, GREEN)
     _kpi(ws, "J9:L9", "J10:L11", "SCHEDULE STATUS", '=IF(F10>=B10,"ON TRACK","DELAY "&TEXT(B10-F10,"0.00%"))', LIGHT_AMBER, AMBER, "General")
-    _kpi(ws, "B13:D13", "B14:D15", "TIME IMPACT", '=IF(F10>=B10,"0 Days",MAX(0,H5-IFERROR(LOOKUP(F10,Dashboard_Data!$B$2:$B$200,Dashboard_Data!$A$2:$A$200),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General")
+    _kpi(ws, "B13:D13", "B14:D15", "TIME IMPACT", '=IF(F10>=B10,"0 Days",MAX(0,J5-IFERROR(LOOKUP(F10,Dashboard_Data!$B$2:$B$200,Dashboard_Data!$A$2:$A$200),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General")
     _kpi(ws, "F13:H13", "F14:H15", "PROGRESS GAP", '=MAX(B10-F10,0)', LIGHT_GRAY, NAVY)
-    _kpi(ws, "J13:L13", "J14:L15", "REPORTING PERIOD", '=D5', LIGHT_GRAY, NAVY, "General")
+    _kpi(ws, "J13:L13", "J14:L15", "REPORTING PERIOD", '=G5', LIGHT_GRAY, NAVY, "General")
 
     _merge_title(ws, "B17:L17", "S-CURVE — PLAN VS ACTUAL", 11)
     _style_box(ws, "B18:L34", WHITE)
     chart = LineChart()
     chart.title = ""
     chart.style = 13
-    chart.height = 8.0
-    chart.width = 20.5
+    chart.height = float(_LAYOUT["chart_height"])
+    chart.width = float(_LAYOUT["chart_width"])
     chart.y_axis.scaling.min = 0
     chart.y_axis.scaling.max = 1
     chart.y_axis.numFmt = "0%"
@@ -240,7 +372,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         cell = ws[f"{start}37"]
         cell.value = header
         cell.fill = _solid(NAVY)
-        cell.font = Font(bold=True, color=WHITE, size=9)
+        cell.font = Font(name=_FONT, bold=True, color=WHITE, size=9)
         cell.alignment = Alignment(horizontal="center", vertical="center")
         for row in ws[f"{start}37:{end}37"]:
             for c in row:
@@ -250,7 +382,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     output_row = 38
     source_row = 2
     shown = 0
-    while source_row <= source.max_row and shown < 8:
+    while source_row <= source.max_row and shown < int(_LAYOUT["activity_rows"]):
         plan_row = source_row
         actual_row = source_row + 1 if source_row + 1 <= source.max_row else source_row
         ws[f"B{output_row}"] = f"='{TABLE_SHEET}'!A{plan_row}"
@@ -262,7 +394,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws.merge_cells(f"I{output_row}:J{output_row}")
         ws[f"I{output_row}"] = f'=IFERROR(G{output_row}*K{output_row},0)'
         ws.merge_cells(f"K{output_row}:L{output_row}")
-        ws[f"K{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$H$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
+        ws[f"K{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$J$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
 
         actual_out = output_row + 1
         ws.merge_cells(f"C{actual_out}:E{actual_out}")
@@ -271,7 +403,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws.merge_cells(f"I{actual_out}:J{actual_out}")
         ws[f"I{actual_out}"] = f'=IFERROR(G{output_row}*K{actual_out},0)'
         ws.merge_cells(f"K{actual_out}:L{actual_out}")
-        ws[f"K{actual_out}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$H$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
+        ws[f"K{actual_out}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$J$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
 
         for row_index in (output_row, actual_out):
             for row_cells in ws[f"B{row_index}:L{row_index}"]:
@@ -282,8 +414,8 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             ws[f"G{row_index}"].number_format = "#,##0.00"
             ws[f"I{row_index}"].number_format = "#,##0.00"
             ws[f"K{row_index}"].number_format = "0.00%"
-        ws[f"F{output_row}"].font = Font(bold=True, color=BLUE)
-        ws[f"F{actual_out}"].font = Font(bold=True, color=GREEN)
+        ws[f"F{output_row}"].font = Font(name=_FONT, bold=True, color=BLUE)
+        ws[f"F{actual_out}"].font = Font(name=_FONT, bold=True, color=GREEN)
         output_row += 2
         source_row += 2
         shown += 1
