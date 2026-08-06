@@ -72,7 +72,7 @@ def test_progress_service_creates_dashboard_before_mapping(tmp_path):
 
     import progress_studio.services.progress_service as module
     original = module.prepare_progress_and_scurve
-    module.prepare_progress_and_scurve = lambda workbook, ws: (0, 0)
+    module.prepare_progress_and_scurve = lambda workbook, ws: (0, 0, 0, 0, 0)
     try:
         ProgressService().build(source, output)
     finally:
