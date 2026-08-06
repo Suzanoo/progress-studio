@@ -49,3 +49,40 @@ def test_dashboard_activity_rows_are_formula_linked_to_progress_table():
     assert dashboard["F38"].value == "Plan"
     assert dashboard["F39"].value == "Actual"
     assert "SUMPRODUCT" in dashboard["K38"].value
+
+
+def test_progress_service_creates_dashboard_before_mapping(tmp_path):
+    from progress_studio.services.progress_service import ProgressService
+
+    source = tmp_path / "source.xlsx"
+    output = tmp_path / "progress.xlsx"
+    wb = _workbook()
+    # ProgressService expects a main sheet and then builds progress sheets from it;
+    # use a focused monkeypatch to verify orchestration without duplicating the
+    # complete schedule fixture.
+    main = wb.create_sheet("main", 0)
+    main.append([])
+    main.append([])
+    main.append([])
+    main.append(["Row Type", "WBS", "Description", "P/A", "Activity ID", "Outline Level"])
+    main.append(["Project Summary", "", "Demo Project", "P", "", 0])
+    main.append(["", "", "", "A", "", ""])
+    wb.save(source)
+    wb.close()
+
+    import progress_studio.services.progress_service as module
+    original = module.prepare_progress_and_scurve
+    module.prepare_progress_and_scurve = lambda workbook, ws: (0, 0)
+    try:
+        ProgressService().build(source, output)
+    finally:
+        module.prepare_progress_and_scurve = original
+
+    from openpyxl import load_workbook
+    result = load_workbook(output, data_only=False)
+    try:
+        assert result.sheetnames[0] == "Dashboard"
+        assert result["Dashboard"]["C5"].value == "Demo Project"
+        assert "Dashboard_Data" in result.sheetnames
+    finally:
+        result.close()

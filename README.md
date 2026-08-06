@@ -1,3 +1,11 @@
+
+### MS-P1.7 — Dashboard from initial XML generation
+
+- The `Dashboard` sheet is created during the **Build progress sheets** stage, before BOQ mapping.
+- A user importing XML receives a dashboard-ready workbook immediately, even while all activity amounts are still zero.
+- The same four-level orange Activity Data hierarchy theme is applied during initial generation and mapped export.
+- Mapping export refreshes the existing dashboard; it is no longer the first point at which the dashboard appears.
+
 # Progress Studio
 
 Progress Studio creates a progress workbook from schedule XML, maps BOQ amounts to activities, saves mapping sessions, and exports a recalculation-ready Excel workbook.
