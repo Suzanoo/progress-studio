@@ -1,5 +1,14 @@
 # Changelog
 
+## MS-P1.6 — Excel Dashboard
+
+- Added a separate `Dashboard` worksheet as the first workbook tab.
+- Added Weekly / Monthly and Cutoff Date dropdown controls.
+- Added formula-linked KPIs, S-Curve, and Activity Progress summary.
+- Added hidden `Dashboard_Data` helper sheet while preserving `main`, `progress`, and `progress_table`.
+- Integrated dashboard generation into both fresh workbook generation and mapped workbook export.
+- Added automated dashboard and generation-progress tests.
+
 ## MS-P1.2 — Cached Workbook Identity
 
 - Cache Progress and BOQ workbook identities at load/relink boundaries.

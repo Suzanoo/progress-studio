@@ -146,3 +146,16 @@ The exported `main` sheet calculates earned Actual Amount automatically:
 - Project Actual Amount = sum of all Activity Actual Amounts
 
 Weekly Plan/Actual roll-ups continue to use the full Plan Amount as their weight, so displaying earned Actual Amount does not change progress percentages.
+
+## Excel Dashboard
+
+Generated workbooks now include a separate **Dashboard** worksheet as the first tab.
+It uses live formulas from `progress` and `progress_table` and contains:
+
+- Cutoff Date dropdown
+- Weekly / Monthly dropdown
+- Planned Progress, Actual Progress, Schedule Status, Time Impact, and Progress Gap KPIs
+- S-Curve chart
+- Activity Progress summary
+
+`Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. The existing `main`, `progress`, and `progress_table` worksheets remain unchanged as source sheets.
