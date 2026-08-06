@@ -26,6 +26,8 @@ class ActivityDataPalette:
 
     wbs_level_1_fill: str = "F4B183"
     wbs_level_2_fill: str = "F8CBAD"
+    wbs_level_3_fill: str = "FADBC8"
+    wbs_level_4_fill: str = "FCE8DE"
     font_color: str = "000000"
 
 

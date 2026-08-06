@@ -127,7 +127,7 @@ progress_studio/infrastructure/excel/export_theme.py
 It contains two independent palettes:
 
 - `TimescalePalette` — Project, WBS level 1, WBS level 2, Plan/Actual, and S-curve colors in the timescale section.
-- `ActivityDataPalette` — WBS level 1 and WBS level 2 colors in the Activity Data section.
+- `ActivityDataPalette` — WBS level 1, 2, 3, and 4 colors in the Activity Data section. WBS levels deeper than 4 reuse the level-4 color.
 
 The Activity Data formatter is implemented in:
 
@@ -135,4 +135,4 @@ The Activity Data formatter is implemented in:
 progress_studio/infrastructure/excel/activity_data_theme.py
 ```
 
-Activity Data styling changes fill and font only. It does not add or replace row borders, and it does not modify timescale cells.
+Activity Data styling changes fill and font only. It uses the `Outline Level` value, preserves existing row borders, and does not modify timescale cells. Levels 1–4 use progressively lighter fills; level 5 and deeper use the level-4 fill.

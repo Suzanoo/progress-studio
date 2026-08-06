@@ -41,10 +41,12 @@ def apply_activity_data_wbs_hierarchy(
     first_data_row: int = 5,
     palette: ActivityDataPalette = DEFAULT_ACTIVITY_DATA_PALETTE,
 ) -> None:
-    """Differentiate WBS level 1 and 2 in Activity Data only.
+    """Apply a four-step WBS color hierarchy to Activity Data only.
 
-    Project Summary, Activity rows, and all timescale cells are intentionally
-    left unchanged. Actual rows inherit the style of their paired WBS Plan row.
+    WBS levels 1 through 4 use progressively lighter fills. Levels deeper than
+    4 intentionally reuse the level-4 fill so the palette remains readable and
+    predictable. Project Summary, Activity rows, borders, and all timescale
+    cells are left unchanged. Actual rows inherit their paired WBS Plan style.
     """
     headers = {
         _normalized(ws.cell(header_row, col).value): col
@@ -58,8 +60,12 @@ def apply_activity_data_wbs_hierarchy(
         return
 
     last_data_col = _activity_data_last_column(ws, header_row)
-    level_1_fill = PatternFill("solid", fgColor=palette.wbs_level_1_fill)
-    level_2_fill = PatternFill("solid", fgColor=palette.wbs_level_2_fill)
+    level_fills = {
+        1: PatternFill("solid", fgColor=palette.wbs_level_1_fill),
+        2: PatternFill("solid", fgColor=palette.wbs_level_2_fill),
+        3: PatternFill("solid", fgColor=palette.wbs_level_3_fill),
+        4: PatternFill("solid", fgColor=palette.wbs_level_4_fill),
+    }
 
     previous_wbs_level: int | None = None
     for row in range(first_data_row, ws.max_row + 1):
@@ -69,15 +75,15 @@ def apply_activity_data_wbs_hierarchy(
         if row_type == "wbs":
             level = _as_level(ws.cell(row, outline_col).value)
             previous_wbs_level = level
-        elif pa == "A" and previous_wbs_level in (1, 2):
+        elif pa == "A" and previous_wbs_level is not None:
             level = previous_wbs_level
         else:
             previous_wbs_level = None
             continue
 
-        if level not in (1, 2):
+        if level is None or level < 1:
             continue
-        fill = level_1_fill if level == 1 else level_2_fill
+        fill = level_fills[min(level, 4)]
 
         for col in range(1, last_data_col + 1):
             cell = ws.cell(row, col)
