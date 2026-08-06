@@ -136,3 +136,13 @@ progress_studio/infrastructure/excel/activity_data_theme.py
 ```
 
 Activity Data styling changes fill and font only. It uses the `Outline Level` value, preserves existing row borders, and does not modify timescale cells. Levels 1–4 use progressively lighter fills; level 5 and deeper use the level-4 fill.
+
+## Actual Amount calculation
+
+The exported `main` sheet calculates earned Actual Amount automatically:
+
+- Activity Actual Amount = Activity Plan Amount × Actual `% Complete`
+- WBS Actual Amount = sum of descendant Activity Actual Amounts
+- Project Actual Amount = sum of all Activity Actual Amounts
+
+Weekly Plan/Actual roll-ups continue to use the full Plan Amount as their weight, so displaying earned Actual Amount does not change progress percentages.

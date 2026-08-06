@@ -349,8 +349,9 @@ def prepare_activity_amount_refs(
 
         actual_row = plan_row + 1
         if actual_row <= ws.max_row and normalize_header(ws.cell(actual_row, pa_col).value) == "a":
-            ws.cell(actual_row, amount_col).value = f"={amount_letter}{plan_row}"
-            ws.cell(actual_row, amount_col).number_format = ";;;"
+            # Actual Amount is calculated later, after % Complete formulas exist.
+            ws.cell(actual_row, amount_col).value = None
+            ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
     return with_amount, without_amount
 
 def rollup_amounts(
@@ -385,14 +386,14 @@ def rollup_amounts(
                 f'${pa_letter}${row + 1}:${pa_letter}${end_row},"P")'
             )
 
-        # WBS and Project Actual rows reference Plan amounts but hide the values.
+        # Parent Actual Amount is calculated later from descendant Activity Actual rows.
         actual_row = row + 1
         if (
             actual_row <= ws.max_row
             and normalize_header(ws.cell(actual_row, pa_col).value) == "a"
         ):
-            ws.cell(actual_row, amount_col).value = f"={amount_letter}{row}"
-            ws.cell(actual_row, amount_col).number_format = ";;;"
+            ws.cell(actual_row, amount_col).value = None
+            ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
 
         if row_type == "wbs":
             wbs_count += 1
@@ -485,11 +486,25 @@ def add_progress_formulas(
                         f'{week_letter}${first_child_row}:{week_letter}${end_row},"<>")'
                     )
 
+                # Weekly progress must always be weighted by the full Plan Amount.
+                # For Actual rows the full amount is on the preceding Plan row, while
+                # the visible Actual Amount column contains earned value.
+                if pa_code == "A":
+                    weight_range = (
+                        f'${amount_letter}${first_child_row - 1}:'
+                        f'${amount_letter}${end_row - 1}'
+                    )
+                else:
+                    weight_range = (
+                        f'${amount_letter}${first_child_row}:'
+                        f'${amount_letter}${end_row}'
+                    )
+
                 weighted_sum = (
                     f'SUMPRODUCT('
                     f'{activity_test},'
                     f'--(${pa_letter}${first_child_row}:${pa_letter}${end_row}="{pa_code}"),'
-                    f'${amount_letter}${first_child_row}:${amount_letter}${end_row},'
+                    f'{weight_range},'
                     f'{week_letter}${first_child_row}:{week_letter}${end_row})'
                 )
 
@@ -497,7 +512,7 @@ def add_progress_formulas(
                     f'SUMPRODUCT('
                     f'{activity_test},'
                     f'--(${pa_letter}${first_child_row}:${pa_letter}${end_row}="{pa_code}"),'
-                    f'${amount_letter}${first_child_row}:${amount_letter}${end_row})'
+                    f'{weight_range})'
                 )
 
                 formula = (
@@ -536,6 +551,69 @@ def add_percent_complete_formulas(
             )
             ws.cell(row, percent_complete_col).number_format = PERCENT_FORMAT
             ws.cell(row, percent_complete_col).protection = Protection(locked=True)
+
+
+def add_actual_amount_formulas(
+    ws,
+    plan_rows: list[dict[str, object]],
+    activity_id_col: int,
+    pa_col: int,
+    amount_col: int,
+    percent_complete_col: int,
+) -> None:
+    """Calculate earned Actual Amount for activities and roll it up to parents.
+
+    Activity Actual Amount = Plan Amount x Actual % Complete.
+    WBS/Project Actual Amount = sum of descendant Activity Actual Amounts.
+    """
+    activity_id_letter = get_column_letter(activity_id_col)
+    pa_letter = get_column_letter(pa_col)
+    amount_letter = get_column_letter(amount_col)
+    percent_letter = get_column_letter(percent_complete_col)
+
+    # Activities first so parent SUMIFS formulas can roll them up.
+    for item in plan_rows:
+        if str(item["row_type"]) != "activity":
+            continue
+        plan_row = int(item["row"])
+        actual_row = plan_row + 1
+        if (
+            actual_row > ws.max_row
+            or normalize_header(ws.cell(actual_row, pa_col).value) != "a"
+        ):
+            continue
+        ws.cell(actual_row, amount_col).value = (
+            f'=IF({percent_letter}{actual_row}="","",'
+            f'{amount_letter}{plan_row}*{percent_letter}{actual_row})'
+        )
+        ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
+        ws.cell(actual_row, amount_col).protection = Protection(locked=True)
+
+    # Roll up from deepest parent to Project Summary.
+    for index in range(len(plan_rows) - 1, -1, -1):
+        item = plan_rows[index]
+        row_type = str(item["row_type"])
+        if row_type not in {"wbs", "project summary"}:
+            continue
+        plan_row = int(item["row"])
+        actual_row = plan_row + 1
+        if (
+            actual_row > ws.max_row
+            or normalize_header(ws.cell(actual_row, pa_col).value) != "a"
+        ):
+            continue
+        end_row = find_descendant_physical_end(ws, plan_rows, index, pa_col)
+        first_child_row = plan_row + 2
+        if first_child_row > end_row:
+            ws.cell(actual_row, amount_col).value = 0
+        else:
+            ws.cell(actual_row, amount_col).value = (
+                f'=SUMIFS(${amount_letter}${first_child_row}:${amount_letter}${end_row},'
+                f'${activity_id_letter}${first_child_row}:${activity_id_letter}${end_row},"<>",'
+                f'${pa_letter}${first_child_row}:${pa_letter}${end_row},"A")'
+            )
+        ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
+        ws.cell(actual_row, amount_col).protection = Protection(locked=True)
 
 
 def add_percent_complete_warning(
@@ -906,6 +984,14 @@ def prepare_progress_and_scurve(wb, ws) -> tuple[int, int, int, int, int]:
         plan_rows,
         timescale_cols,
         pa_col,
+        percent_complete_col,
+    )
+    add_actual_amount_formulas(
+        ws,
+        plan_rows,
+        activity_id_col,
+        pa_col,
+        amount_col,
         percent_complete_col,
     )
 

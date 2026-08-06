@@ -229,3 +229,10 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Kept the separate WBS level hierarchy in the Activity Data section.
 - Removed the dark top border from WBS level 1 Activity Data rows.
 - Centralized export color configuration in `progress_studio/infrastructure/excel/export_theme.py`.
+
+## MS-P1.5 - Actual Amount formulas
+
+- Calculate Activity Actual Amount from Plan Amount and Actual `% Complete`.
+- Roll up Actual Amount to WBS and Project Summary rows.
+- Keep weekly Actual progress weighted by full Plan Amount.
+- Show Actual Amount cells with the normal currency format instead of hiding them.
