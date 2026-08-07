@@ -1,5 +1,14 @@
 ## MS-P1.8 — Dashboard Data and Theme Refactor
 
+
+## MS-P1.14 — Progress-Source Dashboard
+
+- Dashboard KPI Plan/Actual now read the stable `progress` sheet directly at the selected cutoff.
+- Time Impact = rounded baseline project duration (`project_finish - project_start`) × absolute schedule variance.
+- Schedule Status and Time Impact cards use delay/ahead/on-schedule conditional colors.
+- `Dashboard_Data` remains a thin Weekly/Monthly chart adapter instead of duplicating schedule business logic.
+- Activity Progress now mirrors the main-sheet native Excel outline hierarchy for Project → WBS → Activity drill-down.
+
 ## MS-P1.13 — Dashboard + Main Filter Polish
 
 - Dashboard Activity Progress now renders every progress row instead of stopping at eight.

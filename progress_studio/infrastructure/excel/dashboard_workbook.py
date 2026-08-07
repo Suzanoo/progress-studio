@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image as XLImage
-from openpyxl.formatting.rule import DataBarRule
+from openpyxl.formatting.rule import DataBarRule, FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.filters import FilterColumn
@@ -415,14 +415,57 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws.add_data_validation(cutoff_validation)
     cutoff_validation.add(ws["K5"])
 
-    # KPI values always use the selected cutoff date regardless of chart view.
+    # KPI values read the stable progress sheet directly. Dashboard_Data is a
+    # thin chart adapter only; schedule dates/progress are calculated once in
+    # progress and merely presented here.
     _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
-    plan_kpi = '=IFERROR(LOOKUP(2,1/((Dashboard_Data!$A$2:$A$250<=$K$5)*(Dashboard_Data!$B$2:$B$250<>"")),Dashboard_Data!$B$2:$B$250),0)'
-    actual_kpi = '=IFERROR(LOOKUP(2,1/((Dashboard_Data!$A$2:$A$250<=$K$5)*(Dashboard_Data!$C$2:$C$250<>"")),Dashboard_Data!$C$2:$C$250),0)'
+    progress_ws = workbook[PROGRESS_SHEET]
+    progress_cols = _progress_columns(progress_ws)
+    progress_last_row = max(2, progress_ws.max_row)
+    date_letter = progress_ws.cell(1, progress_cols["date"]).column_letter
+    plan_letter = progress_ws.cell(1, progress_cols["plan"]).column_letter
+    actual_letter = progress_ws.cell(1, progress_cols["actual"]).column_letter
+    progress_ref = f"'{PROGRESS_SHEET}'"
+    plan_kpi = (
+        f'=IFERROR(LOOKUP(2,1/(({progress_ref}!${date_letter}$2:${date_letter}${progress_last_row}<=$K$5)*'
+        f'({progress_ref}!${plan_letter}$2:${plan_letter}${progress_last_row}<>"")),'
+        f'{progress_ref}!${plan_letter}$2:${plan_letter}${progress_last_row})/100,0)'
+    )
+    actual_kpi = (
+        f'=IFERROR(LOOKUP(2,1/(({progress_ref}!${date_letter}$2:${date_letter}${progress_last_row}<=$K$5)*'
+        f'({progress_ref}!${actual_letter}$2:${actual_letter}${progress_last_row}<>"")),'
+        f'{progress_ref}!${actual_letter}$2:${actual_letter}${progress_last_row})/100,0)'
+    )
+    schedule_formula = (
+        '=IF(E10=B10,"ON SCHEDULE",'
+        'IF(E10<B10,"DELAY "&TEXT(B10-E10,"0.00%"),'
+        '"AHEAD "&TEXT(E10-B10,"0.00%")))'
+    )
+    # progress!A/B are the authoritative project baseline dates. Convert KPI 3
+    # variance to calendar days across the fixed baseline duration and round to
+    # whole days.
+    time_impact_formula = (
+        f'=ROUND(ABS(E10-B10)*MAX(0,{progress_ref}!$B$2-{progress_ref}!$A$2),0)&" Days"'
+    )
     _kpi(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_kpi, LIGHT_BLUE, BLUE, icon="planned")
     _kpi(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_kpi, LIGHT_GREEN, GREEN, icon="actual")
-    _kpi(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", '=IF(E10>=B10,"ON TRACK","DELAY "&TEXT(B10-E10,"0.00%"))', LIGHT_AMBER, AMBER, "General", icon="schedule")
-    _kpi(ws, "K9:M9", "K10:M12", "TIME IMPACT", '=IF(E10>=B10,"0 Days",MAX(0,$K$5-IFERROR(LOOKUP(E10,Dashboard_Data!$B$2:$B$250,Dashboard_Data!$A$2:$A$250),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General", icon="time_impact")
+    _kpi(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", schedule_formula, LIGHT_AMBER, AMBER, "General", icon="schedule")
+    _kpi(ws, "K9:M9", "K10:M12", "TIME IMPACT", time_impact_formula, LIGHT_RED, RED, "General", icon="time_impact")
+
+    # Schedule/Time Impact cards follow the KPI 3 condition visually.
+    for target in ("H9:J12", "K9:M12"):
+        ws.conditional_formatting.add(
+            target,
+            FormulaRule(formula=['$E$10<$B$10'], fill=_solid(LIGHT_RED), font=Font(name=_FONT, bold=True, color=RED)),
+        )
+        ws.conditional_formatting.add(
+            target,
+            FormulaRule(formula=['$E$10>$B$10'], fill=_solid(LIGHT_GREEN), font=Font(name=_FONT, bold=True, color=GREEN)),
+        )
+        ws.conditional_formatting.add(
+            target,
+            FormulaRule(formula=['$E$10=$B$10'], fill=_solid(LIGHT_BLUE), font=Font(name=_FONT, bold=True, color=BLUE)),
+        )
     for row in range(9, 13):
         ws.row_dimensions[row].height = 24
     ws.row_dimensions[10].height = 28
@@ -539,6 +582,18 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         else:
             ws[f"C{output_row}"].alignment = Alignment(vertical="center", wrap_text=True, indent=min(wbs_depth + 1, 4))
 
+        # Mirror the main-sheet outline hierarchy. Project is the top summary;
+        # each WBS/activity row is detail beneath its parent and can be collapsed
+        # with Excel's native +/- controls.
+        if kind == "project":
+            outline_level = 0
+        else:
+            parts = [part for part in wbs_code.split(".") if part]
+            outline_level = min(max(len(parts), 1), 7)
+        ws.row_dimensions[output_row].outlineLevel = outline_level
+        ws.row_dimensions[output_row].hidden = False
+        ws.row_dimensions[output_row].collapsed = False
+
         ws[f"F{output_row}"].number_format = "#,##0.00"
         ws[f"H{output_row}"].number_format = "0.00%"
         ws[f"I{output_row}"].number_format = "0.00%"
@@ -559,6 +614,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             f"K39:K{output_row - 1}",
             DataBarRule(start_type="num", start_value=0, end_type="max", color=RED, showValue=True),
         )
+    # Outline summary rows sit above their details, matching the main sheet.
+    ws.sheet_properties.outlinePr.summaryBelow = False
+    ws.sheet_properties.outlinePr.applyStyles = True
+    ws.sheet_properties.outlinePr.showOutlineSymbols = True
+
     ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
     # Keep one purposeful control: only WBS exposes a filter button.
     # The AutoFilter range still spans the whole table so Excel keeps normal table behavior.

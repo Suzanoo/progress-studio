@@ -96,3 +96,35 @@ def test_activity_exception_table_is_not_capped_at_eight_rows():
 
     assert ws["B50"].value == "='progress_table'!A24"
     assert ws.auto_filter.ref == "B38:M50"
+
+
+def test_activity_progress_uses_native_outline_levels_like_main_sheet():
+    wb = Workbook()
+    progress = wb.active
+    progress.title = "progress"
+    progress.append(["project_start", "project_finish", "week_start", "plan", "actual"])
+    progress.append([date(2026, 1, 1), date(2026, 2, 28), date(2026, 1, 2), 10, 5])
+
+    table = wb.create_sheet("progress_table")
+    table.append(["WBS", "Activities", "Amount", "P/A", "%Progress", date(2026, 1, 2), "_Kind"])
+    rows = [
+        ["PROJECT", "Project", 1000, "P", 10, 10, "project"],
+        ["PROJECT", "Project", 1000, "A", 5, 5, "project"],
+        ["1", "WBS 1", 1000, "P", 10, 10, "wbs"],
+        ["1", "WBS 1", 1000, "A", 5, 5, "wbs"],
+        ["1.1", "WBS 1.1", 1000, "P", 10, 10, "wbs"],
+        ["1.1", "WBS 1.1", 1000, "A", 5, 5, "wbs"],
+        ["1.1.1", "Activity A", 1000, "P", 10, 10, "activity"],
+        ["1.1.1", "Activity A", 1000, "A", 5, 5, "activity"],
+    ]
+    for row in rows:
+        table.append(row)
+
+    build_dashboard(wb)
+    ws = wb["Dashboard"]
+
+    assert ws.row_dimensions[39].outlineLevel == 0
+    assert ws.row_dimensions[40].outlineLevel == 1
+    assert ws.row_dimensions[41].outlineLevel == 2
+    assert ws.row_dimensions[42].outlineLevel == 3
+    assert ws.sheet_properties.outlinePr.summaryBelow is False

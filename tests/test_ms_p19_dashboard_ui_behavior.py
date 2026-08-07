@@ -55,15 +55,29 @@ def test_ms_p19_plan_curve_is_full_baseline_but_actual_curve_is_cutoff_limited()
     assert data["H5"].value is not None
 
 
-def test_ms_p19_kpis_use_cutoff_and_are_independent_of_weekly_monthly_view():
+def test_ms_p19_kpis_read_stable_progress_sheet_directly():
     wb = _workbook()
     build_dashboard(wb)
     ws = wb[DASHBOARD_SHEET]
 
-    assert "Dashboard_Data!$A$2:$A$250<=$K$5" in ws["B10"].value
-    assert "Dashboard_Data!$B$2:$B$250" in ws["B10"].value
-    assert "Dashboard_Data!$C$2:$C$250" in ws["E10"].value
-    assert "Dashboard_Data!$G$2:$G$250" not in ws["B10"].value
+    assert "'progress'!$C$2:$C$5<=$K$5" in ws["B10"].value
+    assert "'progress'!$D$2:$D$5" in ws["B10"].value
+    assert "'progress'!$E$2:$E$5" in ws["E10"].value
+    assert "Dashboard_Data" not in ws["B10"].value
+    assert "Dashboard_Data" not in ws["E10"].value
+
+
+def test_ms_p19_time_impact_uses_project_duration_from_progress_and_rounds_days():
+    wb = _workbook()
+    build_dashboard(wb)
+    ws = wb[DASHBOARD_SHEET]
+
+    formula = ws["K10"].value
+    assert "ABS(E10-B10)" in formula
+    assert "'progress'!$B$2-'progress'!$A$2" in formula
+    assert formula.startswith("=ROUND(")
+    assert formula.endswith('&" Days"')
+    assert "Dashboard_Data" not in formula
 
 
 def test_ms_p19_chart_and_theme_layout_are_configurable_and_wide():
