@@ -46,12 +46,14 @@ def test_dashboard_activity_rows_are_formula_linked_to_progress_table():
 
     assert dashboard["B39"].value == "='progress_table'!A2"
     assert dashboard["C39"].value == "='progress_table'!B2"
-    assert dashboard["F39"].value == "='progress_table'!C2"
-    assert "SUMPRODUCT" in dashboard["H39"].value
-    assert "SUMPRODUCT" in dashboard["I39"].value
-    assert dashboard["J39"].value == "=I39-H39"
-    assert dashboard["K39"].value.startswith("=MAX(")
-    assert dashboard["M39"].value is None
+    assert dashboard["F39"].value == "Plan"
+    assert dashboard["F40"].value == "Actual"
+    assert dashboard["H39"].value == "='progress_table'!C2"
+    assert dashboard["H40"].value is None
+    assert "SUMPRODUCT" in dashboard["L39"].value
+    assert "SUMPRODUCT" in dashboard["L40"].value
+    assert dashboard["J39"].value.endswith("*L39,0)")
+    assert dashboard["J40"].value.endswith("*L40,0)")
 
 
 def test_dashboard_data_is_populated_from_real_progress_headers_and_string_dates():

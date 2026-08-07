@@ -521,10 +521,10 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
     ws["B35"].alignment = Alignment(horizontal="left", vertical="center")
 
-    _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS — EXCEPTION CONTROL", 11)
-    headers = ["WBS", "Activity", "Amount", "Plan %", "Actual %", "Variance", "Gap Amount"]
-    starts = ["B", "C", "F", "H", "I", "J", "K"]
-    ends = ["B", "E", "G", "H", "I", "J", "M"]
+    _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
+    headers = ["WBS", "Activity", "Type", "Total", "Amount", "Progress"]
+    starts = ["B", "C", "F", "H", "J", "L"]
+    ends = ["B", "E", "G", "I", "K", "M"]
     for start_col, end_col, header in zip(starts, ends, headers):
         ws.merge_cells(f"{start_col}38:{end_col}38")
         cell = ws[f"{start_col}38"]
@@ -542,88 +542,98 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         if str(source.cell(1, col).value or "").strip().lower() == "_kind":
             kind_col = col
             break
+
     output_row = 39
     source_row = 2
-    shown = 0
+    pair_index = 0
     while source_row <= source.max_row:
         plan_row = source_row
         actual_row = source_row + 1 if source_row + 1 <= source.max_row else source_row
-
-        ws[f"B{output_row}"] = f"='{TABLE_SHEET}'!A{plan_row}"
-        ws.merge_cells(f"C{output_row}:E{output_row}")
-        ws[f"C{output_row}"] = f"='{TABLE_SHEET}'!B{plan_row}"
-        ws.merge_cells(f"F{output_row}:G{output_row}")
-        ws[f"F{output_row}"] = f"='{TABLE_SHEET}'!C{plan_row}"
-        ws[f"H{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
-        ws[f"I{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
-        ws[f"J{output_row}"] = f'=I{output_row}-H{output_row}'
-        ws.merge_cells(f"K{output_row}:M{output_row}")
-        ws[f"K{output_row}"] = f'=MAX(0,(H{output_row}-I{output_row})*F{output_row})'
-
         kind = str(source.cell(plan_row, kind_col).value or "").strip().lower() if kind_col else ""
         wbs_code = str(source.cell(plan_row, 1).value or "").strip()
         if not kind:
             kind = "project" if wbs_code.upper() == "PROJECT" else "activity"
         wbs_depth = 0 if wbs_code.upper() == "PROJECT" else max(0, len([part for part in wbs_code.split(".") if part]) - 1)
 
-        for row_cells in ws[f"B{output_row}:M{output_row}"]:
-            for cell in row_cells:
-                cell.border = _thin_border()
-                cell.fill = _solid(WHITE if shown % 2 == 0 else LIGHT_GRAY)
-                cell.alignment = Alignment(vertical="center", wrap_text=True)
-
-        if kind in {"project", "wbs"}:
-            hierarchy_fill = LIGHT_BLUE if kind == "project" or wbs_depth == 0 else ("EEF4FA" if wbs_depth == 1 else "F5F8FC")
-            for row_cells in ws[f"B{output_row}:M{output_row}"]:
-                for cell in row_cells:
-                    cell.fill = _solid(hierarchy_fill)
-                    cell.font = Font(name=_FONT, bold=True, color=NAVY, size=9)
-            ws[f"C{output_row}"].alignment = Alignment(vertical="center", wrap_text=True, indent=min(wbs_depth, 3))
-        else:
-            ws[f"C{output_row}"].alignment = Alignment(vertical="center", wrap_text=True, indent=min(wbs_depth + 1, 4))
-
-        # Mirror the main-sheet outline hierarchy. Project is the top summary;
-        # each WBS/activity row is detail beneath its parent and can be collapsed
-        # with Excel's native +/- controls.
         if kind == "project":
             outline_level = 0
         else:
             parts = [part for part in wbs_code.split(".") if part]
             outline_level = min(max(len(parts), 1), 7)
-        ws.row_dimensions[output_row].outlineLevel = outline_level
-        ws.row_dimensions[output_row].hidden = False
-        ws.row_dimensions[output_row].collapsed = False
 
-        ws[f"F{output_row}"].number_format = "#,##0.00"
-        ws[f"H{output_row}"].number_format = "0.00%"
-        ws[f"I{output_row}"].number_format = "0.00%"
-        ws[f"J{output_row}"].number_format = "+0.00%;-0.00%;0.00%"
-        ws[f"K{output_row}"].number_format = "#,##0.00"
-        output_row += 1
+        for pa_label, src_row, is_plan in (("Plan", plan_row, True), ("Actual", actual_row, False)):
+            row = output_row
+            if is_plan:
+                ws[f"B{row}"] = f"='{TABLE_SHEET}'!A{plan_row}"
+                ws.merge_cells(f"C{row}:E{row}")
+                ws[f"C{row}"] = f"='{TABLE_SHEET}'!B{plan_row}"
+            else:
+                ws.merge_cells(f"C{row}:E{row}")
+
+            ws.merge_cells(f"F{row}:G{row}")
+            ws[f"F{row}"] = pa_label
+            ws.merge_cells(f"H{row}:I{row}")
+            if is_plan:
+                ws[f"H{row}"] = f"='{TABLE_SHEET}'!C{plan_row}"
+            ws.merge_cells(f"J{row}:K{row}")
+            progress_formula = (
+                f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*'
+                f'\'{TABLE_SHEET}\'!$F{src_row}:$ZZ{src_row})/100,0)'
+            )
+            ws[f"L{row}"] = progress_formula
+            ws.merge_cells(f"L{row}:M{row}")
+            ws[f"J{row}"] = f'=IFERROR(\'{TABLE_SHEET}\'!$C${plan_row}*L{row},0)'
+
+            base_fill = WHITE if pair_index % 2 == 0 else LIGHT_GRAY
+            if kind in {"project", "wbs"}:
+                base_fill = LIGHT_BLUE if kind == "project" or wbs_depth == 0 else ("EEF4FA" if wbs_depth == 1 else "F5F8FC")
+
+            for row_cells in ws[f"B{row}:M{row}"]:
+                for cell in row_cells:
+                    cell.border = _thin_border()
+                    cell.fill = _solid(base_fill)
+                    cell.alignment = Alignment(vertical="center", wrap_text=True)
+                    if kind in {"project", "wbs"}:
+                        cell.font = Font(name=_FONT, bold=True, color=NAVY, size=9)
+
+            if is_plan:
+                ws[f"C{row}"].alignment = Alignment(vertical="center", wrap_text=True, indent=min(wbs_depth if kind in {"project", "wbs"} else wbs_depth + 1, 4))
+
+            # Plan/Actual are a visual pair. Type and progress use the same blue/green
+            # language as the OKD application without introducing extra business logic.
+            pa_fill = LIGHT_BLUE if is_plan else LIGHT_GREEN
+            pa_color = BLUE if is_plan else GREEN
+            ws[f"F{row}"].fill = _solid(pa_fill)
+            ws[f"F{row}"].font = Font(name=_FONT, bold=True, color=pa_color, size=9)
+            ws[f"F{row}"].alignment = Alignment(horizontal="center", vertical="center")
+            ws[f"L{row}"].fill = _solid(pa_fill)
+            ws[f"L{row}"].font = Font(name=_FONT, bold=True, color=pa_color, size=9)
+
+            ws.row_dimensions[row].outlineLevel = outline_level
+            ws.row_dimensions[row].hidden = False
+            ws.row_dimensions[row].collapsed = False
+            ws.row_dimensions[row].height = 22
+
+            ws[f"H{row}"].number_format = "#,##0.00"
+            ws[f"J{row}"].number_format = "#,##0.00"
+            ws[f"L{row}"].number_format = "0.00%"
+            output_row += 1
+
         source_row += 2
-        shown += 1
+        pair_index += 1
 
-    if shown:
-        # Visual exception cues: behind rows surface immediately while ahead/on-track
-        # remain readable without turning the dashboard into a heatmap.
-        ws.conditional_formatting.add(
-            f"J39:J{output_row - 1}",
-            DataBarRule(start_type="num", start_value=-1, end_type="num", end_value=1, color=BLUE, showValue=True),
-        )
-        ws.conditional_formatting.add(
-            f"K39:K{output_row - 1}",
-            DataBarRule(start_type="num", start_value=0, end_type="max", color=RED, showValue=True),
-        )
-    # Outline summary rows sit above their details, matching the main sheet.
+    # Summary rows sit above their detail rows, matching the main-sheet outline.
+    # Both Plan and Actual rows receive the same outline level so a pair never splits.
     ws.sheet_properties.outlinePr.summaryBelow = False
     ws.sheet_properties.outlinePr.applyStyles = True
     ws.sheet_properties.outlinePr.showOutlineSymbols = True
 
     ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
-    # Keep one purposeful control: only WBS exposes a filter button.
-    # The AutoFilter range still spans the whole table so Excel keeps normal table behavior.
+    # Keep one purposeful filter control: WBS only. The filter range still spans
+    # the complete activity table so Excel keeps normal filter/sort behavior.
     for col_id in range(1, 12):
         ws.auto_filter.filterColumn.append(FilterColumn(colId=col_id, showButton=False))
+
     ws.print_area = f"B2:M{max(56, output_row - 1)}"
 
 

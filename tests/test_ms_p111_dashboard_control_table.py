@@ -20,18 +20,25 @@ def _workbook():
     return wb
 
 
-def test_dashboard_control_table_is_one_row_per_activity():
+def test_dashboard_activity_progress_uses_plan_actual_pairs():
     wb = _workbook()
     build_dashboard(wb)
     ws = wb["Dashboard"]
     assert ws["B38"].value == "WBS"
-    assert ws["H38"].value == "Plan %"
-    assert ws["I38"].value == "Actual %"
-    assert ws["J38"].value == "Variance"
-    assert ws["K38"].value == "Gap Amount"
-    assert ws["M38"].value is None
+    assert ws["F38"].value == "Type"
+    assert ws["H38"].value == "Total"
+    assert ws["J38"].value == "Amount"
+    assert ws["L38"].value == "Progress"
     assert ws["B39"].value == "='progress_table'!A2"
+    assert ws["F39"].value == "Plan"
+    assert ws["F40"].value == "Actual"
     assert ws["B40"].value is None
+    assert ws["H39"].value == "='progress_table'!C2"
+    assert ws["H40"].value is None
+    assert "SUMPRODUCT" in ws["L39"].value
+    assert "SUMPRODUCT" in ws["L40"].value
+    assert ws["J39"].value.endswith("*L39,0)")
+    assert ws["J40"].value.endswith("*L40,0)")
 
 
 def test_pipeline_steps_do_not_hardcode_obsolete_step_counts():
@@ -69,7 +76,7 @@ def test_monthly_cutoff_uses_last_real_reporting_date_and_dynamic_dropdown():
     assert "Dashboard_Data!$K$2:$K$3" in cutoff_validations[0].formula1
 
 
-def test_activity_exception_table_only_shows_wbs_filter_button():
+def test_activity_progress_only_shows_wbs_filter_button():
     wb = _workbook()
     build_dashboard(wb)
     ws = wb["Dashboard"]
@@ -79,7 +86,7 @@ def test_activity_exception_table_only_shows_wbs_filter_button():
     assert hidden_button_columns == set(range(1, 12))
 
 
-def test_activity_exception_table_is_not_capped_at_eight_rows():
+def test_activity_progress_is_not_capped_at_eight_pairs():
     wb = Workbook()
     progress = wb.active
     progress.title = "progress"
@@ -94,8 +101,10 @@ def test_activity_exception_table_is_not_capped_at_eight_rows():
     build_dashboard(wb)
     ws = wb["Dashboard"]
 
-    assert ws["B50"].value == "='progress_table'!A24"
-    assert ws.auto_filter.ref == "B38:M50"
+    assert ws["B61"].value == "='progress_table'!A24"
+    assert ws["F61"].value == "Plan"
+    assert ws["F62"].value == "Actual"
+    assert ws.auto_filter.ref == "B38:M62"
 
 
 def test_activity_progress_uses_native_outline_levels_like_main_sheet():
@@ -124,7 +133,11 @@ def test_activity_progress_uses_native_outline_levels_like_main_sheet():
     ws = wb["Dashboard"]
 
     assert ws.row_dimensions[39].outlineLevel == 0
-    assert ws.row_dimensions[40].outlineLevel == 1
-    assert ws.row_dimensions[41].outlineLevel == 2
-    assert ws.row_dimensions[42].outlineLevel == 3
+    assert ws.row_dimensions[40].outlineLevel == 0
+    assert ws.row_dimensions[41].outlineLevel == 1
+    assert ws.row_dimensions[42].outlineLevel == 1
+    assert ws.row_dimensions[43].outlineLevel == 2
+    assert ws.row_dimensions[44].outlineLevel == 2
+    assert ws.row_dimensions[45].outlineLevel == 3
+    assert ws.row_dimensions[46].outlineLevel == 3
     assert ws.sheet_properties.outlinePr.summaryBelow is False
