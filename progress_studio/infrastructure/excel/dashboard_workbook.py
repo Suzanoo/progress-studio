@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from calendar import monthrange
 from datetime import date, datetime
 import json
 import re
@@ -13,6 +12,7 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.formatting.rule import DataBarRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.filters import FilterColumn
 
 DASHBOARD_SHEET = "Dashboard"
 DATA_SHEET = "Dashboard_Data"
@@ -145,9 +145,6 @@ def _progress_columns(progress_ws) -> dict[str, int]:
     return result
 
 
-def _month_end(value: date) -> date:
-    return date(value.year, value.month, monthrange(value.year, value.month)[1])
-
 
 def _remove(workbook, name: str) -> None:
     if name in workbook.sheetnames:
@@ -183,12 +180,19 @@ def _progress_rows(workbook, progress_ws) -> list[tuple[int, date]]:
 
 
 def _monthly_groups(rows: list[tuple[int, date]]) -> list[tuple[date, list[int]]]:
-    groups: dict[tuple[int, int], list[int]] = {}
+    """Group weekly reporting rows by month using the last real cutoff date.
+
+    Monthly reporting must stay on the same reporting calendar as Weekly.  Using
+    a synthetic calendar month-end (for example 31-Aug when reporting is every
+    Friday) creates a cutoff date that has no source data.  The monthly period is
+    therefore represented by the final available weekly cutoff inside that month.
+    """
+    groups: dict[tuple[int, int], list[tuple[int, date]]] = {}
     for row, value in rows:
-        groups.setdefault((value.year, value.month), []).append(row)
+        groups.setdefault((value.year, value.month), []).append((row, value))
     return [
-        (_month_end(date(year, month, 1)), source_rows)
-        for (year, month), source_rows in sorted(groups.items())
+        (entries[-1][1], [row for row, _ in entries])
+        for _, entries in sorted(groups.items())
     ]
 
 
@@ -252,6 +256,20 @@ def _build_data_sheet(workbook, progress_ws) -> None:
         ws.cell(output_row, 7).number_format = "dd/mm/yyyy"
         ws.cell(output_row, 8).number_format = "0.00%"
         ws.cell(output_row, 9).number_format = "0.00%"
+
+    # Dedicated validation lists keep the Cutoff Date dropdown aligned with the
+    # selected reporting view.  Monthly is intentionally a subset of Weekly so
+    # every monthly cutoff is also a valid weekly reporting date.
+    ws["J1"] = "Weekly Cutoff"
+    ws["K1"] = "Monthly Cutoff"
+    for output_row, (_, week_date) in enumerate(rows, start=2):
+        ws.cell(output_row, 10, week_date)
+        ws.cell(output_row, 10).number_format = "dd/mm/yyyy"
+    for output_row, (month_date, _) in enumerate(months, start=2):
+        ws.cell(output_row, 11, month_date)
+        ws.cell(output_row, 11).number_format = "dd/mm/yyyy"
+    ws.column_dimensions["J"].hidden = True
+    ws.column_dimensions["K"].hidden = True
 
     if ws.max_row < 2 or ws["A2"].value is None:
         raise RuntimeError("Dashboard generation failed: Dashboard_Data contains no weekly rows.")
@@ -349,7 +367,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws["G5"] = default_view
     ws["J5"] = "Cutoff Date"
     ws.merge_cells("K5:M5")
-    ws["K5"] = workbook[DATA_SHEET].cell(workbook[DATA_SHEET].max_row, 1).value
+    data_ws = workbook[DATA_SHEET]
+    weekly_cutoffs = [data_ws.cell(row, 10).value for row in range(2, data_ws.max_row + 1) if data_ws.cell(row, 10).value]
+    monthly_cutoffs = [data_ws.cell(row, 11).value for row in range(2, data_ws.max_row + 1) if data_ws.cell(row, 11).value]
+    initial_cutoffs = monthly_cutoffs if default_view == "Monthly" else weekly_cutoffs
+    ws["K5"] = initial_cutoffs[-1] if initial_cutoffs else (weekly_cutoffs[-1] if weekly_cutoffs else None)
     ws["K5"].number_format = "dd/mm/yyyy"
     ws["G5"].font = Font(name=_FONT, bold=True, color=NAVY)
     ws["K5"].font = Font(name=_FONT, bold=True, color=NAVY)
@@ -375,10 +397,16 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws.add_data_validation(view_validation)
     view_validation.add(ws["G5"])
 
-    last_week_row = max(2, len(_progress_rows(workbook, workbook[PROGRESS_SHEET])) + 1)
+    last_week_row = max(2, len(weekly_cutoffs) + 1)
+    last_month_row = max(2, len(monthly_cutoffs) + 1)
     cutoff_validation = DataValidation(
         type="list",
-        formula1=f"'{DATA_SHEET}'!$A$2:$A${last_week_row}",
+        # Excel data validation cannot directly use a cross-sheet range chosen
+        # by IF. INDIRECT keeps the dropdown dynamic without VBA/macros.
+        formula1=(
+            f'=INDIRECT(IF($G$5="Weekly","{DATA_SHEET}!$J$2:$J${last_week_row}",'
+            f'"{DATA_SHEET}!$K$2:$K${last_month_row}"))'
+        ),
         allow_blank=False,
     )
     cutoff_validation.prompt = "Select the reporting cutoff date. KPI and Actual use this date."
@@ -466,6 +494,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
                 c.border = _thin_border()
 
     source = workbook[TABLE_SHEET]
+    kind_col = None
+    for col in range(1, source.max_column + 1):
+        if str(source.cell(1, col).value or "").strip().lower() == "_kind":
+            kind_col = col
+            break
     output_row = 39
     source_row = 2
     shown = 0
@@ -490,11 +523,28 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             f'IF(I{output_row}=H{output_row},"ON TRACK","BEHIND"))))'
         )
 
+        kind = str(source.cell(plan_row, kind_col).value or "").strip().lower() if kind_col else ""
+        wbs_code = str(source.cell(plan_row, 1).value or "").strip()
+        if not kind:
+            kind = "project" if wbs_code.upper() == "PROJECT" else "activity"
+        wbs_depth = 0 if wbs_code.upper() == "PROJECT" else max(0, len([part for part in wbs_code.split(".") if part]) - 1)
+
         for row_cells in ws[f"B{output_row}:M{output_row}"]:
             for cell in row_cells:
                 cell.border = _thin_border()
                 cell.fill = _solid(WHITE if shown % 2 == 0 else LIGHT_GRAY)
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+        if kind in {"project", "wbs"}:
+            hierarchy_fill = LIGHT_BLUE if kind == "project" or wbs_depth == 0 else ("EEF4FA" if wbs_depth == 1 else "F5F8FC")
+            for row_cells in ws[f"B{output_row}:M{output_row}"]:
+                for cell in row_cells:
+                    cell.fill = _solid(hierarchy_fill)
+                    cell.font = Font(name=_FONT, bold=True, color=NAVY, size=9)
+            ws[f"C{output_row}"].alignment = Alignment(vertical="center", wrap_text=True, indent=min(wbs_depth, 3))
+        else:
+            ws[f"C{output_row}"].alignment = Alignment(vertical="center", wrap_text=True, indent=min(wbs_depth + 1, 4))
+
         ws[f"F{output_row}"].number_format = "#,##0.00"
         ws[f"H{output_row}"].number_format = "0.00%"
         ws[f"I{output_row}"].number_format = "0.00%"
@@ -517,6 +567,10 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             DataBarRule(start_type="num", start_value=0, end_type="max", color=RED, showValue=True),
         )
     ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
+    # Keep the exception table calm: only WBS and Status expose filter buttons.
+    # All other columns remain sortable/readable data, not UI controls.
+    for col_id in range(1, 11):
+        ws.auto_filter.filterColumn.append(FilterColumn(colId=col_id, showButton=False))
     ws.print_area = f"B2:M{max(56, output_row - 1)}"
 
 

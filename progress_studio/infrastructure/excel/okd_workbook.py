@@ -806,7 +806,7 @@ def build_progress_table_sheet(
         f"={excel_sheet_ref(source_ws.title)}!"
         f"{get_column_letter(source_col)}{HEADER_ROW}"
         for source_col, _ in weeks
-    ])
+    ] + ["_Kind"])
 
     # Header cells are live links to the date headers in the main worksheet.
     # Without an explicit date number format, Excel displays their serial
@@ -849,6 +849,8 @@ def build_progress_table_sheet(
                 f"={source_ref}!{get_column_letter(amount_col)}{plan_row}",
             )
             ws.cell(output_row, 4, pa_value)
+            kind_col = 6 + len(weeks)
+            ws.cell(output_row, kind_col, str(item.get("kind") or "activity"))
 
             first_week_letter = get_column_letter(6)
             last_week_letter = get_column_letter(5 + len(weeks))
@@ -931,6 +933,8 @@ def build_progress_table_sheet(
     ws.column_dimensions["E"].width = 14
     for output_col in range(6, 6 + len(weeks)):
         ws.column_dimensions[get_column_letter(output_col)].width = 12
+    kind_col_letter = get_column_letter(6 + len(weeks))
+    ws.column_dimensions[kind_col_letter].hidden = True
     ws.row_dimensions[1].height = 24
 
     return verify_progress_table_links(ws, weeks, table_rows)

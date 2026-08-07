@@ -39,3 +39,41 @@ def test_pipeline_steps_do_not_hardcode_obsolete_step_counts():
     text = "\n".join(path.read_text(encoding="utf-8") for path in root.glob("*_step.py"))
     assert "/8]" not in text
     assert "/7]" not in text
+
+
+def test_monthly_cutoff_uses_last_real_reporting_date_and_dynamic_dropdown():
+    wb = Workbook()
+    progress = wb.active
+    progress.title = "progress"
+    progress.append(["project_start", "project_finish", "week_start", "plan", "actual"])
+    progress.append([date(2026, 8, 1), date(2026, 9, 30), date(2026, 8, 7), 10, 5])
+    progress.append([date(2026, 8, 1), date(2026, 9, 30), date(2026, 8, 28), 30, 20])
+    progress.append([date(2026, 8, 1), date(2026, 9, 30), date(2026, 9, 4), 40, 25])
+    progress.append([date(2026, 8, 1), date(2026, 9, 30), date(2026, 9, 25), 70, 50])
+    table = wb.create_sheet("progress_table")
+    table.append(["WBS", "Activities", "Amount", "P/A", "%Progress", date(2026, 8, 7)])
+    table.append(["1.1", "Activity A", 1000, "P", 30, 10])
+    table.append(["1.1", "Activity A", 1000, "A", 20, 5])
+
+    build_dashboard(wb)
+    data = wb["Dashboard_Data"]
+    ws = wb["Dashboard"]
+
+    assert data["K2"].value == date(2026, 8, 28)
+    assert data["K3"].value == date(2026, 9, 25)
+    assert ws["K5"].value == date(2026, 9, 25)
+    cutoff_validations = [v for v in ws.data_validations.dataValidation if "INDIRECT" in str(v.formula1)]
+    assert len(cutoff_validations) == 1
+    assert '$G$5="Weekly"' in cutoff_validations[0].formula1
+    assert "Dashboard_Data!$J$2:$J$5" in cutoff_validations[0].formula1
+    assert "Dashboard_Data!$K$2:$K$3" in cutoff_validations[0].formula1
+
+
+def test_activity_exception_table_only_shows_wbs_and_status_filter_buttons():
+    wb = _workbook()
+    build_dashboard(wb)
+    ws = wb["Dashboard"]
+
+    assert ws.auto_filter.ref.startswith("B38:M")
+    hidden_button_columns = {fc.colId for fc in ws.auto_filter.filterColumn if fc.showButton is False}
+    assert hidden_button_columns == set(range(1, 11))
