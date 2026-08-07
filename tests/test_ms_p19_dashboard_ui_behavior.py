@@ -41,7 +41,7 @@ def test_ms_p19_has_only_four_kpi_cards_and_weekly_monthly_view():
 
     validations = list(ws.data_validations.dataValidation)
     assert any(v.formula1 == '"Weekly,Monthly"' for v in validations)
-    assert ws["G5"].value == "Weekly"
+    assert ws["G5"].value == "Monthly"
 
 
 def test_ms_p19_plan_curve_is_full_baseline_but_actual_curve_is_cutoff_limited():

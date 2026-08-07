@@ -22,7 +22,7 @@ class ImportStep:
         output_folder = context.working_folder / "01_import"
         output_file = output_folder / f"{project_name}_imported.xlsx"
         print("\n" + "=" * 72)
-        print("[1/8] Import Schedule XML")
+        print("Import Schedule XML")
         print("=" * 72)
         print(f"INPUT  : {context.source_xml}")
         print(f"OUTPUT : {output_file}")

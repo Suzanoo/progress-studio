@@ -29,7 +29,8 @@
     "chart_markers": false,
     "marker_size": 4,
     "plan_line_width": 26000,
-    "actual_line_width": 26000
+    "actual_line_width": 26000,
+    "default_view": "Monthly"
   },
   "icons": {
     "enabled": true,

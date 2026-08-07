@@ -33,7 +33,7 @@ def test_dashboard_is_created_as_first_separate_sheet_with_controls_and_chart():
     dashboard = wb[DASHBOARD_SHEET]
     assert dashboard["B2"].value == "PROGRESS STUDIO DASHBOARD"
     assert dashboard["C5"].value == "Demo Project"
-    assert dashboard["G5"].value == "Weekly"
+    assert dashboard["G5"].value == "Monthly"
     assert dashboard["K5"].value == date(2026, 1, 9)
     assert len(dashboard.data_validations.dataValidation) == 2
     assert len(dashboard._charts) == 1
@@ -46,9 +46,11 @@ def test_dashboard_activity_rows_are_formula_linked_to_progress_table():
 
     assert dashboard["B39"].value == "='progress_table'!A2"
     assert dashboard["C39"].value == "='progress_table'!B2"
-    assert dashboard["F39"].value == "Plan"
-    assert dashboard["F40"].value == "Actual"
-    assert "SUMPRODUCT" in dashboard["K39"].value
+    assert dashboard["F39"].value == "='progress_table'!C2"
+    assert "SUMPRODUCT" in dashboard["H39"].value
+    assert "SUMPRODUCT" in dashboard["I39"].value
+    assert dashboard["J39"].value == "=I39-H39"
+    assert dashboard["M39"].value.startswith("=IF(")
 
 
 def test_dashboard_data_is_populated_from_real_progress_headers_and_string_dates():

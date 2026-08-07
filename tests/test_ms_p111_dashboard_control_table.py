@@ -1,0 +1,41 @@
+from datetime import date
+from pathlib import Path
+
+from openpyxl import Workbook
+
+from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+
+
+def _workbook():
+    wb = Workbook()
+    progress = wb.active
+    progress.title = "progress"
+    progress.append(["project_start", "project_finish", "week_start", "plan", "actual"])
+    progress.append([date(2026, 1, 1), date(2026, 2, 28), date(2026, 1, 2), 10, 5])
+    progress.append([date(2026, 1, 1), date(2026, 2, 28), date(2026, 1, 9), 25, 12])
+    table = wb.create_sheet("progress_table")
+    table.append(["WBS", "Activities", "Amount", "P/A", "%Progress", date(2026, 1, 2), date(2026, 1, 9)])
+    table.append(["1.1", "Activity A", 1000, "P", 25, 10, 15])
+    table.append(["1.1", "Activity A", 1000, "A", 12, 5, 7])
+    return wb
+
+
+def test_dashboard_control_table_is_one_row_per_activity():
+    wb = _workbook()
+    build_dashboard(wb)
+    ws = wb["Dashboard"]
+    assert ws["B38"].value == "WBS"
+    assert ws["H38"].value == "Plan %"
+    assert ws["I38"].value == "Actual %"
+    assert ws["J38"].value == "Variance"
+    assert ws["K38"].value == "Gap Amount"
+    assert ws["M38"].value == "Status"
+    assert ws["B39"].value == "='progress_table'!A2"
+    assert ws["B40"].value is None
+
+
+def test_pipeline_steps_do_not_hardcode_obsolete_step_counts():
+    root = Path(__file__).resolve().parents[1] / "progress_studio" / "pipeline"
+    text = "\n".join(path.read_text(encoding="utf-8") for path in root.glob("*_step.py"))
+    assert "/8]" not in text
+    assert "/7]" not in text

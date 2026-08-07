@@ -46,7 +46,7 @@ def _load_dashboard_theme() -> dict:
             "light_gray": LIGHT_GRAY, "border": BORDER, "text": TEXT,
             "muted": MUTED, "white": WHITE,
         },
-        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "activity_rows": 8, "chart_height": 8.0, "chart_width": 20.5},
+        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "default_view": "Monthly", "activity_rows": 8, "chart_height": 8.0, "chart_width": 20.5},
         "icons": {"enabled": True, "size": 32, "planned": "planned.png", "actual": "actual.png", "schedule": "schedule.png", "time_impact": "time_impact.png"},
     }
     try:
@@ -343,7 +343,10 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
 
     ws["F5"] = "View"
     ws.merge_cells("G5:H5")
-    ws["G5"] = "Weekly"
+    default_view = str(_LAYOUT.get("default_view", "Monthly")).title()
+    if default_view not in {"Weekly", "Monthly"}:
+        default_view = "Monthly"
+    ws["G5"] = default_view
     ws["J5"] = "Cutoff Date"
     ws.merge_cells("K5:M5")
     ws["K5"] = workbook[DATA_SHEET].cell(workbook[DATA_SHEET].max_row, 1).value
@@ -447,19 +450,19 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
     ws["B35"].alignment = Alignment(horizontal="left", vertical="center")
 
-    _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
-    headers = ["WBS", "Activity", "Type", "Total", "Amount", "Progress"]
-    starts = ["B", "C", "F", "G", "I", "K"]
-    ends = ["B", "E", "F", "H", "J", "M"]
-    for start, end, header in zip(starts, ends, headers):
-        ws.merge_cells(f"{start}38:{end}38")
-        cell = ws[f"{start}38"]
+    _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS — EXCEPTION CONTROL", 11)
+    headers = ["WBS", "Activity", "Amount", "Plan %", "Actual %", "Variance", "Gap Amount", "Status"]
+    starts = ["B", "C", "F", "H", "I", "J", "K", "M"]
+    ends = ["B", "E", "G", "H", "I", "J", "L", "M"]
+    for start_col, end_col, header in zip(starts, ends, headers):
+        ws.merge_cells(f"{start_col}38:{end_col}38")
+        cell = ws[f"{start_col}38"]
         cell.value = header
         cell.fill = _solid(NAVY)
         cell.font = Font(name=_FONT, bold=True, color=WHITE, size=9)
         cell.alignment = Alignment(horizontal="center", vertical="center")
-        for row in ws[f"{start}38:{end}38"]:
-            for c in row:
+        for row_cells in ws[f"{start_col}38:{end_col}38"]:
+            for c in row_cells:
                 c.border = _thin_border()
 
     source = workbook[TABLE_SHEET]
@@ -469,45 +472,49 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     while source_row <= source.max_row and shown < int(_LAYOUT["activity_rows"]):
         plan_row = source_row
         actual_row = source_row + 1 if source_row + 1 <= source.max_row else source_row
+
         ws[f"B{output_row}"] = f"='{TABLE_SHEET}'!A{plan_row}"
         ws.merge_cells(f"C{output_row}:E{output_row}")
         ws[f"C{output_row}"] = f"='{TABLE_SHEET}'!B{plan_row}"
-        ws[f"F{output_row}"] = "Plan"
-        ws.merge_cells(f"G{output_row}:H{output_row}")
-        ws[f"G{output_row}"] = f"='{TABLE_SHEET}'!C{plan_row}"
-        ws.merge_cells(f"I{output_row}:J{output_row}")
-        ws[f"I{output_row}"] = f'=IFERROR(G{output_row}*K{output_row},0)'
-        ws.merge_cells(f"K{output_row}:M{output_row}")
-        ws[f"K{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
+        ws.merge_cells(f"F{output_row}:G{output_row}")
+        ws[f"F{output_row}"] = f"='{TABLE_SHEET}'!C{plan_row}"
+        ws[f"H{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
+        ws[f"I{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
+        ws[f"J{output_row}"] = f'=I{output_row}-H{output_row}'
+        ws.merge_cells(f"K{output_row}:L{output_row}")
+        ws[f"K{output_row}"] = f'=MAX(0,(H{output_row}-I{output_row})*F{output_row})'
+        ws[f"M{output_row}"] = (
+            f'=IF(AND(H{output_row}=0,I{output_row}=0),"NOT STARTED",'
+            f'IF(I{output_row}>=1,"COMPLETED",'
+            f'IF(I{output_row}>H{output_row},"AHEAD",'
+            f'IF(I{output_row}=H{output_row},"ON TRACK","BEHIND"))))'
+        )
 
-        actual_out = output_row + 1
-        ws.merge_cells(f"C{actual_out}:E{actual_out}")
-        ws[f"F{actual_out}"] = "Actual"
-        ws.merge_cells(f"G{actual_out}:H{actual_out}")
-        ws.merge_cells(f"I{actual_out}:J{actual_out}")
-        ws[f"I{actual_out}"] = f'=IFERROR(G{output_row}*K{actual_out},0)'
-        ws.merge_cells(f"K{actual_out}:M{actual_out}")
-        ws[f"K{actual_out}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
-
-        for row_index in (output_row, actual_out):
-            for row_cells in ws[f"B{row_index}:M{row_index}"]:
-                for cell in row_cells:
-                    cell.border = _thin_border()
-                    cell.fill = _solid(WHITE if shown % 2 == 0 else LIGHT_GRAY)
-                    cell.alignment = Alignment(vertical="center", wrap_text=True)
-            ws[f"G{row_index}"].number_format = "#,##0.00"
-            ws[f"I{row_index}"].number_format = "#,##0.00"
-            ws[f"K{row_index}"].number_format = "0.00%"
-        ws[f"F{output_row}"].font = Font(name=_FONT, bold=True, color=BLUE)
-        ws[f"F{actual_out}"].font = Font(name=_FONT, bold=True, color=GREEN)
-        output_row += 2
+        for row_cells in ws[f"B{output_row}:M{output_row}"]:
+            for cell in row_cells:
+                cell.border = _thin_border()
+                cell.fill = _solid(WHITE if shown % 2 == 0 else LIGHT_GRAY)
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+        ws[f"F{output_row}"].number_format = "#,##0.00"
+        ws[f"H{output_row}"].number_format = "0.00%"
+        ws[f"I{output_row}"].number_format = "0.00%"
+        ws[f"J{output_row}"].number_format = "+0.00%;-0.00%;0.00%"
+        ws[f"K{output_row}"].number_format = "#,##0.00"
+        ws[f"M{output_row}"].font = Font(name=_FONT, bold=True, size=9, color=TEXT)
+        output_row += 1
         source_row += 2
         shown += 1
 
     if shown:
+        # Visual exception cues: behind rows surface immediately while ahead/on-track
+        # remain readable without turning the dashboard into a heatmap.
+        ws.conditional_formatting.add(
+            f"J39:J{output_row - 1}",
+            DataBarRule(start_type="num", start_value=-1, end_type="num", end_value=1, color=BLUE, showValue=True),
+        )
         ws.conditional_formatting.add(
             f"K39:K{output_row - 1}",
-            DataBarRule(start_type="num", start_value=0, end_type="num", end_value=1, color=BLUE, showValue=True),
+            DataBarRule(start_type="num", start_value=0, end_type="max", color=RED, showValue=True),
         )
     ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
     ws.print_area = f"B2:M{max(56, output_row - 1)}"
