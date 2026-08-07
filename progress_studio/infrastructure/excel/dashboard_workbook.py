@@ -11,6 +11,7 @@ from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.formatting.rule import DataBarRule, FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.filters import FilterColumn
 
@@ -543,6 +544,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             kind_col = col
             break
 
+    # The timescale occupies F through the column immediately before _Kind.
+    # Keep Dashboard formulas bounded to those real reporting columns instead
+    # of using a broad sentinel range such as F:ZZ.
+    last_timescale_col = get_column_letter((kind_col - 1) if kind_col else source.max_column)
+
     output_row = 39
     source_row = 2
     pair_index = 0
@@ -576,9 +582,13 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             if is_plan:
                 ws[f"H{row}"] = f"='{TABLE_SHEET}'!C{plan_row}"
             ws.merge_cells(f"J{row}:K{row}")
+            # progress_table is already the authoritative weekly activity source.
+            # Sum only reporting columns whose header date is on/before the
+            # selected Dashboard cutoff. SUMIFS recalculates immediately when
+            # K5 changes and avoids re-deriving progress from the S-curve.
             progress_formula = (
-                f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*'
-                f'\'{TABLE_SHEET}\'!$F{src_row}:$ZZ{src_row})/100,0)'
+                f'=IFERROR(SUMIFS(\'{TABLE_SHEET}\'!$F{src_row}:${last_timescale_col}{src_row},'
+                f'\'{TABLE_SHEET}\'!$F$1:${last_timescale_col}$1,"<="&$K$5)/100,0)'
             )
             ws[f"L{row}"] = progress_formula
             ws.merge_cells(f"L{row}:M{row}")

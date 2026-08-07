@@ -35,8 +35,8 @@ def test_dashboard_activity_progress_uses_plan_actual_pairs():
     assert ws["B40"].value is None
     assert ws["H39"].value == "='progress_table'!C2"
     assert ws["H40"].value is None
-    assert "SUMPRODUCT" in ws["L39"].value
-    assert "SUMPRODUCT" in ws["L40"].value
+    assert "SUMIFS" in ws["L39"].value
+    assert "SUMIFS" in ws["L40"].value
     assert ws["J39"].value.endswith("*L39,0)")
     assert ws["J40"].value.endswith("*L40,0)")
 

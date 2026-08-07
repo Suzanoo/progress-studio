@@ -50,8 +50,8 @@ def test_dashboard_activity_rows_are_formula_linked_to_progress_table():
     assert dashboard["F40"].value == "Actual"
     assert dashboard["H39"].value == "='progress_table'!C2"
     assert dashboard["H40"].value is None
-    assert "SUMPRODUCT" in dashboard["L39"].value
-    assert "SUMPRODUCT" in dashboard["L40"].value
+    assert "SUMIFS" in dashboard["L39"].value
+    assert "SUMIFS" in dashboard["L40"].value
     assert dashboard["J39"].value.endswith("*L39,0)")
     assert dashboard["J40"].value.endswith("*L40,0)")
 
