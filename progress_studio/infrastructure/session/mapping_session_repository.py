@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import date, datetime, time, timezone
+import base64
 import hashlib
 import json
 import os
@@ -22,6 +23,7 @@ from progress_studio.domain.mapping_session import (
     SESSION_FORMAT,
     SESSION_VERSION,
     WorkbookFingerprint,
+    WorkbookSnapshot,
 )
 
 
@@ -220,6 +222,15 @@ def _migrate_v6_to_v7(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_v7_to_v8(payload: dict[str, Any]) -> dict[str, Any]:
+    """v8 projects may embed their source workbooks for standalone rebuilds."""
+    migrated = dict(payload)
+    migrated.setdefault("progress_snapshot", None)
+    migrated.setdefault("boq_snapshot", None)
+    migrated["version"] = 8
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
@@ -227,6 +238,7 @@ _MIGRATIONS: dict[int, Migration] = {
     4: _migrate_v4_to_v5,
     5: _migrate_v5_to_v6,
     6: _migrate_v6_to_v7,
+    7: _migrate_v7_to_v8,
 }
 
 
@@ -260,6 +272,48 @@ def _migrate_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def workbook_snapshot(path: Path) -> WorkbookSnapshot:
+    path = Path(path).expanduser().resolve()
+    if not path.is_file():
+        raise SessionValidationError(f"Workbook was not found: {path}")
+    raw = path.read_bytes()
+    return WorkbookSnapshot(
+        filename=path.name,
+        sha256=hashlib.sha256(raw).hexdigest(),
+        content_b64=base64.b64encode(raw).decode("ascii"),
+    )
+
+
+def materialize_workbook_snapshot(snapshot: WorkbookSnapshot, cache_dir: Path) -> Path:
+    """Restore one embedded workbook into a deterministic local cache."""
+    try:
+        raw = base64.b64decode(snapshot.content_b64.encode("ascii"), validate=True)
+    except Exception as exc:
+        raise SessionValidationError(
+            f"Embedded workbook snapshot is corrupt: {snapshot.filename}"
+        ) from exc
+    if hashlib.sha256(raw).hexdigest() != snapshot.sha256:
+        raise SessionValidationError(
+            f"Embedded workbook snapshot failed integrity check: {snapshot.filename}"
+        )
+    suffix = Path(snapshot.filename).suffix or ".xlsx"
+    target = Path(cache_dir) / f"{snapshot.sha256[:16]}{suffix}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists() or hashlib.sha256(target.read_bytes()).hexdigest() != snapshot.sha256:
+        fd, temp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+        temp = Path(temp_name)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, target)
+        except Exception:
+            temp.unlink(missing_ok=True)
+            raise
+    return target
+
+
 class MappingSessionRepository:
     """Persist mapping allocations as a small, atomic JSON sidecar."""
 
@@ -267,6 +321,14 @@ class MappingSessionRepository:
     def fingerprint(path: Path) -> WorkbookFingerprint:
         """Compute a workbook identity at an explicit load/relink boundary."""
         return fingerprint(path)
+
+    @staticmethod
+    def snapshot(path: Path) -> WorkbookSnapshot:
+        return workbook_snapshot(path)
+
+    @staticmethod
+    def materialize_snapshot(snapshot: WorkbookSnapshot) -> Path:
+        return materialize_workbook_snapshot(snapshot, user_data_dir() / "project_cache")
 
     def create(
         self,
@@ -279,6 +341,8 @@ class MappingSessionRepository:
         working_tree_nodes: list[WorkingTreeNode] | None = None,
         progress_fingerprint: WorkbookFingerprint | None = None,
         boq_fingerprint: WorkbookFingerprint | None = None,
+        progress_snapshot: WorkbookSnapshot | None = None,
+        boq_snapshot: WorkbookSnapshot | None = None,
     ) -> MappingSessionData:
         """Build session data, reusing identities already verified in memory.
 
@@ -296,6 +360,8 @@ class MappingSessionRepository:
             supplemental_activities=tuple(supplemental_activities or ()),
             supplemental_wbs=tuple(supplemental_wbs or ()),
             working_tree_nodes=tuple(working_tree_nodes or ()),
+            progress_snapshot=progress_snapshot or workbook_snapshot(progress_file),
+            boq_snapshot=boq_snapshot or workbook_snapshot(boq_file),
         )
 
     def save(self, path: Path, session: MappingSessionData) -> Path:
@@ -311,6 +377,8 @@ class MappingSessionRepository:
             "supplemental_activities": [asdict(record) for record in session.supplemental_activities],
             "supplemental_wbs": [asdict(record) for record in session.supplemental_wbs],
             "working_tree_nodes": [asdict(record) for record in session.working_tree_nodes],
+            "progress_snapshot": asdict(session.progress_snapshot) if session.progress_snapshot else None,
+            "boq_snapshot": asdict(session.boq_snapshot) if session.boq_snapshot else None,
         }
         _atomic_json_write(path, payload)
         return path
@@ -354,6 +422,14 @@ class MappingSessionRepository:
             )
             boq_sheet = str(payload["boq_sheet"]).strip()
             saved_at = str(payload["saved_at"])
+            progress_snapshot = (
+                WorkbookSnapshot(**payload["progress_snapshot"])
+                if payload.get("progress_snapshot") else None
+            )
+            boq_snapshot = (
+                WorkbookSnapshot(**payload["boq_snapshot"])
+                if payload.get("boq_snapshot") else None
+            )
         except (KeyError, TypeError, ValueError) as exc:
             raise SessionValidationError("The mapping session is incomplete or malformed.") from exc
         if not boq_sheet:
@@ -367,6 +443,8 @@ class MappingSessionRepository:
             supplemental_activities=supplemental_activities,
             supplemental_wbs=supplemental_wbs,
             working_tree_nodes=working_tree_nodes,
+            progress_snapshot=progress_snapshot,
+            boq_snapshot=boq_snapshot,
         )
 
     @staticmethod

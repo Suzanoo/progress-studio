@@ -22,7 +22,7 @@ MappingStore / MappingSession
         ↓
 Session repository or WorkbookExportService
         ↓
-JSON session or mapped Excel workbook
+Self-contained `.progressstudio` project or rebuilt Excel workbook
 ```
 
 ## Sources of truth
@@ -30,7 +30,25 @@ JSON session or mapped Excel workbook
 - The generated `main` worksheet is the workbook source of truth for Activity Amount.
 - `MappingStore` is the runtime source of truth for Activities, BOQ items, selections, and allocations.
 - Treeview rows are presentation only. Business logic must never read values back from the GUI.
-- Session JSON stores references and allocation records, not duplicated workbook data.
+- `.progressstudio` v8 stores mapping/tree state plus verified embedded copies of the Progress and BOQ source workbooks. This makes a saved project self-contained for future workbook rebuilds.
+- Workbook snapshots are source preservation only; runtime business logic still reads normalized domain records and never reads GUI widgets.
+
+## Rebuild contract
+
+```text
+.progressstudio v8
+    ├── mapping + working tree
+    ├── embedded Progress source
+    └── embedded BOQ source
+            ↓
+    restore verified local copies
+            ↓
+    WorkbookExportService / latest generation engine
+            ↓
+    latest-format rebuilt workbook
+```
+
+Projects created before v8 remain readable. They must be opened with their original/relinked source workbooks once and saved again before they become self-contained. Legacy Actual Progress migration from an edited workbook is intentionally outside MS-R1.
 
 ## Workbook contract
 

@@ -1,3 +1,12 @@
+## MS-R1 — Self-contained Rebuild Workbook
+
+- Upgraded `.progressstudio` project schema from v7 to v8.
+- Saved projects now embed verified Progress and BOQ workbook snapshots.
+- A v8 project can restore its sources from a local integrity-checked cache when the original files are missing, renamed, or on another machine.
+- Export workspace now presents **Rebuild Latest Workbook**, reusing the current generation/export engine and saved mapping/tree state.
+- Legacy v7 and older projects migrate safely but require one successful source relink/open and Save before standalone rebuild is available.
+- Actual Progress migration from an edited legacy workbook remains explicitly out of scope for MS-R1.
+
 ## MS-P1.8 — Dashboard Data and Theme Refactor
 
 

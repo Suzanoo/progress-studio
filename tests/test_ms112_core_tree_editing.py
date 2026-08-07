@@ -98,7 +98,7 @@ def test_session_v6_round_trips_working_tree(tmp_path: Path) -> None:
     )
     path = repo.save(tmp_path / "sample.progressstudio", session)
     loaded = repo.load(path)
-    assert loaded.version == 7
+    assert loaded.version == 8
     assert loaded.working_tree_nodes
     restored = make_store()
     restored.restore_working_tree(loaded.working_tree_nodes)

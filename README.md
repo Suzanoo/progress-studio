@@ -60,10 +60,17 @@ Schedule XML
 → Progress Workbook
 → Load BOQ
 → Map BOQ to Activities
-→ Save Session
-→ Export mapped workbook
+→ Save Project (.progressstudio; self-contained in v8)
+→ Rebuild Latest Workbook
 → Open in Microsoft Excel, recalculate, and save
 ```
+
+
+## MS-R1 — Self-contained workbook rebuild
+
+Projects saved by this version embed verified copies of the Progress and BOQ source workbooks inside the `.progressstudio` project. After the project has been saved once in v8, the original source files are no longer required to rebuild a workbook with the latest Progress Studio generation/export engine.
+
+Legacy v7 and older projects still open normally, but require their original/relinked workbooks once. Save the project again to upgrade it to the self-contained v8 format. Migration of Actual Progress from a separately edited legacy workbook is a later milestone and is not part of MS-R1.
 
 ## Technical documentation
 

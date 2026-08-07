@@ -258,8 +258,9 @@ class ProgressStudioDesktopApp(tk.Tk):
         panel = ttk.Frame(frame, style="Surface.TFrame", padding=28)
         panel.pack(fill="x")
         ttk.Label(panel, text="Export", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(panel, text="Create a mapped Progress workbook without changing the original input file.", style="Muted.TLabel").pack(anchor="w", pady=(8, 18))
-        ttk.Button(panel, text="Export Mapped Workbook", style="Accent.TButton", command=self._defer_mapping("export_workbook")).pack(anchor="w")
+        ttk.Label(panel, text="Rebuild the latest workbook from the saved Progress Studio project state.", style="Muted.TLabel").pack(anchor="w", pady=(8, 18))
+        ttk.Button(panel, text="Rebuild Latest Workbook", style="Accent.TButton", command=self._defer_mapping("rebuild_workbook")).pack(anchor="w")
+        ttk.Label(panel, text="Projects saved with MS-R1 embed their Progress and BOQ sources, so rebuilds can work from the .progressstudio file alone.", style="Muted.TLabel", wraplength=760).pack(anchor="w", pady=(10, 0))
 
     def _build_settings_workspace(self) -> None:
         frame = self._new_workspace("settings")
