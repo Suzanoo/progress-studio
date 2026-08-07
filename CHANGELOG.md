@@ -254,3 +254,10 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Roll up Actual Amount to WBS and Project Summary rows.
 - Keep weekly Actual progress weighted by full Plan Amount.
 - Show Actual Amount cells with the normal currency format instead of hiding them.
+
+## MS-P1.10 - Embedded Dashboard KPI Icons
+
+- Add four lightweight transparent PNG icons for Planned Progress, Actual Progress, Schedule Status, and Time Impact.
+- Embed KPI icons inside the generated XLSX so they remain visible on other computers without extra fonts or internet access.
+- Add dashboard icon settings to `progress_studio/config/dashboard_theme.json` for enable/disable, size, and asset filenames.
+- Add regression coverage that verifies all four icons survive workbook save/reopen.

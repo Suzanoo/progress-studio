@@ -30,5 +30,13 @@
     "marker_size": 4,
     "plan_line_width": 26000,
     "actual_line_width": 26000
+  },
+  "icons": {
+    "enabled": true,
+    "size": 32,
+    "planned": "planned.png",
+    "actual": "actual.png",
+    "schedule": "schedule.png",
+    "time_impact": "time_impact.png"
   }
 }

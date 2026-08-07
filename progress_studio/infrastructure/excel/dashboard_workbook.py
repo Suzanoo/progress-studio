@@ -9,6 +9,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.formatting.rule import DataBarRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -46,6 +47,7 @@ def _load_dashboard_theme() -> dict:
             "muted": MUTED, "white": WHITE,
         },
         "layout": {"title": "PROGRESS STUDIO DASHBOARD", "activity_rows": 8, "chart_height": 8.0, "chart_width": 20.5},
+        "icons": {"enabled": True, "size": 32, "planned": "planned.png", "actual": "actual.png", "schedule": "schedule.png", "time_impact": "time_impact.png"},
     }
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
@@ -54,6 +56,7 @@ def _load_dashboard_theme() -> dict:
     result = defaults.copy()
     result["colors"] = {**defaults["colors"], **loaded.get("colors", {})}
     result["layout"] = {**defaults["layout"], **loaded.get("layout", {})}
+    result["icons"] = {**defaults["icons"], **loaded.get("icons", {})}
     result["font"] = loaded.get("font", defaults["font"])
     return result
 
@@ -62,6 +65,7 @@ _THEME = _load_dashboard_theme()
 _FONT = _THEME["font"]
 _COLORS = _THEME["colors"]
 _LAYOUT = _THEME["layout"]
+_ICONS = _THEME["icons"]
 NAVY = _COLORS["navy"]
 BLUE = _COLORS["blue"]
 GREEN = _COLORS["green"]
@@ -269,7 +273,23 @@ def _style_box(ws, cell_range: str, fill: str = WHITE) -> None:
             cell.border = _thin_border()
 
 
-def _kpi(ws, title_range: str, value_range: str, title: str, formula: str, fill: str, color: str, number_format: str = "0.00%") -> None:
+def _add_kpi_icon(ws, anchor: str, icon_name: str) -> None:
+    if not bool(_ICONS.get("enabled", True)):
+        return
+    filename = _ICONS.get(icon_name)
+    if not filename:
+        return
+    icon_path = Path(__file__).resolve().parents[2] / "assets" / "dashboard" / "icons" / str(filename)
+    if not icon_path.exists():
+        return
+    image = XLImage(str(icon_path))
+    size = int(_ICONS.get("size", 32))
+    image.width = size
+    image.height = size
+    ws.add_image(image, anchor)
+
+
+def _kpi(ws, title_range: str, value_range: str, title: str, formula: str, fill: str, color: str, number_format: str = "0.00%", *, icon: str | None = None) -> None:
     _style_box(ws, f"{title_range.split(':')[0]}:{value_range.split(':')[1]}", fill)
     ws.merge_cells(title_range)
     ws.merge_cells(value_range)
@@ -282,6 +302,8 @@ def _kpi(ws, title_range: str, value_range: str, title: str, formula: str, fill:
     value_cell.font = Font(name=_FONT, size=18, bold=True, color=color)
     value_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     value_cell.number_format = number_format
+    if icon:
+        _add_kpi_icon(ws, value_range.split(":")[0], icon)
 
 
 def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
@@ -366,10 +388,10 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
     plan_kpi = '=IFERROR(LOOKUP(2,1/((Dashboard_Data!$A$2:$A$250<=$K$5)*(Dashboard_Data!$B$2:$B$250<>"")),Dashboard_Data!$B$2:$B$250),0)'
     actual_kpi = '=IFERROR(LOOKUP(2,1/((Dashboard_Data!$A$2:$A$250<=$K$5)*(Dashboard_Data!$C$2:$C$250<>"")),Dashboard_Data!$C$2:$C$250),0)'
-    _kpi(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_kpi, LIGHT_BLUE, BLUE)
-    _kpi(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_kpi, LIGHT_GREEN, GREEN)
-    _kpi(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", '=IF(E10>=B10,"ON TRACK","DELAY "&TEXT(B10-E10,"0.00%"))', LIGHT_AMBER, AMBER, "General")
-    _kpi(ws, "K9:M9", "K10:M12", "TIME IMPACT", '=IF(E10>=B10,"0 Days",MAX(0,$K$5-IFERROR(LOOKUP(E10,Dashboard_Data!$B$2:$B$250,Dashboard_Data!$A$2:$A$250),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General")
+    _kpi(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_kpi, LIGHT_BLUE, BLUE, icon="planned")
+    _kpi(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_kpi, LIGHT_GREEN, GREEN, icon="actual")
+    _kpi(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", '=IF(E10>=B10,"ON TRACK","DELAY "&TEXT(B10-E10,"0.00%"))', LIGHT_AMBER, AMBER, "General", icon="schedule")
+    _kpi(ws, "K9:M9", "K10:M12", "TIME IMPACT", '=IF(E10>=B10,"0 Days",MAX(0,$K$5-IFERROR(LOOKUP(E10,Dashboard_Data!$B$2:$B$250,Dashboard_Data!$A$2:$A$250),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General", icon="time_impact")
     for row in range(9, 13):
         ws.row_dimensions[row].height = 24
     ws.row_dimensions[10].height = 28
