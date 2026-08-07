@@ -162,8 +162,8 @@ It uses live formulas from `progress` and `progress_table` and contains:
 
 - Cutoff Date dropdown
 - Weekly / Monthly dropdown
-- Planned Progress, Actual Progress, Schedule Status, Time Impact, and Progress Gap KPIs
-- S-Curve chart
+- Four KPI cards: Planned Progress, Actual Progress, Schedule Status, and Time Impact
+- S-Curve chart with full baseline Plan and cutoff-limited Actual
 - Activity Progress summary
 
-`Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. The existing `main`, `progress`, and `progress_table` worksheets remain unchanged as source sheets.
+`Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. KPI values always follow the selected cutoff date; changing Weekly/Monthly only changes the chart reporting view. Dashboard colors and chart layout are configurable in `progress_studio/config/dashboard_theme.json`. The existing `main`, `progress`, and `progress_table` worksheets remain unchanged as source sheets.

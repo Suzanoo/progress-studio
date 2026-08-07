@@ -15,12 +15,20 @@
     "border": "D9DEE7",
     "text": "1F2937",
     "muted": "667085",
-    "white": "FFFFFF"
+    "white": "FFFFFF",
+    "chart_grid": "E5E7EB",
+    "chart_axis": "B8C2CC"
   },
   "layout": {
     "title": "PROGRESS STUDIO DASHBOARD",
     "activity_rows": 8,
-    "chart_height": 8.0,
-    "chart_width": 20.5
+    "chart_height": 9.2,
+    "chart_width": 25.0,
+    "chart_style": 2,
+    "chart_major_unit": 0.2,
+    "chart_markers": false,
+    "marker_size": 4,
+    "plan_line_width": 26000,
+    "actual_line_width": 26000
   }
 }

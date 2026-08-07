@@ -8,6 +8,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.formatting.rule import DataBarRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -209,7 +210,7 @@ def _build_data_sheet(workbook, progress_ws) -> None:
     rows = _progress_rows(workbook, progress_ws)
     months = _monthly_groups(rows)
 
-    ws.append(["Weekly Date", "Weekly Plan", "Weekly Actual", "Monthly Date", "Monthly Plan", "Monthly Actual", "Display Date", "Display Plan", "Display Actual"])
+    ws.append(["Weekly Date", "Weekly Plan", "Weekly Actual", "Monthly Date", "Monthly Plan", "Monthly Actual", "Period", "Plan", "Actual"])
     for output_row, (source_row, week_date) in enumerate(rows, start=2):
         ws.cell(output_row, 1, week_date)
         ws.cell(output_row, 2, _source_percent_formula(progress_ws, source_row, columns["plan"]))
@@ -240,8 +241,10 @@ def _build_data_sheet(workbook, progress_ws) -> None:
         monthly_plan = f"E{monthly_row}" if monthly_row else '""'
         monthly_actual = f"F{monthly_row}" if monthly_row else '""'
         ws.cell(output_row, 7, f'=IF(Dashboard!$G$5="Weekly",{weekly_date},{monthly_date})')
-        ws.cell(output_row, 8, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$J$5),"",IF(Dashboard!$G$5="Weekly",{weekly_plan},{monthly_plan}))')
-        ws.cell(output_row, 9, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$J$5),"",IF(Dashboard!$G$5="Weekly",{weekly_actual},{monthly_actual}))')
+        # Baseline plan is always rendered for the full project duration. Cutoff only
+        # affects KPI calculation and the Actual curve.
+        ws.cell(output_row, 8, f'=IF(G{output_row}="","",IF(Dashboard!$G$5="Weekly",{weekly_plan},{monthly_plan}))')
+        ws.cell(output_row, 9, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$K$5),"",IF(Dashboard!$G$5="Weekly",{weekly_actual},{monthly_actual}))')
         ws.cell(output_row, 7).number_format = "dd/mm/yyyy"
         ws.cell(output_row, 8).number_format = "0.00%"
         ws.cell(output_row, 9).number_format = "0.00%"
@@ -291,95 +294,154 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws.page_setup.fitToHeight = 0
     ws.sheet_properties.outlinePr.summaryBelow = True
 
-    for col, width in {"A":3,"B":15,"C":15,"D":15,"E":3,"F":15,"G":15,"H":15,"I":3,"J":15,"K":15,"L":15}.items():
+    # Simple, wide dashboard canvas. Four KPI cards fit on one line.
+    widths = {
+        "A": 3, "B": 14, "C": 14, "D": 14,
+        "E": 14, "F": 14, "G": 14,
+        "H": 14, "I": 14, "J": 14,
+        "K": 14, "L": 14, "M": 14,
+    }
+    for col, width in widths.items():
         ws.column_dimensions[col].width = width
-    for row in range(1, 80):
+    for row in range(1, 90):
         ws.row_dimensions[row].height = 20
 
-    ws.merge_cells("B2:L2")
+    ws.merge_cells("B2:M2")
     ws["B2"] = _LAYOUT["title"]
     ws["B2"].font = Font(name=_FONT, size=20, bold=True, color=NAVY)
     ws["B2"].alignment = Alignment(vertical="center")
-    ws.row_dimensions[2].height = 30
+    ws.row_dimensions[2].height = 32
 
-    _merge_title(ws, "B4:L4", "PROJECT INFORMATION", 11)
-    _style_box(ws, "B5:L6", LIGHT_GRAY)
+    _merge_title(ws, "B4:M4", "PROJECT INFORMATION", 11)
+    _style_box(ws, "B5:M6", LIGHT_GRAY)
     ws["B5"] = "Project"
+    ws.merge_cells("C5:D5")
     ws["C5"] = project_name or "Project"
     ws["C5"].font = Font(name=_FONT, bold=True, color=TEXT)
-    ws["B6"] = "Data source"
-    ws["C6"] = "Live formulas from progress / progress_table"
-    ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
+
     ws["F5"] = "View"
     ws.merge_cells("G5:H5")
     ws["G5"] = "Weekly"
-    ws["I5"] = "Cutoff Date"
-    ws.merge_cells("J5:L5")
-    ws["J5"] = workbook[DATA_SHEET].cell(workbook[DATA_SHEET].max_row, 1).value
-    ws["J5"].number_format = "dd/mm/yyyy"
+    ws["J5"] = "Cutoff Date"
+    ws.merge_cells("K5:M5")
+    ws["K5"] = workbook[DATA_SHEET].cell(workbook[DATA_SHEET].max_row, 1).value
+    ws["K5"].number_format = "dd/mm/yyyy"
     ws["G5"].font = Font(name=_FONT, bold=True, color=NAVY)
-    ws["J5"].font = Font(name=_FONT, bold=True, color=NAVY)
+    ws["K5"].font = Font(name=_FONT, bold=True, color=NAVY)
     ws["G5"].alignment = Alignment(horizontal="center")
-    ws["J5"].alignment = Alignment(horizontal="center")
+    ws["K5"].alignment = Alignment(horizontal="center")
+
+    ws["B6"] = "Data source"
+    ws.merge_cells("C6:H6")
+    ws["C6"] = "Live formulas from progress / progress_table"
+    ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
+    ws["J6"] = "Chart rule"
+    ws.merge_cells("K6:M6")
+    ws["K6"] = "Plan: full baseline  |  Actual: to cutoff"
+    ws["K6"].font = Font(name=_FONT, size=9, color=MUTED)
 
     view_validation = DataValidation(type="list", formula1='"Weekly,Monthly"', allow_blank=False)
+    view_validation.error = "Choose Weekly or Monthly."
+    view_validation.errorTitle = "Invalid reporting view"
+    view_validation.prompt = "Switch the dashboard chart between Weekly and Monthly."
+    view_validation.promptTitle = "Reporting View"
+    view_validation.showInputMessage = True
+    view_validation.showErrorMessage = True
     ws.add_data_validation(view_validation)
     view_validation.add(ws["G5"])
+
     last_week_row = max(2, len(_progress_rows(workbook, workbook[PROGRESS_SHEET])) + 1)
-    cutoff_validation = DataValidation(type="list", formula1=f"'{DATA_SHEET}'!$A$2:$A${last_week_row}", allow_blank=False)
+    cutoff_validation = DataValidation(
+        type="list",
+        formula1=f"'{DATA_SHEET}'!$A$2:$A${last_week_row}",
+        allow_blank=False,
+    )
+    cutoff_validation.prompt = "Select the reporting cutoff date. KPI and Actual use this date."
+    cutoff_validation.promptTitle = "Cutoff Date"
+    cutoff_validation.showInputMessage = True
     ws.add_data_validation(cutoff_validation)
-    cutoff_validation.add(ws["J5"])
+    cutoff_validation.add(ws["K5"])
 
-    _merge_title(ws, "B8:L8", "KPI SUMMARY", 11)
-    _kpi(ws, "B9:D9", "B10:D11", "PLANNED PROGRESS", '=IFERROR(LOOKUP(2,1/(Dashboard_Data!$H$2:$H$200<>""),Dashboard_Data!$H$2:$H$200),0)', LIGHT_BLUE, BLUE)
-    _kpi(ws, "F9:H9", "F10:H11", "ACTUAL PROGRESS", '=IFERROR(LOOKUP(2,1/(Dashboard_Data!$I$2:$I$200<>""),Dashboard_Data!$I$2:$I$200),0)', LIGHT_GREEN, GREEN)
-    _kpi(ws, "J9:L9", "J10:L11", "SCHEDULE STATUS", '=IF(F10>=B10,"ON TRACK","DELAY "&TEXT(B10-F10,"0.00%"))', LIGHT_AMBER, AMBER, "General")
-    _kpi(ws, "B13:D13", "B14:D15", "TIME IMPACT", '=IF(F10>=B10,"0 Days",MAX(0,J5-IFERROR(LOOKUP(F10,Dashboard_Data!$B$2:$B$200,Dashboard_Data!$A$2:$A$200),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General")
-    _kpi(ws, "F13:H13", "F14:H15", "PROGRESS GAP", '=MAX(B10-F10,0)', LIGHT_GRAY, NAVY)
-    _kpi(ws, "J13:L13", "J14:L15", "REPORTING PERIOD", '=G5', LIGHT_GRAY, NAVY, "General")
+    # KPI values always use the selected cutoff date regardless of chart view.
+    _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
+    plan_kpi = '=IFERROR(LOOKUP(2,1/((Dashboard_Data!$A$2:$A$250<=$K$5)*(Dashboard_Data!$B$2:$B$250<>"")),Dashboard_Data!$B$2:$B$250),0)'
+    actual_kpi = '=IFERROR(LOOKUP(2,1/((Dashboard_Data!$A$2:$A$250<=$K$5)*(Dashboard_Data!$C$2:$C$250<>"")),Dashboard_Data!$C$2:$C$250),0)'
+    _kpi(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_kpi, LIGHT_BLUE, BLUE)
+    _kpi(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_kpi, LIGHT_GREEN, GREEN)
+    _kpi(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", '=IF(E10>=B10,"ON TRACK","DELAY "&TEXT(B10-E10,"0.00%"))', LIGHT_AMBER, AMBER, "General")
+    _kpi(ws, "K9:M9", "K10:M12", "TIME IMPACT", '=IF(E10>=B10,"0 Days",MAX(0,$K$5-IFERROR(LOOKUP(E10,Dashboard_Data!$B$2:$B$250,Dashboard_Data!$A$2:$A$250),Dashboard_Data!$A$2))&" Days")', LIGHT_RED, RED, "General")
+    for row in range(9, 13):
+        ws.row_dimensions[row].height = 24
+    ws.row_dimensions[10].height = 28
+    ws.row_dimensions[11].height = 28
+    ws.row_dimensions[12].height = 28
 
-    _merge_title(ws, "B17:L17", "S-CURVE — PLAN VS ACTUAL", 11)
-    _style_box(ws, "B18:L34", WHITE)
+    # S-Curve: Plan is full baseline; Actual stops at selected cutoff.
+    _merge_title(ws, "B15:M15", "S-CURVE — PLAN VS ACTUAL", 11)
+    _style_box(ws, "B16:M34", WHITE)
     chart = LineChart()
-    chart.title = ""
-    chart.style = 13
+    chart.title = None
+    chart.style = int(_LAYOUT.get("chart_style", 2))
     chart.height = float(_LAYOUT["chart_height"])
     chart.width = float(_LAYOUT["chart_width"])
     chart.y_axis.scaling.min = 0
     chart.y_axis.scaling.max = 1
+    chart.y_axis.majorUnit = float(_LAYOUT.get("chart_major_unit", 0.2))
     chart.y_axis.numFmt = "0%"
     chart.y_axis.title = "Progress"
     chart.x_axis.title = "Period"
-    max_rows = min(200, workbook[DATA_SHEET].max_row)
+    chart.legend.position = "t"
+
+    # Make the plotting area lighter and cleaner than the default Excel chart.
+    grid = GraphicalProperties()
+    grid.line.solidFill = _COLORS.get("chart_grid", "E5E7EB")
+    grid.line.width = 9000
+    chart.y_axis.majorGridlines.graphicalProperties = grid
+    axis_line = GraphicalProperties()
+    axis_line.line.solidFill = _COLORS.get("chart_axis", "B8C2CC")
+    axis_line.line.width = 9000
+    chart.y_axis.spPr = axis_line
+    chart.x_axis.spPr = axis_line
+
+    max_rows = min(250, workbook[DATA_SHEET].max_row)
     data = Reference(workbook[DATA_SHEET], min_col=8, max_col=9, min_row=1, max_row=max_rows)
     cats = Reference(workbook[DATA_SHEET], min_col=7, min_row=2, max_row=max_rows)
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(cats)
     if len(chart.series) >= 2:
         chart.series[0].graphicalProperties.line.solidFill = BLUE
-        chart.series[0].graphicalProperties.line.width = 22000
+        chart.series[0].graphicalProperties.line.width = int(_LAYOUT.get("plan_line_width", 26000))
         chart.series[1].graphicalProperties.line.solidFill = GREEN
-        chart.series[1].graphicalProperties.line.width = 22000
-    chart.legend.position = "b"
-    ws.add_chart(chart, "B18")
+        chart.series[1].graphicalProperties.line.width = int(_LAYOUT.get("actual_line_width", 26000))
+        if bool(_LAYOUT.get("chart_markers", False)):
+            chart.series[0].marker.symbol = "circle"
+            chart.series[0].marker.size = int(_LAYOUT.get("marker_size", 4))
+            chart.series[1].marker.symbol = "circle"
+            chart.series[1].marker.size = int(_LAYOUT.get("marker_size", 4))
+    ws.add_chart(chart, "B16")
 
-    _merge_title(ws, "B36:L36", "ACTIVITY PROGRESS", 11)
+    ws.merge_cells("B35:M35")
+    ws["B35"] = "Plan curve = full baseline duration    •    Actual curve = selected cutoff date"
+    ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
+    ws["B35"].alignment = Alignment(horizontal="left", vertical="center")
+
+    _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
     headers = ["WBS", "Activity", "Type", "Total", "Amount", "Progress"]
     starts = ["B", "C", "F", "G", "I", "K"]
-    ends = ["B", "E", "F", "H", "J", "L"]
+    ends = ["B", "E", "F", "H", "J", "M"]
     for start, end, header in zip(starts, ends, headers):
-        ws.merge_cells(f"{start}37:{end}37")
-        cell = ws[f"{start}37"]
+        ws.merge_cells(f"{start}38:{end}38")
+        cell = ws[f"{start}38"]
         cell.value = header
         cell.fill = _solid(NAVY)
         cell.font = Font(name=_FONT, bold=True, color=WHITE, size=9)
         cell.alignment = Alignment(horizontal="center", vertical="center")
-        for row in ws[f"{start}37:{end}37"]:
+        for row in ws[f"{start}38:{end}38"]:
             for c in row:
                 c.border = _thin_border()
 
     source = workbook[TABLE_SHEET]
-    output_row = 38
+    output_row = 39
     source_row = 2
     shown = 0
     while source_row <= source.max_row and shown < int(_LAYOUT["activity_rows"]):
@@ -393,8 +455,8 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws[f"G{output_row}"] = f"='{TABLE_SHEET}'!C{plan_row}"
         ws.merge_cells(f"I{output_row}:J{output_row}")
         ws[f"I{output_row}"] = f'=IFERROR(G{output_row}*K{output_row},0)'
-        ws.merge_cells(f"K{output_row}:L{output_row}")
-        ws[f"K{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$J$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
+        ws.merge_cells(f"K{output_row}:M{output_row}")
+        ws[f"K{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
 
         actual_out = output_row + 1
         ws.merge_cells(f"C{actual_out}:E{actual_out}")
@@ -402,11 +464,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws.merge_cells(f"G{actual_out}:H{actual_out}")
         ws.merge_cells(f"I{actual_out}:J{actual_out}")
         ws[f"I{actual_out}"] = f'=IFERROR(G{output_row}*K{actual_out},0)'
-        ws.merge_cells(f"K{actual_out}:L{actual_out}")
-        ws[f"K{actual_out}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$J$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
+        ws.merge_cells(f"K{actual_out}:M{actual_out}")
+        ws[f"K{actual_out}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
 
         for row_index in (output_row, actual_out):
-            for row_cells in ws[f"B{row_index}:L{row_index}"]:
+            for row_cells in ws[f"B{row_index}:M{row_index}"]:
                 for cell in row_cells:
                     cell.border = _thin_border()
                     cell.fill = _solid(WHITE if shown % 2 == 0 else LIGHT_GRAY)
@@ -422,11 +484,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
 
     if shown:
         ws.conditional_formatting.add(
-            f"K38:K{output_row - 1}",
+            f"K39:K{output_row - 1}",
             DataBarRule(start_type="num", start_value=0, end_type="num", end_value=1, color=BLUE, showValue=True),
         )
-    ws.auto_filter.ref = f"B37:L{max(37, output_row - 1)}"
-    ws.print_area = f"B2:L{max(55, output_row - 1)}"
+    ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
+    ws.print_area = f"B2:M{max(56, output_row - 1)}"
 
 
 def build_dashboard(workbook, *, project_name: str | None = None) -> None:

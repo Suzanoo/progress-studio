@@ -34,7 +34,7 @@ def test_dashboard_is_created_as_first_separate_sheet_with_controls_and_chart():
     assert dashboard["B2"].value == "PROGRESS STUDIO DASHBOARD"
     assert dashboard["C5"].value == "Demo Project"
     assert dashboard["G5"].value == "Weekly"
-    assert dashboard["J5"].value == date(2026, 1, 9)
+    assert dashboard["K5"].value == date(2026, 1, 9)
     assert len(dashboard.data_validations.dataValidation) == 2
     assert len(dashboard._charts) == 1
 
@@ -44,11 +44,11 @@ def test_dashboard_activity_rows_are_formula_linked_to_progress_table():
     build_dashboard(wb)
     dashboard = wb[DASHBOARD_SHEET]
 
-    assert dashboard["B38"].value == "='progress_table'!A2"
-    assert dashboard["C38"].value == "='progress_table'!B2"
-    assert dashboard["F38"].value == "Plan"
-    assert dashboard["F39"].value == "Actual"
-    assert "SUMPRODUCT" in dashboard["K38"].value
+    assert dashboard["B39"].value == "='progress_table'!A2"
+    assert dashboard["C39"].value == "='progress_table'!B2"
+    assert dashboard["F39"].value == "Plan"
+    assert dashboard["F40"].value == "Actual"
+    assert "SUMPRODUCT" in dashboard["K39"].value
 
 
 def test_dashboard_data_is_populated_from_real_progress_headers_and_string_dates():
@@ -70,4 +70,4 @@ def test_dashboard_data_is_populated_from_real_progress_headers_and_string_dates
     assert data["B2"].value == 0.09
     assert data["A3"].value == date(2026, 3, 6)
     assert data["C3"].value == 0.05
-    assert wb[DASHBOARD_SHEET]["J5"].value == date(2026, 3, 6)
+    assert wb[DASHBOARD_SHEET]["K5"].value == date(2026, 3, 6)
