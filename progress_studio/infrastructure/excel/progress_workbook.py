@@ -19,6 +19,7 @@ except ImportError as exc:
     ) from exc
 
 from progress_studio.infrastructure.excel.export_theme import DEFAULT_TIMESCALE_PALETTE
+from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 
 
 SCRIPT_VERSION = "6.4-wbs-level-color-hierarchy"
@@ -1029,9 +1030,13 @@ def prepare_progress_and_scurve(wb, ws) -> tuple[int, int, int, int, int]:
     )
 
     ws.freeze_panes = ws.cell(FIRST_DATA_ROW, timescale_cols[0])
-    if ws.auto_filter.ref:
-        last_col = get_column_letter(ws.max_column)
-        ws.auto_filter.ref = f"A{HEADER_ROW}:{last_col}{last_activity_data_row}"
+    configure_filter_buttons(
+        ws,
+        header_row=HEADER_ROW,
+        last_row=last_activity_data_row,
+        last_col=ws.max_column,
+        visible_columns={row_type_col, pa_col},
+    )
 
     return with_amount, without_amount, wbs_count, project_count, len(timescale_cols)
 

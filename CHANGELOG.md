@@ -1,5 +1,11 @@
 ## MS-P1.8 — Dashboard Data and Theme Refactor
 
+## MS-P1.13 — Dashboard + Main Filter Polish
+
+- Dashboard Activity Progress now renders every progress row instead of stopping at eight.
+- Removed the Status column; the exception table now exposes only the WBS filter.
+- Main worksheet keeps a full AutoFilter range but shows filter buttons only on Row Type and P/A.
+
 - Fixed blank `Dashboard_Data` when `progress.week_start` contains worksheet-reference formulas.
 - Added dynamic progress-header discovery and date parsing.
 - Added a clear generation error when weekly dashboard data cannot be built.

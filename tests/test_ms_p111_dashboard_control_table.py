@@ -29,7 +29,7 @@ def test_dashboard_control_table_is_one_row_per_activity():
     assert ws["I38"].value == "Actual %"
     assert ws["J38"].value == "Variance"
     assert ws["K38"].value == "Gap Amount"
-    assert ws["M38"].value == "Status"
+    assert ws["M38"].value is None
     assert ws["B39"].value == "='progress_table'!A2"
     assert ws["B40"].value is None
 
@@ -69,11 +69,30 @@ def test_monthly_cutoff_uses_last_real_reporting_date_and_dynamic_dropdown():
     assert "Dashboard_Data!$K$2:$K$3" in cutoff_validations[0].formula1
 
 
-def test_activity_exception_table_only_shows_wbs_and_status_filter_buttons():
+def test_activity_exception_table_only_shows_wbs_filter_button():
     wb = _workbook()
     build_dashboard(wb)
     ws = wb["Dashboard"]
 
     assert ws.auto_filter.ref.startswith("B38:M")
     hidden_button_columns = {fc.colId for fc in ws.auto_filter.filterColumn if fc.showButton is False}
-    assert hidden_button_columns == set(range(1, 11))
+    assert hidden_button_columns == set(range(1, 12))
+
+
+def test_activity_exception_table_is_not_capped_at_eight_rows():
+    wb = Workbook()
+    progress = wb.active
+    progress.title = "progress"
+    progress.append(["project_start", "project_finish", "week_start", "plan", "actual"])
+    progress.append([date(2026, 1, 1), date(2026, 2, 28), date(2026, 1, 2), 10, 5])
+    table = wb.create_sheet("progress_table")
+    table.append(["WBS", "Activities", "Amount", "P/A", "%Progress", date(2026, 1, 2)])
+    for index in range(12):
+        table.append([f"1.{index+1}", f"Activity {index+1}", 1000, "P", 10, 10])
+        table.append([f"1.{index+1}", f"Activity {index+1}", 1000, "A", 5, 5])
+
+    build_dashboard(wb)
+    ws = wb["Dashboard"]
+
+    assert ws["B50"].value == "='progress_table'!A24"
+    assert ws.auto_filter.ref == "B38:M50"

@@ -22,6 +22,7 @@ from progress_studio.infrastructure.excel.mapping_reader import validate_progres
 from progress_studio.infrastructure.excel.calculation_policy import request_full_excel_recalculation
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
 
@@ -380,7 +381,13 @@ class MappedWorkbookExporter:
             f'${pa_letter}${project_plan_row + 2}:${pa_letter}${last_row},"P")'
         )
         ws.cell(project_actual_row, amount_col).value = f'={amount_letter}{project_plan_row}'
-        ws.auto_filter.ref = f'A{header_row}:{get_column_letter(max_col)}{last_row}'
+        configure_filter_buttons(
+            ws,
+            header_row=header_row,
+            last_row=last_row,
+            last_col=max_col,
+            visible_columns={row_type_col, pa_col},
+        )
         return sum(1 for _d, node, _p, _a in node_rows if node.kind is WorkingNodeKind.ACTIVITY)
 
     @staticmethod

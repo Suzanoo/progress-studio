@@ -50,7 +50,8 @@ def test_dashboard_activity_rows_are_formula_linked_to_progress_table():
     assert "SUMPRODUCT" in dashboard["H39"].value
     assert "SUMPRODUCT" in dashboard["I39"].value
     assert dashboard["J39"].value == "=I39-H39"
-    assert dashboard["M39"].value.startswith("=IF(")
+    assert dashboard["K39"].value.startswith("=MAX(")
+    assert dashboard["M39"].value is None
 
 
 def test_dashboard_data_is_populated_from_real_progress_headers_and_string_dates():

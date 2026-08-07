@@ -46,7 +46,7 @@ def _load_dashboard_theme() -> dict:
             "light_gray": LIGHT_GRAY, "border": BORDER, "text": TEXT,
             "muted": MUTED, "white": WHITE,
         },
-        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "default_view": "Monthly", "activity_rows": 8, "chart_height": 8.0, "chart_width": 20.5},
+        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "default_view": "Monthly", "chart_height": 8.0, "chart_width": 20.5},
         "icons": {"enabled": True, "size": 32, "planned": "planned.png", "actual": "actual.png", "schedule": "schedule.png", "time_impact": "time_impact.png"},
     }
     try:
@@ -479,9 +479,9 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws["B35"].alignment = Alignment(horizontal="left", vertical="center")
 
     _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS — EXCEPTION CONTROL", 11)
-    headers = ["WBS", "Activity", "Amount", "Plan %", "Actual %", "Variance", "Gap Amount", "Status"]
-    starts = ["B", "C", "F", "H", "I", "J", "K", "M"]
-    ends = ["B", "E", "G", "H", "I", "J", "L", "M"]
+    headers = ["WBS", "Activity", "Amount", "Plan %", "Actual %", "Variance", "Gap Amount"]
+    starts = ["B", "C", "F", "H", "I", "J", "K"]
+    ends = ["B", "E", "G", "H", "I", "J", "M"]
     for start_col, end_col, header in zip(starts, ends, headers):
         ws.merge_cells(f"{start_col}38:{end_col}38")
         cell = ws[f"{start_col}38"]
@@ -502,7 +502,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     output_row = 39
     source_row = 2
     shown = 0
-    while source_row <= source.max_row and shown < int(_LAYOUT["activity_rows"]):
+    while source_row <= source.max_row:
         plan_row = source_row
         actual_row = source_row + 1 if source_row + 1 <= source.max_row else source_row
 
@@ -514,14 +514,8 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws[f"H{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{plan_row}:$ZZ{plan_row})/100,0)'
         ws[f"I{output_row}"] = f'=IFERROR(SUMPRODUCT((\'{TABLE_SHEET}\'!$F$1:$ZZ$1<=$K$5)*\'{TABLE_SHEET}\'!$F{actual_row}:$ZZ{actual_row})/100,0)'
         ws[f"J{output_row}"] = f'=I{output_row}-H{output_row}'
-        ws.merge_cells(f"K{output_row}:L{output_row}")
+        ws.merge_cells(f"K{output_row}:M{output_row}")
         ws[f"K{output_row}"] = f'=MAX(0,(H{output_row}-I{output_row})*F{output_row})'
-        ws[f"M{output_row}"] = (
-            f'=IF(AND(H{output_row}=0,I{output_row}=0),"NOT STARTED",'
-            f'IF(I{output_row}>=1,"COMPLETED",'
-            f'IF(I{output_row}>H{output_row},"AHEAD",'
-            f'IF(I{output_row}=H{output_row},"ON TRACK","BEHIND"))))'
-        )
 
         kind = str(source.cell(plan_row, kind_col).value or "").strip().lower() if kind_col else ""
         wbs_code = str(source.cell(plan_row, 1).value or "").strip()
@@ -550,7 +544,6 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         ws[f"I{output_row}"].number_format = "0.00%"
         ws[f"J{output_row}"].number_format = "+0.00%;-0.00%;0.00%"
         ws[f"K{output_row}"].number_format = "#,##0.00"
-        ws[f"M{output_row}"].font = Font(name=_FONT, bold=True, size=9, color=TEXT)
         output_row += 1
         source_row += 2
         shown += 1
@@ -567,9 +560,9 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             DataBarRule(start_type="num", start_value=0, end_type="max", color=RED, showValue=True),
         )
     ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
-    # Keep the exception table calm: only WBS and Status expose filter buttons.
-    # All other columns remain sortable/readable data, not UI controls.
-    for col_id in range(1, 11):
+    # Keep one purposeful control: only WBS exposes a filter button.
+    # The AutoFilter range still spans the whole table so Excel keeps normal table behavior.
+    for col_id in range(1, 12):
         ws.auto_filter.filterColumn.append(FilterColumn(colId=col_id, showButton=False))
     ws.print_area = f"B2:M{max(56, output_row - 1)}"
 
