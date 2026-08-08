@@ -19,6 +19,7 @@ class GenerationProgressDialog(tk.Toplevel):
         ("progress", "Build progress sheets + Dashboard"),
         ("distribution", "Generate plan distribution"),
         ("okd", "Build OKD sheets"),
+        ("monthly", "Build monthly main view"),
         ("finalize", "Finalize workbook"),
     )
 

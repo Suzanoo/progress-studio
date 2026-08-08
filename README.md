@@ -162,6 +162,13 @@ The exported `main` sheet calculates earned Actual Amount automatically:
 
 Weekly Plan/Actual roll-ups continue to use the full Plan Amount as their weight, so displaying earned Actual Amount does not change progress percentages.
 
+
+## Weekly and Monthly Main Views
+
+Generated workbooks keep `main` as the editable **weekly source of truth** and now add `main_monthly` as a calculated monthly view. The monthly worksheet reuses the same Activity Data columns, Plan/Actual row pairs, WBS outline grouping, colors, and Row Type / P/A filters. Its timescale contains one column per reporting month, dated with the last weekly cutoff available in that month.
+
+Monthly progress is formula-driven from `main`: normal Plan/Actual rows sum the weekly increments belonging to the month, while cumulative S-Curve rows take the last weekly cumulative value in the month. Editing weekly Actual progress in `main` therefore updates `main_monthly` when Excel recalculates. `main_monthly` is presentation-only and should not be used as a second progress-entry source.
+
 ## Excel Dashboard
 
 Generated workbooks now include a separate **Dashboard** worksheet as the first tab.

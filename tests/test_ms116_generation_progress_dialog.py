@@ -35,6 +35,7 @@ def test_generation_dialog_lists_core_generation_steps() -> None:
         "Build progress sheets + Dashboard",
         "Generate plan distribution",
         "Build OKD sheets",
+        "Build monthly main view",
         "Finalize workbook",
     ):
         assert step in source

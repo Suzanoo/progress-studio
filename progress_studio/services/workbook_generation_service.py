@@ -15,6 +15,7 @@ from progress_studio.infrastructure.excel.import_workbook_writer import ImportWo
 from progress_studio.services.amount_service import AmountService
 from progress_studio.services.distribution_service import DistributionService
 from progress_studio.services.okd_service import OkdService
+from progress_studio.services.monthly_main_service import MonthlyMainService
 from progress_studio.services.progress_service import ProgressService
 from progress_studio.services.schedule_workbook_service import ScheduleWorkbookService
 from progress_studio.services.timescale_service import TimescaleService
@@ -40,6 +41,7 @@ class WorkbookGenerationService:
         self.progress = ProgressService()
         self.distribution = DistributionService()
         self.okd = OkdService()
+        self.monthly_main = MonthlyMainService()
 
     @staticmethod
     def _write_amount_mapping(workbook_file: Path, amounts: dict[str, float]) -> None:
@@ -97,6 +99,7 @@ class WorkbookGenerationService:
             amount_mapped = temp_dir / "04_amount.xlsx"
             progress = temp_dir / "05_progress.xlsx"
             distributed = temp_dir / "06_distributed.xlsx"
+            monthly = temp_dir / "07_monthly.xlsx"
 
             report("main", "Building main schedule...")
             self.writer.write(imported, Path("working-tree"), source.project_name, rows)
@@ -129,9 +132,13 @@ class WorkbookGenerationService:
             self.okd.build(distributed, distributed)
             report("okd", "OKD sheets built.", True)
 
+            report("monthly", "Building monthly main view...")
+            self.monthly_main.build(distributed, monthly)
+            report("monthly", "Monthly main view built.", True)
+
             report("finalize", "Writing final workbook...")
             output_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(distributed, output_file)
+            shutil.copy2(monthly, output_file)
 
         return WorkbookGenerationResult(
             output_file=output_file,

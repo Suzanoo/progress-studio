@@ -26,6 +26,7 @@ STEP_LABELS = {
     "build-progress-workbook": "Build progress workbook",
     "generate-plan-distribution": "Generate plan distribution",
     "build-okd-sheets": "Build OKD sheets",
+    "build-monthly-main-view": "Build monthly main view",
 }
 DAYS = [(str(index), name) for index, name in enumerate(
     ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"), 1

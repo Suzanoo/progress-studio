@@ -22,6 +22,7 @@ from progress_studio.infrastructure.excel.mapping_reader import validate_progres
 from progress_studio.infrastructure.excel.calculation_policy import request_full_excel_recalculation
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
@@ -123,7 +124,7 @@ class MappedWorkbookExporter:
                 amount_rows = 0
 
             if progress_callback is not None and not can_generate:
-                for step, message in (("read", "Source workbook loaded."), ("main", "Main schedule prepared."), ("timescale", "Existing timescale preserved."), ("mapping", "Mapped amounts prepared."), ("progress", "Existing progress sheets preserved."), ("distribution", "Existing distribution preserved."), ("okd", "Existing OKD sheets preserved.")):
+                for step, message in (("read", "Source workbook loaded."), ("main", "Main schedule prepared."), ("timescale", "Existing timescale preserved."), ("mapping", "Mapped amounts prepared."), ("progress", "Existing progress sheets preserved."), ("distribution", "Existing distribution preserved."), ("okd", "Existing OKD sheets preserved."), ("monthly", "Monthly main view prepared.")):
                     progress_callback(step, message, True)
             workbook = load_workbook(temp_file)
             try:
@@ -142,6 +143,7 @@ class MappedWorkbookExporter:
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
                 apply_activity_data_wbs_hierarchy(workbook['main'])
+                build_monthly_main_view(workbook, require_timescale=False)
                 build_dashboard(workbook, project_name=output_file.stem)
                 request_full_excel_recalculation(workbook)
                 workbook.save(temp_file)

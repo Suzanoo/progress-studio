@@ -28,6 +28,7 @@ Self-contained `.progressstudio` project or rebuilt Excel workbook
 ## Sources of truth
 
 - The generated `main` worksheet is the workbook source of truth for Activity Amount.
+- `main` is also the editable weekly timescale source; `main_monthly` is a formula-derived monthly presentation view and never owns progress inputs.
 - `MappingStore` is the runtime source of truth for Activities, BOQ items, selections, and allocations.
 - Treeview rows are presentation only. Business logic must never read values back from the GUI.
 - `.progressstudio` v8 stores mapping/tree state plus verified embedded copies of the Progress and BOQ source workbooks. This makes a saved project self-contained for future workbook rebuilds.

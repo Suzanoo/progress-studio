@@ -6,6 +6,7 @@ from progress_studio.pipeline.amount_step import AmountStep
 from progress_studio.pipeline.progress_step import ProgressStep
 from progress_studio.pipeline.distribution_step import DistributionStep
 from progress_studio.pipeline.okd_step import OkdStep
+from progress_studio.pipeline.monthly_main_step import MonthlyMainStep
 from progress_studio.pipeline.schedule_step import ScheduleStep
 from progress_studio.pipeline.timescale_step import TimescaleStep
 from progress_studio.presentation.cli import CommandLineInterface
@@ -18,6 +19,7 @@ from progress_studio.services.schedule_service import ScheduleService
 from progress_studio.services.schedule_workbook_service import ScheduleWorkbookService
 from progress_studio.services.timescale_service import TimescaleService
 from progress_studio.services.okd_service import OkdService
+from progress_studio.services.monthly_main_service import MonthlyMainService
 
 from .application import ProgressStudioApplication
 from .pipeline import Pipeline
@@ -34,5 +36,6 @@ def build_application() -> ProgressStudioApplication:
         ProgressStep(ProgressService()),
         DistributionStep(DistributionService(), DistributionPrompt()),
         OkdStep(OkdService()),
+        MonthlyMainStep(MonthlyMainService()),
     ])
     return ProgressStudioApplication(pipeline, CommandLineInterface(SETTINGS), SETTINGS)
