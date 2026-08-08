@@ -25,6 +25,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import build_dashbo
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
 from progress_studio.infrastructure.excel.okd_workbook import OKDExportError, build_progress_views_from_source
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
+from progress_studio.infrastructure.excel.edited_workbook_migrator import migrate_edited_main_into_workbook
 from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
 
@@ -76,6 +77,7 @@ class MappedWorkbookExporter:
         working_tree_nodes: list[WorkingTreeNode] | None = None,
         overwrite: bool = False,
         progress_callback: Callable[[str, str, bool], None] | None = None,
+        edited_workbook: Path | None = None,
     ) -> ExportResult:
         progress_file = Path(progress_file).resolve()
         output_file = Path(output_file).resolve()
@@ -87,6 +89,8 @@ class MappedWorkbookExporter:
             raise FileExistsError(f'Export file already exists: {output_file}')
         if output_file.suffix.lower() != '.xlsx':
             raise ValueError('Export filename must use the .xlsx extension.')
+        if edited_workbook is not None and output_file == Path(edited_workbook).expanduser().resolve():
+            raise ValueError('Rebuild output must be different from the edited input workbook.')
 
         source_workbook = load_workbook(progress_file, read_only=False, data_only=False)
         try:
@@ -128,6 +132,7 @@ class MappedWorkbookExporter:
                 for step, message in (("read", "Source workbook loaded."), ("main", "Main schedule prepared."), ("timescale", "Existing timescale preserved."), ("mapping", "Mapped amounts prepared."), ("progress", "Existing progress sheets preserved."), ("distribution", "Existing distribution preserved."), ("okd", "Existing OKD sheets preserved."), ("monthly", "Monthly main view prepared.")):
                     progress_callback(step, message, True)
             workbook = load_workbook(temp_file)
+            migration = None
             try:
                 validate_progress_workbook_contract(workbook)
                 if not can_generate:
@@ -142,6 +147,16 @@ class MappedWorkbookExporter:
                 self._write_amount_mapping(workbook, totals)
                 self._write_extension_sheet(workbook, activities, totals, supplemental_wbs or [])
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
+                if edited_workbook is not None:
+                    if progress_callback is not None:
+                        progress_callback("migrate", "Reading user edits from existing workbook...", False)
+                    migration = migrate_edited_main_into_workbook(workbook, edited_workbook)
+                    if progress_callback is not None:
+                        progress_callback(
+                            "migrate",
+                            f"Migrated {migration.matched_activity_count}/{migration.source_activity_count} activities.",
+                            True,
+                        )
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
                 apply_activity_data_wbs_hierarchy(workbook['main'])
                 # Rebuild project progress and the value-only activity snapshot from
@@ -164,7 +179,7 @@ class MappedWorkbookExporter:
                 workbook.close()
             validate_xlsx_tables(temp_file)
             _atomic_replace(temp_file, output_file)
-            return ExportResult(output_file, validation, amount_rows, mapping_rows)
+            return ExportResult(output_file, validation, amount_rows, mapping_rows, migration)
         except Exception:
             temp_file.unlink(missing_ok=True)
             raise

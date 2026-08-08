@@ -261,7 +261,9 @@ class ProgressStudioDesktopApp(tk.Tk):
         ttk.Label(panel, text="Export", style="Title.TLabel").pack(anchor="w")
         ttk.Label(panel, text="Rebuild the latest workbook from the saved Progress Studio project state.", style="Muted.TLabel").pack(anchor="w", pady=(8, 18))
         ttk.Button(panel, text="Rebuild Latest Workbook", style="Accent.TButton", command=self._defer_mapping("rebuild_workbook")).pack(anchor="w")
-        ttk.Label(panel, text="Projects saved with MS-R1 embed their Progress and BOQ sources, so rebuilds can work from the .progressstudio file alone.", style="Muted.TLabel", wraplength=760).pack(anchor="w", pady=(10, 0))
+        ttk.Button(panel, text="Rebuild from Edited Workbook...", command=self._defer_mapping("rebuild_from_edited_workbook")).pack(anchor="w", pady=(10, 0))
+        ttk.Label(panel, text="Use Rebuild from Edited Workbook to preserve Amount plus weekly Plan/Actual edits made in an exported main sheet. The .progressstudio mapping/tree remains unchanged.", style="Muted.TLabel", wraplength=760).pack(anchor="w", pady=(10, 0))
+        ttk.Label(panel, text="Projects saved with MS-R1 embed their Progress and BOQ sources, so rebuilds can work from the .progressstudio file alone.", style="Muted.TLabel", wraplength=760).pack(anchor="w", pady=(6, 0))
 
     def _build_settings_workspace(self) -> None:
         frame = self._new_workspace("settings")

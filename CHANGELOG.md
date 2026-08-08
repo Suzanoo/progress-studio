@@ -304,3 +304,11 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Store generated Activity Plan weekly values as static values in `progress_table`; Actual rows, Amount links, and WBS/Project rollups remain live.
 - Store generated Activity Plan monthly values as static values in `main_monthly`; Actual and summary rows remain formula-driven.
 - Preserve a non-zero Excel calculation engine ID and request normal recalculation on save.
+
+## MS-R2 - Rebuild from Edited Workbook
+- Added an Export workspace action to rebuild the latest workbook while migrating user edits from an existing exported workbook.
+- Migration reads only `main` Activity inputs: Amount plus weekly Plan and Actual values.
+- Matching uses Activity ID first, then a conservative Description + Plan Start + Plan Finish fallback.
+- Weekly values are aligned by reporting date, not by worksheet column position.
+- Rebuild regenerates progress, value-only progress_table snapshot, main_monthly, and Dashboard from the migrated main sheet.
+- The `.progressstudio` project/mapping state is not modified by this workflow.

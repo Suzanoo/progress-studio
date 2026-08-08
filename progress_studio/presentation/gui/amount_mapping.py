@@ -283,6 +283,16 @@ class AmountMappingFrame(ttk.Frame):
         """Rebuild the latest workbook from the currently loaded project state."""
         self._export()
 
+    def rebuild_from_edited_workbook(self) -> None:
+        """Rebuild latest structure while migrating user edits from an exported workbook."""
+        selected = filedialog.askopenfilename(
+            title="Select edited Progress workbook",
+            filetypes=[("Excel workbook", "*.xlsx")],
+        )
+        if not selected:
+            return
+        self._export(edited_workbook=Path(selected))
+
     def _bind_shortcuts(self) -> None:
         top = self.winfo_toplevel()
         for sequence in ("<Control-o>", "<Command-o>"):
@@ -1270,7 +1280,7 @@ class AmountMappingFrame(ttk.Frame):
         finally:
             self._busy(False)
 
-    def _export(self) -> None:
+    def _export(self, edited_workbook: Path | None = None) -> None:
         if not self.progress_file:
             messagebox.showwarning("Amount Mapping", "Load a Progress workbook first.")
             return
@@ -1324,6 +1334,7 @@ class AmountMappingFrame(ttk.Frame):
                     self.store,
                     overwrite=True,
                     progress_callback=report,
+                    edited_workbook=edited_workbook,
                 )
                 events.put(("done", result))
             except Exception as exc:  # surfaced on the Tk thread below
@@ -1353,11 +1364,23 @@ class AmountMappingFrame(ttk.Frame):
                         dialog.close()
                         self._busy(False)
                         self._notify("Workbook exported")
+                        migration_text = ""
+                        if result.migration is not None:
+                            mig = result.migration
+                            migration_text = (
+                                f"\n\nEdited workbook migration:\n"
+                                f"Matched activities: {mig.matched_activity_count}/{mig.source_activity_count} "
+                                f"(ID {mig.matched_by_activity_id}, fallback {mig.matched_by_signature})\n"
+                                f"Amount cells: {mig.amount_cells_migrated}\n"
+                                f"Plan weekly cells: {mig.plan_cells_migrated}\n"
+                                f"Actual weekly cells: {mig.actual_cells_migrated}\n"
+                                f"Unmatched: {len(mig.unmatched_activity_ids)} | Ambiguous: {len(mig.ambiguous_activity_ids)}"
+                            )
                         messagebox.showinfo(
                             "Export complete",
                             f"Mapped workbook created:\n{result.output_file}\n\n"
                             f"Amount rows updated: {result.amount_rows_updated}\n"
-                            f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}",
+                            f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}{migration_text}",
                         )
                         finished = True
                     elif event == "error":

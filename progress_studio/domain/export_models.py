@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from progress_studio.domain.rebuild_models import EditedWorkbookMigrationResult
+
 
 @dataclass(frozen=True, slots=True)
 class ExportValidation:
@@ -35,3 +37,4 @@ class ExportResult:
     validation: ExportValidation
     amount_rows_updated: int
     mapping_rows_written: int
+    migration: EditedWorkbookMigrationResult | None = None

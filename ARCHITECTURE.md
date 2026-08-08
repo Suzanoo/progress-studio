@@ -96,3 +96,6 @@ Activity ID and WBS are optional. Missing Activity IDs are generated determinist
 as `ACT-000001`, `ACT-000002`, and so on. Missing hierarchy is represented as a flat
 activity structure. Existing Microsoft Project / P6-exported XML remains supported
 through the same normalized reader.
+
+### Edited-workbook rebuild boundary (MS-R2)
+`.progressstudio` remains the structure/mapping source of truth. An edited exported workbook may be supplied as a secondary, read-only source of user-owned `main` inputs (Activity Amount, weekly Plan, weekly Actual). The migration is applied to the freshly rebuilt `main`, after which all derived workbook views are regenerated. No legacy formulas, formatting, WBS structure, or project-session state are imported.

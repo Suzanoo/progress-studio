@@ -48,6 +48,7 @@ class WorkbookExportService:
         *,
         overwrite: bool = False,
         progress_callback: Callable[[str, str, bool], None] | None = None,
+        edited_workbook: Path | None = None,
     ) -> ExportResult:
         validation = self.validate(store)
         return self.exporter.export(
@@ -61,4 +62,5 @@ class WorkbookExportService:
             working_tree_nodes=list(store.working_tree_nodes()),
             overwrite=overwrite,
             progress_callback=progress_callback,
+            edited_workbook=edited_workbook,
         )
