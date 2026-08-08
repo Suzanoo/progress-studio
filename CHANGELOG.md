@@ -1,3 +1,12 @@
+## MS-P1.19 — Snapshot Progress Table
+
+- Changed `progress_table` from a large live weekly dependency matrix to a value-only Plan/Actual snapshot.
+- `main` remains the editable weekly master for Amount, Plan, and Actual inputs.
+- Project/WBS rows in the snapshot are recalculated from current Activity values at export/rebuild time.
+- Mapped/Rebuild export now refreshes `progress` and `progress_table` from the final `main` before building the Dashboard.
+- Dashboard Activity Progress continues to respond to Cutoff Date by summing snapshot values, but user edits in `main` enter the activity snapshot only on the next Export/Rebuild.
+- Preserved the historical `checked_links` metadata count for compatibility while validating that snapshot cells contain no formulas.
+
 ## MS-R1 — Self-contained Rebuild Workbook
 
 - Upgraded `.progressstudio` project schema from v7 to v8.

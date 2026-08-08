@@ -172,7 +172,7 @@ Monthly progress is formula-driven from `main`: normal Plan/Actual rows sum the 
 ## Excel Dashboard
 
 Generated workbooks now include a separate **Dashboard** worksheet as the first tab.
-It uses live formulas from `progress` and `progress_table` and contains:
+Project-level KPI/chart data stays live from `progress`; Activity Progress reads the latest value-only snapshot in `progress_table`. The snapshot is regenerated on Export/Rebuild and contains:
 
 - Cutoff Date dropdown
 - Weekly / Monthly dropdown
@@ -180,4 +180,4 @@ It uses live formulas from `progress` and `progress_table` and contains:
 - S-Curve chart with full baseline Plan and cutoff-limited Actual
 - Activity Progress summary
 
-`Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. KPI values always follow the selected cutoff date; changing Weekly/Monthly only changes the chart reporting view. Dashboard colors and chart layout are configurable in `progress_studio/config/dashboard_theme.json`. The existing `main`, `progress`, and `progress_table` worksheets remain unchanged as source sheets.
+`Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. KPI values always follow the selected cutoff date; changing Weekly/Monthly only changes the chart reporting view. Dashboard colors and chart layout are configurable in `progress_studio/config/dashboard_theme.json`. `main` remains the editable Plan/Actual master, while `progress_table` is deliberately a lightweight snapshot refreshed by Export/Rebuild rather than a live weekly mirror.

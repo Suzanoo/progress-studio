@@ -383,7 +383,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
 
     ws["B6"] = "Data source"
     ws.merge_cells("C6:H6")
-    ws["C6"] = "Live formulas from progress / progress_table"
+    ws["C6"] = "Project live from progress • Activity snapshot from progress_table"
     ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
     ws["J6"] = "Chart rule"
     ws.merge_cells("K6:M6")

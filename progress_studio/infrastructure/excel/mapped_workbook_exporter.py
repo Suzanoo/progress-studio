@@ -23,6 +23,7 @@ from progress_studio.infrastructure.excel.calculation_policy import configure_in
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
+from progress_studio.infrastructure.excel.okd_workbook import OKDExportError, build_progress_views_from_source
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
@@ -143,6 +144,16 @@ class MappedWorkbookExporter:
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)
                 self._write_summary_sheet(workbook, validation, progress_file.name, output_file.name)
                 apply_activity_data_wbs_hierarchy(workbook['main'])
+                # Rebuild project progress and the value-only activity snapshot from
+                # the final mapped main sheet. This is the refresh boundary for
+                # progress_table: user edits remain in main until the next rebuild.
+                # Minimal legacy workbooks used by the compatibility path may not
+                # contain a weekly timescale; leave their existing views untouched.
+                try:
+                    build_progress_views_from_source(workbook, workbook['main'])
+                except OKDExportError as exc:
+                    if "Weekly timescale not found" not in str(exc):
+                        raise
                 build_monthly_main_view(workbook, require_timescale=False)
                 build_dashboard(workbook, project_name=output_file.stem)
                 configure_incremental_excel_recalculation(workbook)
