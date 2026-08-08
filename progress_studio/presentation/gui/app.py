@@ -15,6 +15,7 @@ from progress_studio.app.pipeline import PipelineEvent
 from progress_studio.config import SETTINGS
 from progress_studio.infrastructure.layout_preferences import LayoutPreferences, LayoutPreferencesRepository
 from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
+from progress_studio.presentation.gui.payment import PaymentFrame
 from progress_studio.presentation.gui.strings import tr
 from progress_studio.presentation.gui.theme import FONT_MONO, PALETTE, configure_styles
 
@@ -54,6 +55,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         ("import", "⇩", "Import"),
         ("mapping", "▦", "Mapping"),
         ("ai", "✦", "AI Helper"),
+        ("payment", "$", "Payment"),
         ("export", "⇧", "Export"),
         ("settings", "⚙", "Settings"),
     )
@@ -127,6 +129,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._build_import_workspace()
         self._build_mapping_workspace()
         self._build_ai_workspace()
+        self._build_payment_workspace()
         self._build_export_workspace()
         self._build_settings_workspace()
 
@@ -162,6 +165,7 @@ class ProgressStudioDesktopApp(tk.Tk):
 
         tools_menu = tk.Menu(menu, tearoff=False)
         tools_menu.add_command(label="Import Workspace", command=lambda: self._show_workspace("import"))
+        tools_menu.add_command(label="Payment Workspace", command=lambda: self._show_workspace("payment"))
         tools_menu.add_command(label="Export Workspace", command=lambda: self._show_workspace("export"))
         menu.add_cascade(label="Tools", menu=tools_menu)
 
@@ -253,6 +257,11 @@ class ProgressStudioDesktopApp(tk.Tk):
     def _build_ai_workspace(self) -> None:
         frame = self._new_workspace("ai")
         self._placeholder(frame, "AI Helper", "Semantic suggestions will appear here after the mapping workspace is stable.")
+
+    def _build_payment_workspace(self) -> None:
+        frame = self._new_workspace("payment")
+        self.payment_workspace = PaymentFrame(frame)
+        self.payment_workspace.pack(fill="both", expand=True)
 
     def _build_export_workspace(self) -> None:
         frame = self._new_workspace("export")

@@ -312,3 +312,10 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Weekly values are aligned by reporting date, not by worksheet column position.
 - Rebuild regenerates progress, value-only progress_table snapshot, main_monthly, and Dashboard from the migrated main sheet.
 - The `.progressstudio` project/mapping state is not modified by this workflow.
+
+## MS-PAY1 - Payment Workspace + Main Snapshot
+- Added a dedicated Payment workspace in the desktop sidebar and Tools menu.
+- Added one-workbook upload/browse flow with fast Progress Studio `main` validation.
+- Added lightweight package-level `main` -> `Payment` snapshot generation.
+- Payment output uses Save As and replaces only an existing `Payment` sheet when present.
+- No payment lines, matrix, KPI, or payment tables are rendered in this milestone.

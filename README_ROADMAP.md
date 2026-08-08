@@ -238,3 +238,12 @@ Tkinter presentation
 - Changed workbooks are never reconciled or merged automatically.
 - Export reads from domain records and allocation records, not Treeview rows.
 - Large tables must use pagination and update only affected rows.
+
+### Payment milestones
+- [x] MS-PAY1 - Payment workspace, workbook upload/validation, lightweight `main` -> `Payment` snapshot.
+- [ ] MS-PAY2 - Fake payment model (15 periods).
+- [ ] MS-PAY3 - Payment position engine.
+- [ ] MS-PAY4 - Single payment line renderer.
+- [ ] MS-PAY5 - 15 payment lines with per-payment colors.
+- [ ] MS-PAY6 - Rendering/performance hardening.
+- [ ] MS-PAY7 - Rebuild compatibility.
