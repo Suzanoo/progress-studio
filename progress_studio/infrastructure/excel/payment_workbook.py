@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 import tempfile
+from datetime import date, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
@@ -55,7 +56,12 @@ class PaymentWorkbookSnapshotter:
                 activity_rows = self._count_activity_rows(root, shared_strings)
                 if activity_rows <= 0:
                     raise PaymentWorkbookError("No activity rows were found in the 'main' worksheet.")
-                return PaymentWorkbookValidation(path, self.MAIN_SHEET, activity_rows, max_row, max_column)
+                project_start, project_finish = self._project_dates(root, shared_strings)
+                default_periods = self._default_periods(project_start, project_finish)
+                return PaymentWorkbookValidation(
+                    path, self.MAIN_SHEET, activity_rows, max_row, max_column,
+                    project_start, project_finish, default_periods,
+                )
         except PaymentWorkbookError:
             raise
         except Exception as exc:
@@ -243,11 +249,24 @@ class PaymentWorkbookSnapshotter:
             strings.append("".join(node.text or "" for node in si.iter(f"{{{MAIN_NS}}}t")))
         return strings
 
+    def activity_ids(self, workbook_path: Path) -> list[str]:
+        path = Path(workbook_path)
+        with ZipFile(path, "r") as package:
+            sheet_map = self._sheet_map(package)
+            if self.MAIN_SHEET not in sheet_map:
+                raise PaymentWorkbookError("Worksheet 'main' was not found.")
+            root = ET.fromstring(package.read(sheet_map[self.MAIN_SHEET]))
+            return self._activity_ids(root, self._shared_strings(package))
+
     @classmethod
     def _count_activity_rows(cls, root: ET.Element, shared_strings: list[str]) -> int:
+        return len(cls._activity_ids(root, shared_strings))
+
+    @classmethod
+    def _activity_ids(cls, root: ET.Element, shared_strings: list[str]) -> list[str]:
         sheet_data = root.find(f"{{{MAIN_NS}}}sheetData")
         if sheet_data is None:
-            return 0
+            return []
         activity_col = None
         header_row = None
         for row in sheet_data.findall(f"{{{MAIN_NS}}}row"):
@@ -257,15 +276,18 @@ class PaymentWorkbookSnapshotter:
             for cell in row.findall(f"{{{MAIN_NS}}}c"):
                 value = cls._cell_text(cell, shared_strings).strip().lower()
                 if value in cls.ACTIVITY_ID_HEADERS:
-                    activity_col = re.match(r"[A-Z]+", cell.attrib.get("r", ""))[0]
-                    header_row = row_num
+                    match = re.match(r"[A-Z]+", cell.attrib.get("r", ""))
+                    if match:
+                        activity_col = match[0]
+                        header_row = row_num
                     break
             if activity_col:
                 break
         if not activity_col or header_row is None:
-            return 0
+            return []
 
-        activity_ids: set[str] = set()
+        activity_ids: list[str] = []
+        seen: set[str] = set()
         for row in sheet_data.findall(f"{{{MAIN_NS}}}row"):
             row_num = int(row.attrib.get("r", "0"))
             if row_num <= header_row:
@@ -275,10 +297,84 @@ class PaymentWorkbookSnapshotter:
                 match = re.match(r"[A-Z]+", ref)
                 if match and match[0] == activity_col:
                     text = cls._cell_text(cell, shared_strings).strip()
-                    if text:
-                        activity_ids.add(text)
+                    if text and text not in seen:
+                        seen.add(text)
+                        activity_ids.append(text)
                     break
-        return len(activity_ids)
+        return activity_ids
+
+
+    @classmethod
+    def _project_dates(cls, root: ET.Element, shared_strings: list[str]) -> tuple[date | None, date | None]:
+        sheet_data = root.find(f"{{{MAIN_NS}}}sheetData")
+        if sheet_data is None:
+            return None, None
+
+        header_row = None
+        columns: dict[str, str] = {}
+        for row in sheet_data.findall(f"{{{MAIN_NS}}}row"):
+            row_num = int(row.attrib.get("r", "0"))
+            if row_num > 30:
+                break
+            values: dict[str, str] = {}
+            for cell in row.findall(f"{{{MAIN_NS}}}c"):
+                match = re.match(r"[A-Z]+", cell.attrib.get("r", ""))
+                if not match:
+                    continue
+                values[cls._cell_text(cell, shared_strings).strip().lower()] = match[0]
+            if "row type" in values and "plan start" in values and "plan finish" in values:
+                header_row = row_num
+                columns = values
+                break
+        if header_row is None:
+            return None, None
+
+        start_values: list[date] = []
+        finish_values: list[date] = []
+        for row in sheet_data.findall(f"{{{MAIN_NS}}}row"):
+            row_num = int(row.attrib.get("r", "0"))
+            if row_num <= header_row:
+                continue
+            cells = {
+                re.match(r"[A-Z]+", cell.attrib.get("r", ""))[0]: cell
+                for cell in row.findall(f"{{{MAIN_NS}}}c")
+                if re.match(r"[A-Z]+", cell.attrib.get("r", ""))
+            }
+            row_type_cell = cells.get(columns["row type"])
+            row_type = cls._cell_text(row_type_cell, shared_strings).strip().lower() if row_type_cell is not None else ""
+            if row_type not in {"project summary", "activity"}:
+                continue
+            start = cls._excel_date(cells.get(columns["plan start"]), shared_strings)
+            finish = cls._excel_date(cells.get(columns["plan finish"]), shared_strings)
+            if start:
+                start_values.append(start)
+            if finish:
+                finish_values.append(finish)
+            if row_type == "project summary" and start and finish:
+                return start, finish
+        return (min(start_values) if start_values else None, max(finish_values) if finish_values else None)
+
+    @classmethod
+    def _excel_date(cls, cell: ET.Element | None, shared_strings: list[str]) -> date | None:
+        if cell is None:
+            return None
+        text = cls._cell_text(cell, shared_strings).strip()
+        if not text:
+            return None
+        try:
+            serial = float(text)
+        except ValueError:
+            try:
+                return datetime.fromisoformat(text).date()
+            except ValueError:
+                return None
+        return (datetime(1899, 12, 30) + timedelta(days=serial)).date()
+
+    @staticmethod
+    def _default_periods(start: date | None, finish: date | None) -> int:
+        if start is None or finish is None or finish <= start:
+            return 1
+        return max((finish.year - start.year) * 12 + finish.month - start.month, 1)
 
     @staticmethod
     def _cell_text(cell: ET.Element, shared_strings: list[str]) -> str:
