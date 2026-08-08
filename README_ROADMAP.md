@@ -241,9 +241,12 @@ Tkinter presentation
 
 ### Payment milestones
 - [x] MS-PAY1 - Payment workspace, workbook upload/validation, lightweight `main` -> `Payment` snapshot.
-- [ ] MS-PAY2 - Fake payment model (15 periods).
-- [ ] MS-PAY3 - Payment position engine.
-- [ ] MS-PAY4 - Single payment line renderer.
-- [ ] MS-PAY5 - 15 payment lines with per-payment colors.
-- [ ] MS-PAY6 - Rendering/performance hardening.
-- [ ] MS-PAY7 - Rebuild compatibility.
+- [x] MS-PAY2 - Payment Input workflow: period count, lightweight editable workbook, upload/validation.
+- [x] MS-PAY3 - Sparse XML Payment Input reader; blank cells are not materialized, explicit 0% is preserved.
+- [x] MS-PAY4 - Activity Progress Index from current `main` Plan rows and weekly distributions.
+- [x] MS-PAY5 - Cell-boundary Payment Position Engine; no line rendering yet.
+- [ ] MS-PAY6 - Single payment line renderer using cell borders.
+- [ ] MS-PAY7 - Multi-payment lines with per-payment colors.
+- [ ] MS-PAY8 - Edge cases, validation and audit.
+- [ ] MS-PAY9 - Rebuild / edited-workbook compatibility.
+- [ ] MS-PAY10 - Performance hardening for large projects.

@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from progress_studio.domain.payment_models import PaymentInputResult, PaymentInputValidation
+from progress_studio.infrastructure.excel.payment_input_reader import PaymentInputSparseReader
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError, PaymentWorkbookSnapshotter
 
 
@@ -19,8 +20,13 @@ class PaymentInputWorkbook:
     DATE_ROW = 7
     FIRST_ACTIVITY_ROW = 8
 
-    def __init__(self, snapshotter: PaymentWorkbookSnapshotter | None = None) -> None:
+    def __init__(
+        self,
+        snapshotter: PaymentWorkbookSnapshotter | None = None,
+        reader: PaymentInputSparseReader | None = None,
+    ) -> None:
         self.snapshotter = snapshotter or PaymentWorkbookSnapshotter()
+        self.reader = reader or PaymentInputSparseReader()
 
     def create(self, source: Path, output: Path, periods: int) -> PaymentInputResult:
         source = Path(source)
@@ -92,63 +98,23 @@ class PaymentInputWorkbook:
         )
 
     def validate(self, payment_workbook: Path, progress_workbook: Path | None = None) -> PaymentInputValidation:
-        path = Path(payment_workbook)
-        if not path.exists():
-            raise PaymentWorkbookError(f"Payment workbook was not found: {path}")
-        if path.suffix.lower() not in {".xlsx", ".xlsm"}:
-            raise PaymentWorkbookError("Select a Payment Requirement .xlsx or .xlsm workbook.")
+        data = self.reader.read(Path(payment_workbook))
 
-        wb = load_workbook(path, read_only=True, data_only=False)
-        try:
-            if self.SHEET not in wb.sheetnames:
-                raise PaymentWorkbookError("Worksheet 'Payment Input' was not found.")
-            ws = wb[self.SHEET]
-            if str(ws.cell(self.HEADER_ROW, 1).value or "").strip().lower() != "activity id":
-                raise PaymentWorkbookError("Payment Input header 'Activity ID' was not found.")
-
-            payment_headers: list[str] = []
-            col = 2
-            while True:
-                value = ws.cell(self.HEADER_ROW, col).value
-                if value is None:
-                    break
-                text = str(value).strip().upper()
-                if not text.startswith("P"):
-                    break
-                payment_headers.append(text)
-                col += 1
-            if not payment_headers:
-                raise PaymentWorkbookError("No payment period columns were found.")
-
-            activity_ids: list[str] = []
-            row = self.FIRST_ACTIVITY_ROW
-            while True:
-                value = ws.cell(row, 1).value
-                if value is None:
-                    break
-                text = str(value).strip()
-                if text:
-                    activity_ids.append(text)
-                row += 1
-            if not activity_ids:
-                raise PaymentWorkbookError("No Activity IDs were found in Payment Input.")
-        finally:
-            wb.close()
-
-        matched = len(activity_ids)
+        matched = len(data.activity_ids)
         missing = 0
         if progress_workbook is not None:
             progress_ids = set(self.snapshotter.activity_ids(Path(progress_workbook)))
-            matched = sum(1 for activity_id in activity_ids if activity_id in progress_ids)
-            missing = len(activity_ids) - matched
+            matched = sum(1 for activity_id in data.activity_ids if activity_id in progress_ids)
+            missing = len(data.activity_ids) - matched
 
         return PaymentInputValidation(
-            workbook=path,
-            payment_sheet=self.SHEET,
-            payment_periods=len(payment_headers),
-            activity_rows=len(activity_ids),
+            workbook=data.workbook,
+            payment_sheet=data.sheet,
+            payment_periods=len(data.periods),
+            activity_rows=len(data.activity_ids),
             matched_activities=matched,
             missing_activities=missing,
+            populated_requirements=data.populated_requirements,
         )
 
     @staticmethod

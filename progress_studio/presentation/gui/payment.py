@@ -284,7 +284,12 @@ class PaymentFrame(ttk.Frame):
     def _validate_payment_input(self, payment_file: Path) -> None:
         progress = self._validated_progress
         try:
-            result = self.service.validate_payment_input(payment_file, progress)
+            if progress is None:
+                result = self.service.validate_payment_input(payment_file, None)
+                preparation = None
+            else:
+                preparation = self.service.prepare_payment_input(progress, payment_file)
+                result = preparation.validation
         except PaymentWorkbookError as exc:
             self.payment_status_var.set(f"Not ready — {exc}")
             return
@@ -293,9 +298,15 @@ class PaymentFrame(ttk.Frame):
             self.payment_status_var.set(
                 f"Review — {result.payment_periods} payments • {result.matched_activities:,}/{result.activity_rows:,} Activity IDs matched • {result.missing_activities:,} missing"
             )
+        elif preparation is not None:
+            positions = preparation.positions
+            self.payment_status_var.set(
+                f"Ready for Render — {result.payment_periods} payments • {result.populated_requirements:,} requirements • "
+                f"{positions.resolved_count:,} positions resolved • {len(positions.issues):,} issues"
+            )
         else:
             self.payment_status_var.set(
-                f"Ready for Render — {result.payment_periods} payments • {result.matched_activities:,}/{result.activity_rows:,} Activity IDs matched"
+                f"Ready — {result.payment_periods} payments • {result.populated_requirements:,} requirements"
             )
 
     def _require_progress(self) -> Path | None:

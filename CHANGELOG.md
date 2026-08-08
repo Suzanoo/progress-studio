@@ -313,6 +313,15 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Rebuild regenerates progress, value-only progress_table snapshot, main_monthly, and Dashboard from the migrated main sheet.
 - The `.progressstudio` project/mapping state is not modified by this workflow.
 
+
+## MS-PAY3 to MS-PAY5 - Sparse Requirements + Position Engine
+- Replaced Payment Input validation reads with a package-level sparse XML reader.
+- Blank requirement cells are skipped entirely; explicit `0%` remains a real requirement.
+- Added a one-pass Activity Progress Index from current `main` Plan rows and weekly incremental distributions.
+- Added cell-boundary position resolution: 0% -> left edge of first Plan bucket; 0-100% -> right edge of first bucket whose cumulative Plan reaches the requirement; 100% -> right edge of final Plan bucket.
+- Payment upload now prepares render positions without drawing lines and reports populated requirements, resolved positions and issues.
+- Real NKC2 check: 15 periods / 200 activities / 8 populated requirements resolved 8/8 in about 0.12 s.
+
 ## MS-PAY1 - Payment Workspace + Main Snapshot
 - Added a dedicated Payment workspace in the desktop sidebar and Tools menu.
 - Added one-workbook upload/browse flow with fast Progress Studio `main` validation.
