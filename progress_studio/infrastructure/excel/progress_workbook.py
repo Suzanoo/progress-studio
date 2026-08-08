@@ -18,6 +18,7 @@ except ImportError as exc:
         "openpyxl was not found.\nInstall it with: pip install openpyxl"
     ) from exc
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.export_theme import DEFAULT_TIMESCALE_PALETTE
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 
@@ -1079,9 +1080,7 @@ def main() -> int:
             prepare_progress_and_scurve(wb, ws)
         )
 
-        wb.calculation.calcMode = "auto"
-        wb.calculation.fullCalcOnLoad = True
-        wb.calculation.forceFullCalc = True
+        configure_incremental_excel_recalculation(wb)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_file)
         wb.close()

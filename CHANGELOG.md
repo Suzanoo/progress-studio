@@ -285,3 +285,13 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Embed KPI icons inside the generated XLSX so they remain visible on other computers without extra fonts or internet access.
 - Add dashboard icon settings to `progress_studio/config/dashboard_theme.json` for enable/disable, size, and asset filenames.
 - Add regression coverage that verifies all four icons survive workbook save/reopen.
+
+## MS-P1.18 - Workbook Performance
+
+### Changed
+
+- Use Excel automatic dependency calculation instead of forcing a full workbook recalculation on every open.
+- Keep `fullCalcOnLoad` and `forceFullCalc` disabled for normal generation/export while retaining an explicit full-rebuild escape hatch for repair/debug workflows.
+- Store generated Activity Plan weekly values as static values in `progress_table`; Actual rows, Amount links, and WBS/Project rollups remain live.
+- Store generated Activity Plan monthly values as static values in `main_monthly`; Actual and summary rows remain formula-driven.
+- Preserve a non-zero Excel calculation engine ID and request normal recalculation on save.

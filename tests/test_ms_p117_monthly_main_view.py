@@ -56,7 +56,7 @@ def _workbook():
     return wb
 
 
-def test_monthly_main_is_formula_driven_from_weekly_main() -> None:
+def test_monthly_main_freezes_static_activity_plan_and_keeps_live_summary_rows() -> None:
     wb = _workbook()
     count = build_monthly_main_view(wb)
     ws = wb["main_monthly"]
@@ -66,8 +66,11 @@ def test_monthly_main_is_formula_driven_from_weekly_main() -> None:
     assert ws.cell(1, 1).value == "Activity Data — Monthly View"
     assert ws.cell(4, 18).value == date(2026, 1, 30)
     assert ws.cell(4, 19).value == date(2026, 2, 27)
-    assert ws.cell(9, 18).value == '=IF(COUNT(\'main\'!R9:R9)=0,"",SUM(\'main\'!R9:R9))'
-    assert ws.cell(9, 19).value == '=IF(COUNT(\'main\'!S9:U9)=0,"",SUM(\'main\'!S9:U9))'
+    assert ws.cell(9, 18).value == 0.10
+    assert ws.cell(9, 19).value == 0.90
+    # Project/WBS/Actual rows stay live to weekly edits.
+    assert isinstance(ws.cell(5, 18).value, str) and ws.cell(5, 18).value.startswith('=')
+    assert isinstance(ws.cell(10, 18).value, str) and ws.cell(10, 18).value.startswith('=')
 
 
 def test_monthly_cumulative_scurve_uses_last_reporting_value() -> None:

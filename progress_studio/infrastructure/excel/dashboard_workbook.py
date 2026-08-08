@@ -15,6 +15,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.filters import FilterColumn
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
+
 DASHBOARD_SHEET = "Dashboard"
 DATA_SHEET = "Dashboard_Data"
 PROGRESS_SHEET = "progress"
@@ -659,9 +661,7 @@ def build_dashboard_file(input_file: Path, output_file: Path, *, project_name: s
     workbook = load_workbook(input_file, data_only=False)
     try:
         build_dashboard(workbook, project_name=project_name)
-        workbook.calculation.calcMode = "auto"
-        workbook.calculation.fullCalcOnLoad = True
-        workbook.calculation.forceFullCalc = True
+        configure_incremental_excel_recalculation(workbook)
         workbook.save(output_file)
     finally:
         workbook.close()

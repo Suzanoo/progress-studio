@@ -77,6 +77,12 @@ class TestV202Bugfixes(unittest.TestCase):
         table = wb["progress_table"]
         self.assertTrue(str(table.cell(1, 6).value).startswith("="))
         self.assertEqual(table.cell(1, 6).number_format, "dd/mm/yyyy")
+        # Activity Plan is generated/static, so it is stored as a value; Actual
+        # remains linked to main so user progress edits stay live.
+        self.assertEqual(table.cell(2, 6).value, 10.0)
+        self.assertEqual(table.cell(2, 5).value, 10.0)
+        self.assertTrue(str(table.cell(3, 6).value).startswith("="))
+        self.assertTrue(str(table.cell(3, 5).value).startswith("="))
 
 
 if __name__ == "__main__":

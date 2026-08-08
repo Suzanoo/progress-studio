@@ -19,7 +19,7 @@ from progress_studio.domain.working_tree import WorkingNodeKind, WorkingNodeOrig
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
-from progress_studio.infrastructure.excel.calculation_policy import request_full_excel_recalculation
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
@@ -145,7 +145,7 @@ class MappedWorkbookExporter:
                 apply_activity_data_wbs_hierarchy(workbook['main'])
                 build_monthly_main_view(workbook, require_timescale=False)
                 build_dashboard(workbook, project_name=output_file.stem)
-                request_full_excel_recalculation(workbook)
+                configure_incremental_excel_recalculation(workbook)
                 workbook.save(temp_file)
                 if progress_callback is not None:
                     progress_callback("finalize", "Workbook finalized.", True)

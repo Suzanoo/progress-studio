@@ -6,6 +6,7 @@ from progress_studio.config import WORKBOOK_SCHEMA
 from progress_studio.domain.progress import ProgressBuildResult
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.okd_workbook import build_progress_views_from_source
 from progress_studio.infrastructure.excel.progress_workbook import (
     find_sheet,
@@ -56,9 +57,7 @@ class ProgressService:
                     + ", ".join(missing)
                 )
 
-            wb.calculation.calcMode = "auto"
-            wb.calculation.fullCalcOnLoad = True
-            wb.calculation.forceFullCalc = True
+            configure_incremental_excel_recalculation(wb)
             output_file.parent.mkdir(parents=True, exist_ok=True)
             wb.save(output_file)
         finally:

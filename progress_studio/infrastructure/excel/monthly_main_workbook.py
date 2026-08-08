@@ -7,6 +7,7 @@ from datetime import date, datetime
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.progress_workbook import (
     add_progress_conditional_formatting,
     clear_progress_conditional_formatting,
@@ -193,9 +194,19 @@ def build_monthly_main_view(
             if row_type == "s-curve" and pa in {"AP", "AA"}:
                 # Cumulative S-curve rows use the last reporting value in month.
                 cell.value = f"={source_ref}!{last_week_col}{row}"
+            elif row_type == "activity" and pa == "P":
+                # Activity Plan distributions are generated numeric inputs in the
+                # weekly main sheet. Freeze their monthly sum as a value so the
+                # monthly view does not duplicate thousands of static formulas.
+                weekly_values = [source.cell(row, col).value for col in weekly_cols]
+                if all(value in (None, "") or isinstance(value, (int, float)) for value in weekly_values):
+                    populated = [float(value) for value in weekly_values if value not in (None, "")]
+                    cell.value = sum(populated) if populated else ""
+                else:
+                    cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
             else:
-                # Weekly values are incremental percentages; summing the weeks
-                # produces the monthly increment and remains live to weekly edits.
+                # Actual and summary rows remain formula-driven so edits to weekly
+                # progress/Amount continue to flow through immediately.
                 cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
 
     _write_year_headers(monthly, first_timescale_col, buckets)
@@ -253,7 +264,5 @@ def build_monthly_main_view(
     monthly.sheet_properties.outlinePr.applyStyles = True
     monthly.sheet_view.showGridLines = source.sheet_view.showGridLines
 
-    workbook.calculation.calcMode = "auto"
-    workbook.calculation.fullCalcOnLoad = True
-    workbook.calculation.forceFullCalc = True
+    configure_incremental_excel_recalculation(workbook)
     return len(buckets)

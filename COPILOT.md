@@ -96,7 +96,8 @@ Confirm the full suite passes and the working tree is clean.
 - `main` is the source of truth for Activity Amount.
 - Activity weekly percentage cells are user-entered distribution values; do not rewrite them during mapping export.
 - WBS and Project Summary percentages are Excel formulas and must be recalculated after Amount changes.
-- Every mapped export must use Automatic calculation, Full Calculation on Load, Force Full Calculation, and `calcId = 0`.
+- Every mapped export must use Automatic dependency calculation with `fullCalcOnLoad = false`, `forceFullCalc = false`, `calcOnSave = true`, and a non-zero calculation engine ID. Full workbook recalculation is reserved for explicit repair/debug workflows.
+- Keep generated Activity Plan timescale values static in derived sheets when safe; keep Actual and Amount-dependent rollups live.
 - Do not add hover tooltips, mouse-motion rendering, animation, or continuous Treeview repainting.
 - The embedded S-Curve preview is outside the current V3 scope.
 

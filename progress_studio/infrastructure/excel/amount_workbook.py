@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.styles import HEADER_FONT, normalize_argb
 from progress_studio.domain.amount import (
     AmountApplicationResult,
@@ -127,9 +128,7 @@ def rebuild_amount_mapping(workbook_path: Path, *, main_sheet: str, mapping_shee
     ws.auto_filter.ref = f"A1:E{ws.max_row}"
     for col, width in {"A": 18, "B": 22, "C": 60, "D": 18, "E": 16}.items():
         ws.column_dimensions[col].width = width
-    wb.calculation.calcMode = "auto"
-    wb.calculation.fullCalcOnLoad = True
-    wb.calculation.forceFullCalc = True
+    configure_incremental_excel_recalculation(wb)
     wb.save(workbook_path)
     wb.close()
     return AmountMappingResult(len(activities), total, decision.source_label)
@@ -230,9 +229,7 @@ def apply_amount_mapping(input_file: Path, output_file: Path, *, main_sheet: str
                 map_ws.cell(r, status_col).value = "Mapped"
         elif status_col:
             map_ws.cell(r, status_col).value = "Ready" if to_amount(map_ws.cell(r, map_headers["amount"]).value) is not None else "Waiting"
-    wb.calculation.fullCalcOnLoad = True
-    wb.calculation.forceFullCalc = True
-    wb.calculation.calcMode = "auto"
+    configure_incremental_excel_recalculation(wb)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_file)
     wb.close()

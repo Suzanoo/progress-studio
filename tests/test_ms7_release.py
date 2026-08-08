@@ -118,7 +118,7 @@ class Ms7ReleaseTests(unittest.TestCase):
                     for cell in row
                     if isinstance(cell.value, str) and cell.value.startswith("=")
                 )
-                self.assertGreaterEqual(formulas, 40000)
+                self.assertLess(formulas, 30000)
             finally:
                 wb.close()
 

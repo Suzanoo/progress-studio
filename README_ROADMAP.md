@@ -152,15 +152,15 @@ Branch: `fix/ms6.2-main-amount-contract`
 
 ### MS-6.3 — Excel Recalculation Contract
 
-**Goal:** Ensure all formulas that depend on mapped Activity Amount are recalculated by Microsoft Excel.
+**Goal:** Ensure formulas that depend on mapped Activity Amount recalculate correctly without forcing an expensive full-workbook rebuild on every open.
 
-Completed:
+Current contract:
 
-- Set Automatic calculation, Full Calculation on Load, and Force Full Calculation.
-- Reset the Excel calculation engine ID so stale formula caches are not trusted.
-- Verify exported packages do not contain a stale calculation chain.
+- Use Automatic dependency calculation with Full Calculation on Load and Force Full Calculation disabled.
+- Keep a non-zero Excel calculation engine ID and request calculation on save.
 - Keep Activity weekly distribution percentages unchanged.
-- Recalculate amount-weighted WBS and Project Summary percentages when Excel opens the export.
+- Recalculate amount-weighted WBS and Project Summary percentages through normal Excel dependencies.
+- Reserve full-workbook recalculation for explicit repair/debug workflows.
 - Remove the embedded S-Curve preview from the current application scope.
 - Keep the mapping UI free from hover tooltips, animation, and continuous repaint behavior.
 

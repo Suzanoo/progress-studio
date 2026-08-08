@@ -15,6 +15,7 @@ except ImportError as exc:
         "openpyxl is not installed. Run: pip install openpyxl"
     ) from exc
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.styles import (
     ACTUAL_FILL,
     ACTUAL_FONT,
@@ -777,9 +778,21 @@ def verify_progress_table_links(
                 f"Invalid P/A value at {OKD_TABLE_SHEET}!D{row}"
             )
 
+        pa_value = ws.cell(row, 4).value
+        kind_col = 6 + len(weeks)
+        kind = str(ws.cell(row, kind_col).value or "activity").strip().lower()
+        static_activity_plan = pa_value == "P" and kind == "activity"
+
         for col in range(3, 6 + len(weeks)):
             value = ws.cell(row, col).value
-            if col != 4 and not (
+            if col == 4:
+                checked += 1
+                continue
+            # Activity Plan distributions are generated numeric values in main.
+            # Store those as values to avoid duplicating thousands of formulas.
+            # Amount remains live because users may adjust Amount after export.
+            static_allowed = static_activity_plan and col >= 5
+            if not static_allowed and not (
                 isinstance(value, str) and value.startswith("=")
             ):
                 raise OKDExportError(
@@ -854,23 +867,47 @@ def build_progress_table_sheet(
 
             first_week_letter = get_column_letter(6)
             last_week_letter = get_column_letter(5 + len(weeks))
-            ws.cell(
-                output_row,
-                5,
-                f'=IF(COUNT({first_week_letter}{output_row}:'
-                f'{last_week_letter}{output_row})=0,"",'
-                f'ROUND(SUM({first_week_letter}{output_row}:'
-                f'{last_week_letter}{output_row}),6))',
-            )
+            kind = str(item.get("kind") or "activity").strip().lower()
+            static_activity_plan = pa_value == "P" and kind == "activity"
 
-            for week_offset, (source_col, _) in enumerate(weeks, start=6):
-                source_col_letter = get_column_letter(source_col)
+            static_plan_values: list[float | None] = []
+            static_plan_supported = static_activity_plan
+            if static_activity_plan:
+                for source_col, _ in weeks:
+                    source_value = source_ws.cell(source_row, source_col).value
+                    if source_value in (None, ""):
+                        static_plan_values.append(None)
+                    elif isinstance(source_value, (int, float)):
+                        static_plan_values.append(round(float(source_value) * 100.0, 6))
+                    else:
+                        # Unexpected formula/text on an Activity Plan row: keep
+                        # the old live-link behavior rather than freezing it.
+                        static_plan_supported = False
+                        break
+
+            if static_plan_supported:
+                populated = [value for value in static_plan_values if value is not None]
+                ws.cell(output_row, 5, round(sum(populated), 6) if populated else "")
+                for week_offset, value in enumerate(static_plan_values, start=6):
+                    ws.cell(output_row, week_offset, value if value is not None else "")
+            else:
                 ws.cell(
                     output_row,
-                    week_offset,
-                    f'=IF({source_ref}!{source_col_letter}{source_row}="","",'
-                    f'ROUND({source_ref}!{source_col_letter}{source_row}*100,6))',
+                    5,
+                    f'=IF(COUNT({first_week_letter}{output_row}:'
+                    f'{last_week_letter}{output_row})=0,"",'
+                    f'ROUND(SUM({first_week_letter}{output_row}:'
+                    f'{last_week_letter}{output_row}),6))',
                 )
+
+                for week_offset, (source_col, _) in enumerate(weeks, start=6):
+                    source_col_letter = get_column_letter(source_col)
+                    ws.cell(
+                        output_row,
+                        week_offset,
+                        f'=IF({source_ref}!{source_col_letter}{source_row}="","",'
+                        f'ROUND({source_ref}!{source_col_letter}{source_row}*100,6))',
+                    )
 
             ws.cell(output_row, 3).number_format = '#,##0.00'
             ws.cell(output_row, 5).number_format = "0.00"
@@ -1038,9 +1075,7 @@ def build_okd_sheets(
     )
     update_info_sheet(wb, len(activities), len(weeks))
 
-    wb.calculation.calcMode = "auto"
-    wb.calculation.fullCalcOnLoad = True
-    wb.calculation.forceFullCalc = True
+    configure_incremental_excel_recalculation(wb)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_file)
