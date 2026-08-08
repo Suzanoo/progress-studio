@@ -66,12 +66,16 @@ def _payment_input(progress: Path, output: Path) -> Path:
     PaymentInputWorkbook().create(progress, output, 3)
     wb = load_workbook(output)
     ws = wb["Payment Input"]
+    # Clear generated suggestions so this helper exercises an explicitly sparse edit.
+    for row in range(8, 10):
+        for col in range(3, 6):
+            ws.cell(row, col).value = None
     # P01: explicit 0% must be retained; P02 has a mid-progress target; P03 = 100%.
-    ws["B8"] = 0.0
-    ws["C8"] = 0.60
-    ws["D8"] = 1.0
+    ws["C8"] = 0.0
+    ws["D8"] = 0.60
+    ws["E8"] = 1.0
     # Only one period populated for A1010; all other cells remain physically blank.
-    ws["C9"] = 0.25
+    ws["D9"] = 0.25
     wb.save(output)
     wb.close()
     return output

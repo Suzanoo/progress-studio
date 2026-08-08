@@ -70,16 +70,14 @@ class PaymentInputSparseReader:
 
         periods: list[tuple[int, str]] = []
         seen_periods: set[str] = set()
-        col = 2
-        while col in header_cells:
-            text = self._cell_text(header_cells[col], shared_strings).strip().upper()
+        for col, cell in sorted(header_cells.items()):
+            text = self._cell_text(cell, shared_strings).strip().upper()
             if not re.fullmatch(r"P\d+", text):
-                break
+                continue
             if text in seen_periods:
                 raise PaymentWorkbookError(f"Duplicate payment period header: {text}")
             seen_periods.add(text)
             periods.append((col, text))
-            col += 1
         if not periods:
             raise PaymentWorkbookError("No payment period columns were found.")
 

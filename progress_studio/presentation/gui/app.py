@@ -52,10 +52,10 @@ class ProgressStudioDesktopApp(tk.Tk):
 
     WORKSPACES = (
         ("home", "⌂", "Home"),
-        ("import", "⇩", "Import"),
+        ("import", "⇩", "Create Progress Bar"),
         ("mapping", "▦", "Mapping"),
-        ("ai", "✦", "AI Helper"),
         ("payment", "$", "Payment"),
+        ("ai", "✦", "AI Helper"),
         ("export", "⇧", "Export"),
         ("settings", "⚙", "Settings"),
     )

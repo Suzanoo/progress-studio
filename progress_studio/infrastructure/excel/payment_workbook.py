@@ -68,86 +68,44 @@ class PaymentWorkbookSnapshotter:
             raise PaymentWorkbookError(f"Workbook cannot be opened: {exc}") from exc
 
     def create_snapshot(self, source: Path, output: Path) -> PaymentSnapshotResult:
+        """Create a valid Excel snapshot by copying ``main`` inside the workbook.
+
+        The previous package-level worksheet XML clone could leave two worksheets
+        pointing at the same table/drawing relationship parts. Excel repairs that
+        situation on open.  For Payment we favour correctness: copy the workbook,
+        let openpyxl clone the worksheet objects, and save atomically.
+        """
+        from openpyxl import load_workbook
+
         validation = self.validate(source)
         source_path = Path(source)
         output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-
+        keep_vba = source_path.suffix.lower() == ".xlsm"
+        with tempfile.NamedTemporaryFile(prefix="payment_", suffix=output_path.suffix, dir=output_path.parent, delete=False) as handle:
+            temp_path = Path(handle.name)
+        replaced = False
         try:
-            with ZipFile(source_path, "r") as src:
-                workbook_root = ET.fromstring(src.read("xl/workbook.xml"))
-                rels_root = ET.fromstring(src.read("xl/_rels/workbook.xml.rels"))
-                content_root = ET.fromstring(src.read("[Content_Types].xml"))
-
-                sheets = workbook_root.find(f"{{{MAIN_NS}}}sheets")
-                if sheets is None:
-                    raise PaymentWorkbookError("Workbook sheet metadata is missing.")
-                rel_map = {
-                    rel.attrib["Id"]: rel.attrib["Target"]
-                    for rel in rels_root.findall(f"{{{PKG_REL_NS}}}Relationship")
-                }
-
-                main_node = next((s for s in sheets if s.attrib.get("name") == self.MAIN_SHEET), None)
-                if main_node is None:
-                    raise PaymentWorkbookError("Worksheet 'main' was not found.")
-                main_rid = main_node.attrib[f"{{{DOC_REL_NS}}}id"]
-                main_part = self._normalise_sheet_target(rel_map[main_rid])
-                main_xml = src.read(main_part)
-
-                payment_node = next((s for s in sheets if s.attrib.get("name") == self.PAYMENT_SHEET), None)
-                replaced = payment_node is not None
-                if payment_node is not None:
-                    payment_rid = payment_node.attrib[f"{{{DOC_REL_NS}}}id"]
-                    payment_part = self._normalise_sheet_target(rel_map[payment_rid])
-                else:
-                    payment_rid = self._next_relationship_id(rels_root)
-                    payment_part = self._next_sheet_part(src)
-                    sheet_id = str(max(int(s.attrib.get("sheetId", "0")) for s in sheets) + 1)
-                    ET.SubElement(
-                        sheets,
-                        f"{{{MAIN_NS}}}sheet",
-                        {
-                            "name": self.PAYMENT_SHEET,
-                            "sheetId": sheet_id,
-                            f"{{{DOC_REL_NS}}}id": payment_rid,
-                        },
-                    )
-                    ET.SubElement(
-                        rels_root,
-                        f"{{{PKG_REL_NS}}}Relationship",
-                        {
-                            "Id": payment_rid,
-                            "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
-                            "Target": str(PurePosixPath(payment_part).relative_to("xl")),
-                        },
-                    )
-                    ET.SubElement(
-                        content_root,
-                        f"{{{CONTENT_NS}}}Override",
-                        {
-                            "PartName": "/" + payment_part,
-                            "ContentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml",
-                        },
-                    )
-
-                main_rels_part = self._worksheet_rels_part(main_part)
-                payment_rels_part = self._worksheet_rels_part(payment_part)
-                main_rels = src.read(main_rels_part) if main_rels_part in src.namelist() else None
-
-                replacements: dict[str, bytes] = {
-                    "xl/workbook.xml": ET.tostring(workbook_root, encoding="utf-8", xml_declaration=True),
-                    "xl/_rels/workbook.xml.rels": ET.tostring(rels_root, encoding="utf-8", xml_declaration=True),
-                    "[Content_Types].xml": ET.tostring(content_root, encoding="utf-8", xml_declaration=True),
-                    payment_part: main_xml,
-                }
-                if main_rels is not None:
-                    replacements[payment_rels_part] = main_rels
-
-                self._write_package(src, output_path, replacements, remove={payment_rels_part} if main_rels is None else set())
-        except PaymentWorkbookError:
-            raise
+            wb = load_workbook(source_path, keep_vba=keep_vba)
+            try:
+                if self.PAYMENT_SHEET in wb.sheetnames:
+                    wb.remove(wb[self.PAYMENT_SHEET])
+                    replaced = True
+                main = wb[self.MAIN_SHEET]
+                payment = wb.copy_worksheet(main)
+                payment.title = self.PAYMENT_SHEET
+                # copy_worksheet intentionally omits a few view/filter settings.
+                payment.freeze_panes = main.freeze_panes
+                payment.sheet_view.showGridLines = main.sheet_view.showGridLines
+                payment.auto_filter.ref = main.auto_filter.ref
+                wb.save(temp_path)
+            finally:
+                wb.close()
+            shutil.move(str(temp_path), str(output_path))
         except Exception as exc:
             raise PaymentWorkbookError(f"Payment snapshot could not be created: {exc}") from exc
+        finally:
+            temp_path.unlink(missing_ok=True)
 
         return PaymentSnapshotResult(source_path, output_path, self.PAYMENT_SHEET, replaced, validation.activity_rows)
 
@@ -257,6 +215,89 @@ class PaymentWorkbookSnapshotter:
                 raise PaymentWorkbookError("Worksheet 'main' was not found.")
             root = ET.fromstring(package.read(sheet_map[self.MAIN_SHEET]))
             return self._activity_ids(root, self._shared_strings(package))
+
+    def activity_plan_profiles(self, workbook_path: Path) -> list[dict]:
+        """Read activity name and weekly Plan values from ``main`` in one XML pass."""
+        path = Path(workbook_path)
+        with ZipFile(path, "r") as package:
+            sheet_map = self._sheet_map(package)
+            if self.MAIN_SHEET not in sheet_map:
+                raise PaymentWorkbookError("Worksheet 'main' was not found.")
+            root = ET.fromstring(package.read(sheet_map[self.MAIN_SHEET]))
+            shared = self._shared_strings(package)
+
+        sheet_data = root.find(f"{{{MAIN_NS}}}sheetData")
+        if sheet_data is None:
+            return []
+        rows = list(sheet_data.findall(f"{{{MAIN_NS}}}row"))
+        header_row = None
+        cols: dict[str, int] = {}
+        for row in rows[:30]:
+            values = {}
+            for cell in row.findall(f"{{{MAIN_NS}}}c"):
+                m = re.match(r"([A-Z]+)", cell.attrib.get("r", ""))
+                if m:
+                    values[self._cell_text(cell, shared).strip().lower()] = self._letters_to_col(m.group(1))
+            if "row type" in values and "activity id" in values and "description" in values:
+                header_row = int(row.attrib.get("r", "0"))
+                cols = values
+                break
+        if header_row is None:
+            return []
+
+        date_row = next((r for r in rows if int(r.attrib.get("r", "0")) == header_row), None)
+        # Timescale dates live on the same row as field headers, to the right of fixed fields.
+        week_dates: dict[int, date] = {}
+        if date_row is not None:
+            for cell in date_row.findall(f"{{{MAIN_NS}}}c"):
+                m = re.match(r"([A-Z]+)", cell.attrib.get("r", ""))
+                if not m:
+                    continue
+                col = self._letters_to_col(m.group(1))
+                d = self._excel_date(cell, shared)
+                if d:
+                    week_dates[col] = d
+
+        profiles = []
+        for row in rows:
+            row_num = int(row.attrib.get("r", "0"))
+            if row_num <= header_row:
+                continue
+            cells = {}
+            for cell in row.findall(f"{{{MAIN_NS}}}c"):
+                m = re.match(r"([A-Z]+)", cell.attrib.get("r", ""))
+                if m:
+                    cells[self._letters_to_col(m.group(1))] = cell
+            row_type = self._cell_text(cells.get(cols["row type"]), shared).strip().lower() if cells.get(cols["row type"]) is not None else ""
+            if row_type != "activity":
+                continue
+            activity_id = self._cell_text(cells.get(cols["activity id"]), shared).strip() if cells.get(cols["activity id"]) is not None else ""
+            if not activity_id:
+                continue
+            name = self._cell_text(cells.get(cols["description"]), shared).strip() if cells.get(cols["description"]) is not None else ""
+            weekly = []
+            for col, d in sorted(week_dates.items()):
+                cell = cells.get(col)
+                if cell is None:
+                    continue
+                raw = self._cell_text(cell, shared).strip()
+                if not raw:
+                    continue
+                try:
+                    value = float(raw)
+                except ValueError:
+                    continue
+                if value != 0:
+                    weekly.append((d, value))
+            profiles.append({"activity_id": activity_id, "activity_name": name, "weekly_plan": tuple(weekly)})
+        return profiles
+
+    @staticmethod
+    def _letters_to_col(letters: str) -> int:
+        value = 0
+        for ch in letters:
+            value = value * 26 + ord(ch) - 64
+        return value
 
     @classmethod
     def _count_activity_rows(cls, root: ET.Element, shared_strings: list[str]) -> int:

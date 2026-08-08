@@ -38,9 +38,9 @@ class PaymentInputWorkbook:
         if validation.project_start is None or validation.project_finish is None:
             raise PaymentWorkbookError("Project Start / Finish could not be read from the main sheet.")
 
-        activity_ids = self.snapshotter.activity_ids(source)
-        if not activity_ids:
-            raise PaymentWorkbookError("No Activity IDs were found in the main sheet.")
+        profiles = self.snapshotter.activity_plan_profiles(source)
+        if not profiles:
+            raise PaymentWorkbookError("No Activity rows were found in the main sheet.")
         payment_dates = self._spread_dates(validation.project_start, validation.project_finish, periods)
 
         wb = Workbook()
@@ -58,11 +58,12 @@ class PaymentInputWorkbook:
         ws["B2"].number_format = ws["B3"].number_format = "dd-mmm-yy"
 
         ws.cell(self.HEADER_ROW, 1, "Activity ID")
+        ws.cell(self.HEADER_ROW, 2, "Activity Name")
         ws.cell(self.DATE_ROW, 1, "Payment Date")
         header_fill = PatternFill("solid", fgColor="1F4E78")
         header_font = Font(color="FFFFFF", bold=True)
         for idx, payment_date in enumerate(payment_dates, start=1):
-            col = idx + 1
+            col = idx + 2
             ws.cell(self.HEADER_ROW, col, f"P{idx:02d}")
             ws.cell(self.DATE_ROW, col, payment_date)
             ws.cell(self.DATE_ROW, col).number_format = "dd-mmm-yy"
@@ -73,17 +74,21 @@ class PaymentInputWorkbook:
             cell.alignment = Alignment(horizontal="center")
         ws.cell(self.DATE_ROW, 1).font = Font(bold=True)
 
-        for row_idx, activity_id in enumerate(activity_ids, start=self.FIRST_ACTIVITY_ROW):
-            ws.cell(row_idx, 1, activity_id)
-            # Blank means "no requirement". Keep cells percentage-formatted so the
-            # user can type 25%, 50%, 100% directly without confusing blank with 0%.
-            for col in range(2, periods + 2):
-                ws.cell(row_idx, col).number_format = "0%"
+        for row_idx, profile in enumerate(profiles, start=self.FIRST_ACTIVITY_ROW):
+            ws.cell(row_idx, 1, profile["activity_id"])
+            ws.cell(row_idx, 2, profile["activity_name"])
+            fake_values = self._fake_requirements(profile["weekly_plan"], payment_dates, validation.project_start)
+            for idx, value in enumerate(fake_values, start=1):
+                cell = ws.cell(row_idx, idx + 2)
+                cell.number_format = "0%"
+                if value is not None:
+                    cell.value = value
 
-        last_col = get_column_letter(periods + 1)
-        ws.freeze_panes = "B8"
-        ws.auto_filter.ref = f"A{self.HEADER_ROW}:{last_col}{self.FIRST_ACTIVITY_ROW + len(activity_ids) - 1}"
+        last_col = get_column_letter(periods + 2)
+        ws.freeze_panes = "C8"
+        # Intentionally no AutoFilter: this is a small edit payload, not a report table.
         ws.column_dimensions["A"].width = 18
+        ws.column_dimensions["B"].width = 42
         output.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output)
         wb.close()
@@ -92,7 +97,7 @@ class PaymentInputWorkbook:
             source_workbook=source,
             output_workbook=output,
             payment_periods=periods,
-            activity_rows=len(activity_ids),
+            activity_rows=len(profiles),
             project_start=validation.project_start,
             project_finish=validation.project_finish,
         )
@@ -116,6 +121,31 @@ class PaymentInputWorkbook:
             missing_activities=missing,
             populated_requirements=data.populated_requirements,
         )
+
+    @staticmethod
+    def _fake_requirements(weekly_plan, payment_dates: list[date], project_start: date) -> list[float | None]:
+        """Suggested cumulative requirements, but only for periods with planned movement.
+
+        A period gets a value only when the activity has incremental Plan progress
+        after the previous payment cut and on/before the current cut. This keeps
+        the generated workbook sparse while ensuring short activities are not lost.
+        """
+        points = sorted((d, float(v)) for d, v in weekly_plan if v is not None)
+        result: list[float | None] = []
+        cumulative = 0.0
+        previous = project_start - timedelta(days=1)
+        point_index = 0
+        for cut in payment_dates:
+            moved = False
+            while point_index < len(points) and points[point_index][0] <= cut:
+                d, value = points[point_index]
+                cumulative += value
+                if d > previous and value != 0:
+                    moved = True
+                point_index += 1
+            result.append(min(max(cumulative, 0.0), 1.0) if moved else None)
+            previous = cut
+        return result
 
     @staticmethod
     def _spread_dates(start: date, finish: date, periods: int) -> list[date]:
