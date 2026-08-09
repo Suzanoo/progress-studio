@@ -134,6 +134,16 @@ def _protect_main(ws) -> None:
                     _set_unlocked(cell)
 
 
+
+
+def _protect_dashboard(ws) -> None:
+    _protect_sheet(ws)
+
+    # Interactive controls stay editable while KPI/chart/formula/layout cells stay locked.
+    # G5 is the Weekly/Monthly selector; K5 is the Cutoff Date selector.
+    _set_unlocked(ws["G5"])
+    _set_unlocked(ws["K5"])
+
 def _protect_payment_input(ws) -> None:
     _protect_sheet(ws)
 
@@ -162,6 +172,8 @@ def apply_final_sheet_protection(workbook) -> tuple[str, ...]:
             _protect_main(ws)
         elif ws.title == "Payment Input":
             _protect_payment_input(ws)
+        elif ws.title == "Dashboard":
+            _protect_dashboard(ws)
         else:
             _protect_sheet(ws)
 

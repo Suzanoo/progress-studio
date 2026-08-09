@@ -446,3 +446,14 @@ Payment Input preparation, and Payment rebuild. No VBA or macro is embedded in t
 workbook. Rebuild code can regenerate protected sheets because the protection is an
 Excel UI guard rather than file encryption.
 
+### MS-RB7.2.1 — Dashboard interactive protection fix
+
+Dashboard remains protected, but its two intended user controls stay editable:
+
+- `G5` — View (`Weekly` / `Monthly`)
+- `K5` — Cutoff Date
+
+All labels, KPI formulas, chart support cells, and layout cells remain locked. This
+preserves Dashboard interactivity without exposing the generated sheet structure to
+accidental edits.
+
