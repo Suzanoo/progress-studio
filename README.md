@@ -277,3 +277,21 @@ Real NKC2_R03 benchmark:
 - RB3 generated-sheet formulas: 2,306
 - no direct generated-sheet formula links to `main`
 
+### MS-RB3.1 — Dashboard source contract fix
+
+Dashboard now follows the same two-sheet contract used by the OKD app:
+
+- S-Curve + KPI source: `progress`
+- Activity table source: `progress_table`
+
+`progress` stores cumulative Plan/Actual as 0..100 percent-points. Dashboard_Data
+converts those values to Excel chart fractions explicitly, including values below 1%
+(e.g. 0.31% -> 0.0031).
+
+Monthly chart points are sampled from cumulative `progress`:
+- Monthly Plan = last weekly cutoff in the month
+- Monthly Actual = last populated weekly Actual in the month
+
+No monthly SUM or multi-area LOOKUP formula is used, preventing the previous
+`#VALUE!` chain in Monthly Actual.
+

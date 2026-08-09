@@ -199,17 +199,18 @@ def _monthly_groups(rows: list[tuple[int, date]]) -> list[tuple[date, list[int]]
     ]
 
 
-def _normalise_percent(value: float | None) -> float | None:
-    if value is None:
+def _progress_percent_value(progress_ws, row: int, col: int) -> float | None:
+    """Return progress 0..100 percent-points as Excel chart fraction 0..1."""
+    numeric = _as_number(progress_ws.cell(row, col).value)
+    if numeric is None:
         return None
-    return value / 100.0 if abs(value) > 1 else value
+    return numeric / 100.0
 
 
 def _source_percent_formula(progress_ws, row: int, col: int) -> str | float | None:
-    value = progress_ws.cell(row, col).value
-    numeric = _as_number(value)
-    if numeric is not None:
-        return _normalise_percent(numeric)
+    value = _progress_percent_value(progress_ws, row, col)
+    if value is not None:
+        return value
     column_letter = progress_ws.cell(1, col).column_letter
     return f'''=IF('{PROGRESS_SHEET}'!{column_letter}{row}="","",'{PROGRESS_SHEET}'!{column_letter}{row}/100)'''
 
@@ -233,10 +234,24 @@ def _build_data_sheet(workbook, progress_ws) -> None:
     for output_row, (month_date, source_rows) in enumerate(months, start=2):
         last_row = source_rows[-1]
         ws.cell(output_row, 4, month_date)
-        ws.cell(output_row, 5, _source_percent_formula(progress_ws, last_row, columns["plan"]))
-        actual_letter = progress_ws.cell(1, columns["actual"]).column_letter
-        actual_refs = ",".join(f"'{PROGRESS_SHEET}'!{actual_letter}{row}" for row in source_rows)
-        ws.cell(output_row, 6, f'=IF(COUNT({actual_refs})=0,"",LOOKUP(2,1/(({actual_refs})<>""),({actual_refs}))/100)')
+        # progress is cumulative; monthly Plan is simply the last weekly cutoff
+        # inside that month.
+        ws.cell(
+            output_row,
+            5,
+            _source_percent_formula(progress_ws, last_row, columns["plan"]),
+        )
+
+        # Actual is cumulative too. Take the last populated weekly Actual in the
+        # month. No SUM and no multi-area LOOKUP formula are required.
+        monthly_actual = None
+        for source_row in reversed(source_rows):
+            monthly_actual = _progress_percent_value(
+                progress_ws, source_row, columns["actual"]
+            )
+            if monthly_actual is not None:
+                break
+        ws.cell(output_row, 6, monthly_actual if monthly_actual is not None else "")
         ws.cell(output_row, 4).number_format = "mmm-yyyy"
         ws.cell(output_row, 5).number_format = "0.00%"
         ws.cell(output_row, 6).number_format = "0.00%"
@@ -418,9 +433,9 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws.add_data_validation(cutoff_validation)
     cutoff_validation.add(ws["K5"])
 
-    # KPI values read the stable progress sheet directly. Dashboard_Data is a
-    # thin chart adapter only; schedule dates/progress are calculated once in
-    # progress and merely presented here.
+    # Dashboard contract: S-Curve/KPIs come from the stable ``progress`` snapshot.
+    # Dashboard_Data is only a thin Weekly/Monthly view adapter. Activity tables
+    # continue to read ``progress_table`` directly.
     _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
     progress_ws = workbook[PROGRESS_SHEET]
     progress_cols = _progress_columns(progress_ws)
