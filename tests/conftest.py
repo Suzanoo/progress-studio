@@ -43,6 +43,7 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_ms_rb72_lightweight_protection.py",
     "test_ms_rb711_hybrid_progress_contract.py",
     "test_ms_rb71_final_sheet_visibility.py",
     "test_ms_test1_test_suite_tiering.py",

@@ -424,3 +424,25 @@ the S-Curve/Dashboard Actual update immediately in Excel without running Rebuild
 Actual reads `progress`; Dashboard monthly Actual uses one contiguous `progress`
 range per month, avoiding the previous multi-area LOOKUP error.
 
+### MS-RB7.2 — Lightweight workbook protection
+
+Final workbooks use Excel sheet protection as an accidental-edit guard, not encryption.
+
+Protection contract:
+- `main` — protected, but user-editable Activity identity/schedule/value cells and
+  non-formula weekly Plan/Actual Activity cells are unlocked.
+- `Payment Input` — protected; only P01...Pn cells on ACT rows are unlocked.
+- `main_monthly`, `Payment`, `Dashboard`, `progress`, `progress_table`,
+  `Dashboard_Data`, and internal/support sheets — protected read-only.
+- workbook structure itself is not protected.
+
+Visibility contract:
+- visible: `main`, `main_monthly`, `Payment Input`, `Payment`, `Dashboard`
+- normal hidden: `progress`, `progress_table`
+- veryHidden: Dashboard/internal/support implementation sheets
+
+The internal password is applied automatically after first export, Progress rebuild,
+Payment Input preparation, and Payment rebuild. No VBA or macro is embedded in the
+workbook. Rebuild code can regenerate protected sheets because the protection is an
+Excel UI guard rather than file encryption.
+

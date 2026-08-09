@@ -24,6 +24,7 @@ from progress_studio.infrastructure.excel.calculation_policy import (
 )
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
+from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 from progress_studio.services.payment_service import PaymentService
 
 from progress_studio.domain.rebuild_models import (
@@ -240,6 +241,7 @@ class WorkbookRebuildEngine:
 
                 configure_incremental_excel_recalculation(wb)
                 apply_final_sheet_visibility(wb)
+                apply_final_sheet_protection(wb)
                 wb.save(temp_path)
             finally:
                 wb.close()
@@ -308,6 +310,7 @@ class WorkbookRebuildEngine:
             visibility_wb = load_workbook(temp_path, read_only=False, data_only=False)
             try:
                 apply_final_sheet_visibility(visibility_wb)
+                apply_final_sheet_protection(visibility_wb)
                 visibility_wb.save(temp_path)
             finally:
                 visibility_wb.close()

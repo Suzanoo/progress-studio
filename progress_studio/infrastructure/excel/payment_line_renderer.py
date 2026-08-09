@@ -21,6 +21,7 @@ from progress_studio.domain.payment_models import (
 )
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
+from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 
 
 class PaymentLineRenderer:
@@ -118,6 +119,7 @@ class PaymentLineRenderer:
                         rendered_points += len(period.points)
 
                     apply_final_sheet_visibility(wb)
+                    apply_final_sheet_protection(wb)
                     wb.save(temp_path)
                 finally:
                     wb.close()

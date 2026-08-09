@@ -31,14 +31,16 @@ def test_rb71_visibility_policy_exposes_only_final_user_sheets() -> None:
     ):
         wb.create_sheet(name)
 
-    visible, very_hidden = apply_final_sheet_visibility(wb)
+    visible, hidden, very_hidden = apply_final_sheet_visibility(wb)
 
     assert visible == tuple(name for name in VISIBLE_SHEETS if name in wb.sheetnames)
     for name in ("main", "main_monthly", "Payment Input", "Payment", "Dashboard"):
         assert wb[name].sheet_state == "visible"
-    for name in ("progress", "progress_table", "Dashboard_Data", "Info", "User Notes"):
+    for name in ("progress", "progress_table"):
+        assert wb[name].sheet_state == "hidden"
+    for name in ("Dashboard_Data", "Info", "User Notes"):
         assert wb[name].sheet_state == "veryHidden"
-    assert "progress" in very_hidden
+    assert "progress" in hidden
 
 
 def test_rb71_progress_rebuild_applies_final_visibility(tmp_path: Path) -> None:
@@ -51,7 +53,9 @@ def test_rb71_progress_rebuild_applies_final_visibility(tmp_path: Path) -> None:
     try:
         for name in ("main", "main_monthly", "Payment Input", "Payment", "Dashboard"):
             assert wb[name].sheet_state == "visible"
-        for name in ("progress", "progress_table", "Dashboard_Data", "User Notes"):
+        for name in ("progress", "progress_table"):
+            assert wb[name].sheet_state == "hidden"
+        for name in ("Dashboard_Data", "User Notes"):
             assert wb[name].sheet_state == "veryHidden"
     finally:
         wb.close()
@@ -87,7 +91,8 @@ def test_rb71_payment_input_and_payment_rebuild_keep_same_visibility_contract(tm
     try:
         for name in ("main", "main_monthly", "Payment Input", "Payment", "Dashboard"):
             assert wb[name].sheet_state == "visible"
-        for name in ("progress", "progress_table", "Dashboard_Data"):
-            assert wb[name].sheet_state == "veryHidden"
+        for name in ("progress", "progress_table"):
+            assert wb[name].sheet_state == "hidden"
+        assert wb["Dashboard_Data"].sheet_state == "veryHidden"
     finally:
         wb.close()

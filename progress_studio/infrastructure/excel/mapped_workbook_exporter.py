@@ -18,6 +18,7 @@ from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord,
 from progress_studio.domain.working_tree import WorkingNodeKind, WorkingNodeOrigin, WorkingTreeNode, WorkingScheduleTree
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
+from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 from progress_studio.infrastructure.excel.amount_workbook import find_header, normalize_header
 from progress_studio.infrastructure.excel.mapping_reader import validate_progress_workbook_contract
 from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
@@ -204,6 +205,7 @@ class MappedWorkbookExporter:
                 build_dashboard(workbook, project_name=output_file.stem)
                 configure_incremental_excel_recalculation(workbook)
                 apply_final_sheet_visibility(workbook)
+                apply_final_sheet_protection(workbook)
                 workbook.save(temp_file)
                 if progress_callback is not None:
                     progress_callback("finalize", "Workbook finalized.", True)

@@ -22,6 +22,7 @@ from progress_studio.infrastructure.excel.payment_line_renderer import PaymentLi
 from progress_studio.infrastructure.excel.payment_progress_index import ActivityProgressIndexReader
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError, PaymentWorkbookSnapshotter
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
+from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 from progress_studio.infrastructure.excel.okd_workbook import build_progress_table_from_source
 from progress_studio.services.payment_position_engine import PaymentPositionEngine
 
@@ -74,6 +75,7 @@ class PaymentService:
                 periods=periods,
             )
             apply_final_sheet_visibility(wb)
+            apply_final_sheet_protection(wb)
             wb.save(output)
             return stats
         finally:
@@ -119,6 +121,7 @@ class PaymentService:
             if "Payment" in wb.sheetnames:
                 del wb["Payment"]
             apply_final_sheet_visibility(wb)
+            apply_final_sheet_protection(wb)
             wb.save(output)
         finally:
             wb.close()
