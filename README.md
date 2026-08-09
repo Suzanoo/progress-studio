@@ -214,3 +214,16 @@ Payment workbook is rebuilt. `Payment` is also deleted/recreated from the curren
 Activity ID; new activities receive suggested values. Payment Date is no longer an
 input because Planned Eligible Date is calculated from the latest required Activity point.
 
+### MS-RB1 — Standalone rebuild core contract
+
+The standalone rebuild path treats the selected workbook itself as the project source.
+
+- `main` is always the schedule/progress source of truth.
+- Progress rebuild owns only: `main_monthly`, `progress`, `progress_table`, `Dashboard_Data`, `Dashboard`.
+- Payment rebuild owns only: `Payment`, and requires embedded `Payment Input`.
+- `main`, `Payment Input`, internal metadata, and unknown user sheets are preserved by contract.
+- The rebuild core has no runtime dependency on XML, BOQ files, `.progressstudio`,
+  `.boqstudio`, mapping allocations, or the working tree.
+- Workbook analysis is sparse: it reads workbook metadata plus `main` worksheet XML only,
+  avoiding full openpyxl workbook loading before a rebuild is selected.
+
