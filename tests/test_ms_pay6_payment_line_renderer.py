@@ -99,7 +99,7 @@ def test_ms_pay6_single_period_uses_vertical_backbone_without_shapes(tmp_path: P
         assert "Payment" in wb.sheetnames
         main = wb["main"]
         sheet = wb["Payment"]
-        assert not sheet._images
+        assert len(sheet._images) == 1  # one lightweight label badge for P01
         assert not sheet._charts
 
         # Backbone is no longer driven by the input Payment Date. P01 becomes
@@ -163,7 +163,7 @@ def test_ms_pay61_renders_three_colored_vertical_backbones(tmp_path: Path) -> No
     wb = load_workbook(output)
     try:
         sheet = wb["Payment"]
-        assert not sheet._images
+        assert len(sheet._images) == 3  # one lightweight label badge per Payment
         assert not sheet._charts
         # Eligible boundaries come from the latest requirement point, not
         # from the dates stored in the Payment Input row:
@@ -189,3 +189,22 @@ def test_ms_pay63_eligible_date_ignores_input_payment_date(tmp_path: Path) -> No
     assert p01.payment_date.isoformat() == "2026-03-13"  # legacy/reference input
     assert p01.planned_eligible_date.isoformat() == "2026-03-23"
     assert p01.controlling_activity_ids == ("A1000",)
+
+
+def test_ms_pay64_adds_only_one_label_drawing_per_payment(tmp_path: Path) -> None:
+    progress = _progress_workbook(tmp_path / "progress.xlsx")
+    payment = _payment_input(progress, tmp_path / "payment_input.xlsx")
+    output = tmp_path / "payment_labeled.xlsx"
+
+    PaymentService().render_single_payment_line(progress, payment, output, "P01")
+
+    wb = load_workbook(output)
+    try:
+        sheet = wb["Payment"]
+        assert len(sheet._images) == 1
+        image = sheet._images[0]
+        assert image.width == 116
+        assert image.height == 22
+        assert not sheet._charts
+    finally:
+        wb.close()

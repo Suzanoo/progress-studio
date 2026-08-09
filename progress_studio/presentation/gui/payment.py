@@ -12,7 +12,7 @@ from progress_studio.services.payment_service import PaymentService
 
 
 class PaymentFrame(ttk.Frame):
-    """Payment workflow UI through MS-PAY6.3 planned eligible payment backbones.
+    """Payment workflow UI through MS-PAY6.4 planned eligible backbones + labels.
 
     Step 1: select Progress workbook and optionally create the Payment snapshot.
     Step 2: generate/edit the lightweight Payment Requirement workbook.
@@ -31,7 +31,7 @@ class PaymentFrame(ttk.Frame):
         self.payment_input_var = tk.StringVar()
         self.payment_status_var = tk.StringVar(value="Upload the edited Payment Requirement workbook when ready.")
         self.snapshot_status_var = tk.StringVar(value="Payment snapshot has not been created yet.")
-        self.render_status_var = tk.StringVar(value="P01-P03 backbones are calculated from the latest required Activity point. Input Payment Date is reference only.")
+        self.render_status_var = tk.StringVar(value="P01-P03 backbones use the latest required Activity point, with one lightweight floating label per Payment.")
 
         self._validated_progress: Path | None = None
         self._snapshot_path: Path | None = None

@@ -8,7 +8,9 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.comments import Comment
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Border, Side
+from PIL import Image, ImageDraw, ImageFont
 
 from progress_studio.config.payment_theme import PAYMENT_LINE_COLORS, PAYMENT_LINE_STYLE
 from progress_studio.domain.payment_models import (
@@ -27,7 +29,8 @@ class PaymentLineRenderer:
     position: the latest resolved requirement boundary among that period's sparse
     Activity points. The Payment Date supplied in the input workbook is retained
     only as legacy/reference metadata and never controls backbone placement.
-    No Shapes, drawing anchors, or pixel coordinates are created.
+    Line geometry remains cell-border based. A single lightweight, cell-anchored
+    badge image is added per Payment only for the visible label.
     """
 
     MAIN_SHEET = "main"
@@ -56,39 +59,47 @@ class PaymentLineRenderer:
         colors: list[tuple[str, str]] = []
         rendered_points = 0
         try:
-            wb = load_workbook(source, keep_vba=keep_vba)
-            try:
-                if self.MAIN_SHEET not in wb.sheetnames:
-                    raise PaymentWorkbookError("Worksheet 'main' was not found.")
-                if self.PAYMENT_SHEET in wb.sheetnames:
-                    wb.remove(wb[self.PAYMENT_SHEET])
+            with tempfile.TemporaryDirectory(prefix="payment_labels_") as label_dir:
+                wb = load_workbook(source, keep_vba=keep_vba)
+                try:
+                    if self.MAIN_SHEET not in wb.sheetnames:
+                        raise PaymentWorkbookError("Worksheet 'main' was not found.")
+                    if self.PAYMENT_SHEET in wb.sheetnames:
+                        wb.remove(wb[self.PAYMENT_SHEET])
 
-                main = wb[self.MAIN_SHEET]
-                payment = wb.copy_worksheet(main)
-                payment.title = self.PAYMENT_SHEET
-                payment.freeze_panes = main.freeze_panes
-                payment.sheet_view.showGridLines = main.sheet_view.showGridLines
-                payment.auto_filter.ref = main.auto_filter.ref
+                    main = wb[self.MAIN_SHEET]
+                    payment = wb.copy_worksheet(main)
+                    payment.title = self.PAYMENT_SHEET
+                    payment.freeze_panes = main.freeze_panes
+                    payment.sheet_view.showGridLines = main.sheet_view.showGridLines
+                    payment.auto_filter.ref = main.auto_filter.ref
 
-                timeline = self._timescale_boundaries(payment)
-                if not timeline:
-                    raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
+                    timeline = self._timescale_boundaries(payment)
+                    if not timeline:
+                        raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
 
-                for period in active:
-                    color = PAYMENT_LINE_COLORS.get(period.period_id, "7F7F7F")
-                    line = Side(style=PAYMENT_LINE_STYLE, color=color)
-                    endpoint = Side(style="thick", color=color)
-                    # The backbone is an output, not an input: it sits at the
-                    # latest resolved requirement boundary for this payment.
-                    backbone = max(self._boundary(point) for point in period.points)
-                    self._paint_header_marker(payment, period, backbone, line)
-                    self._paint_vertical_backbone(payment, period, backbone, line, endpoint)
-                    colors.append((period.period_id, color))
-                    rendered_points += len(period.points)
+                    for period in active:
+                        color = PAYMENT_LINE_COLORS.get(period.period_id, "7F7F7F")
+                        line = Side(style=PAYMENT_LINE_STYLE, color=color)
+                        endpoint = Side(style="thick", color=color)
+                        # The backbone is an output, not an input: it sits at the
+                        # latest resolved requirement boundary for this payment.
+                        backbone = max(self._boundary(point) for point in period.points)
+                        self._paint_header_marker(payment, period, backbone, line)
+                        self._paint_vertical_backbone(payment, period, backbone, line, endpoint)
+                        self._add_payment_label(
+                            payment,
+                            period,
+                            backbone,
+                            color,
+                            Path(label_dir),
+                        )
+                        colors.append((period.period_id, color))
+                        rendered_points += len(period.points)
 
-                wb.save(temp_path)
-            finally:
-                wb.close()
+                    wb.save(temp_path)
+                finally:
+                    wb.close()
             shutil.move(str(temp_path), str(output))
         except PaymentWorkbookError:
             raise
@@ -173,6 +184,58 @@ class PaymentLineRenderer:
             note = marker_cell.comment.text + "\n\n" + note
         marker_cell.comment = Comment(note, "Progress Studio")
 
+
+    def _add_payment_label(
+        self,
+        ws,
+        period: PaymentResolvedPeriod,
+        boundary: int,
+        color: str,
+        label_dir: Path,
+    ) -> None:
+        """Add one small floating badge per Payment; line geometry stays cell-based."""
+        date_text = (
+            period.planned_eligible_date.strftime("%d-%b-%y")
+            if period.planned_eligible_date else "unresolved"
+        )
+        label_text = f"{period.period_id} | {date_text}"
+
+        width, height = 116, 22
+        image = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle(
+            (0, 0, width - 1, height - 1),
+            radius=5,
+            fill=f"#{color}",
+        )
+        try:
+            font = ImageFont.truetype("arialbd.ttf", 11)
+        except OSError:
+            try:
+                font = ImageFont.load_default(size=11)
+            except TypeError:
+                font = ImageFont.load_default()
+
+        bbox = draw.textbbox((0, 0), label_text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        draw.text(
+            ((width - text_w) / 2, (height - text_h) / 2 - bbox[1]),
+            label_text,
+            fill="white",
+            font=font,
+        )
+
+        label_path = label_dir / f"{period.period_id}_label.png"
+        image.save(label_path, optimize=True)
+
+        badge = XLImage(str(label_path))
+        badge.width = width
+        badge.height = height
+        marker_col = min(max(boundary, 1), ws.max_column)
+        anchor_col = max(marker_col - 1, 1)
+        badge.anchor = ws.cell(1, anchor_col).coordinate
+        ws.add_image(badge)
 
     def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:
         result: list[tuple[int, date]] = []
