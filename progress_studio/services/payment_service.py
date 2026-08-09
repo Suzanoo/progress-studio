@@ -42,6 +42,41 @@ class PaymentService:
         self.position_engine = position_engine or PaymentPositionEngine()
         self.line_renderer = line_renderer or PaymentLineRenderer()
 
+    def prepare_embedded_payment_input(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+        periods: int | None = None,
+    ) -> dict[str, int]:
+        """Prepare/reconcile Payment Input only; never rebuild Payment or Progress views."""
+        source = Path(source_workbook)
+        output = Path(output_workbook)
+        if not source.is_file():
+            raise PaymentWorkbookError(f"Workbook was not found: {source}")
+        if output.resolve() != source.resolve():
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, output)
+
+        preserved = None
+        try:
+            preserved = self.payment_reader.read(source)
+        except PaymentWorkbookError:
+            preserved = None
+
+        wb = load_workbook(output)
+        try:
+            if "main" not in wb.sheetnames:
+                raise PaymentWorkbookError("Worksheet 'main' was not found.")
+            stats = self.payment_input.embed(
+                wb,
+                preserved=preserved,
+                periods=periods,
+            )
+            wb.save(output)
+            return stats
+        finally:
+            wb.close()
+
     def rebuild_embedded_workbook(
         self,
         source_workbook: Path,

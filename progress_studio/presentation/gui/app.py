@@ -16,6 +16,7 @@ from progress_studio.config import SETTINGS
 from progress_studio.infrastructure.layout_preferences import LayoutPreferences, LayoutPreferencesRepository
 from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
 from progress_studio.presentation.gui.payment import PaymentFrame
+from progress_studio.presentation.gui.rebuild import RebuildFrame
 from progress_studio.presentation.gui.strings import tr
 from progress_studio.presentation.gui.theme import FONT_MONO, PALETTE, configure_styles
 
@@ -57,6 +58,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         ("payment", "$", "Payment"),
         ("ai", "✦", "AI Helper"),
         ("export", "⇧", "Export"),
+        ("rebuild", "↻", "Rebuild"),
         ("settings", "⚙", "Settings"),
     )
 
@@ -131,6 +133,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._build_ai_workspace()
         self._build_payment_workspace()
         self._build_export_workspace()
+        self._build_rebuild_workspace()
         self._build_settings_workspace()
 
         self.status_bar = ttk.Frame(main, style="StatusBar.TFrame", padding=(6, 2))
@@ -167,6 +170,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         tools_menu.add_command(label="Import Workspace", command=lambda: self._show_workspace("import"))
         tools_menu.add_command(label="Payment Workspace", command=lambda: self._show_workspace("payment"))
         tools_menu.add_command(label="Export Workspace", command=lambda: self._show_workspace("export"))
+        tools_menu.add_command(label="Rebuild Workspace", command=lambda: self._show_workspace("rebuild"))
         menu.add_cascade(label="Tools", menu=tools_menu)
 
         help_menu = tk.Menu(menu, tearoff=False)
@@ -268,11 +272,35 @@ class ProgressStudioDesktopApp(tk.Tk):
         panel = ttk.Frame(frame, style="Surface.TFrame", padding=28)
         panel.pack(fill="x")
         ttk.Label(panel, text="Export", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(panel, text="Rebuild the latest workbook from the saved Progress Studio project state.", style="Muted.TLabel").pack(anchor="w", pady=(8, 18))
-        ttk.Button(panel, text="Rebuild Latest Workbook", style="Accent.TButton", command=self._defer_mapping("rebuild_workbook")).pack(anchor="w")
-        ttk.Button(panel, text="Rebuild from Edited Workbook...", command=self._defer_mapping("rebuild_from_edited_workbook")).pack(anchor="w", pady=(10, 0))
-        ttk.Label(panel, text="Use Rebuild from Edited Workbook to preserve Amount plus weekly Plan/Actual edits made in an exported main sheet. The .progressstudio mapping/tree remains unchanged.", style="Muted.TLabel", wraplength=760).pack(anchor="w", pady=(10, 0))
-        ttk.Label(panel, text="Projects saved with MS-R1 embed their Progress and BOQ sources, so rebuilds can work from the .progressstudio file alone.", style="Muted.TLabel", wraplength=760).pack(anchor="w", pady=(6, 0))
+        ttk.Label(
+            panel,
+            text=(
+                "Create the first mapped workbook from the current Progress Studio "
+                "project and mapping state."
+            ),
+            style="Muted.TLabel",
+            wraplength=760,
+        ).pack(anchor="w", pady=(8, 18))
+        ttk.Button(
+            panel,
+            text="Export Mapped Workbook",
+            style="Accent.TButton",
+            command=self._defer_mapping("export_workbook"),
+        ).pack(anchor="w")
+        ttk.Label(
+            panel,
+            text=(
+                "After the workbook is exported and edited in Excel, use the "
+                "Rebuild workspace. Rebuild does not use the saved mapping tree."
+            ),
+            style="Muted.TLabel",
+            wraplength=760,
+        ).pack(anchor="w", pady=(10, 0))
+
+    def _build_rebuild_workspace(self) -> None:
+        frame = self._new_workspace("rebuild")
+        self.rebuild_workspace = RebuildFrame(frame)
+        self.rebuild_workspace.pack(fill="both", expand=True)
 
     def _build_settings_workspace(self) -> None:
         frame = self._new_workspace("settings")
@@ -298,7 +326,9 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.workspace_title_var.set(f"{title} Workspace" if key not in {"home", "settings"} else title)
         for name, button in self.sidebar_buttons.items():
             button.configure(style="SidebarActive.TButton" if name == key else "Sidebar.TButton")
-        self.command_bar.grid_remove() if key in {"home", "settings"} else self.command_bar.grid()
+        self.command_bar.grid_remove() if key in {
+            "home", "payment", "ai", "export", "rebuild", "settings"
+        } else self.command_bar.grid()
 
     def _defer_mapping(self, method_name: str):
         def command() -> None:

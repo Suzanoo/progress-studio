@@ -338,3 +338,24 @@ Default Payment label style is now:
 Collision and label settings live in `progress_studio/config/payment_lines.json`,
 including `collision_max_offset` and `collision_row_step`.
 
+### MS-RB6 — Standalone Rebuild workspace
+
+Rebuild is now a first-class workspace in the desktop sidebar:
+
+`Home → Create Progress Bar → Mapping → Payment → AI Helper → Export → Rebuild → Settings`
+
+The Rebuild workspace accepts one Excel workbook and asks for exactly one mode:
+
+- **Progress Workbook** — rebuilds `main_monthly`, `progress`, `progress_table`,
+  `Dashboard_Data`, and `Dashboard` from `main`.
+- **Payment** — rebuilds `Payment` only from `main + Payment Input`.
+
+The UI never asks for `.progressstudio`, `.boqstudio`, XML, BOQ, or mapping-tree inputs.
+
+Workspace ownership is also cleaned up:
+- **Export** creates the first mapped workbook only; old Rebuild controls are removed.
+- **Payment** prepares/reconciles `Payment Input` only.
+- **Rebuild** owns every post-Excel regeneration action.
+
+Rebuild execution runs on a worker thread and writes through the RB2/RB4 atomic engines.
+

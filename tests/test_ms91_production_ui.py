@@ -27,7 +27,7 @@ def test_style_b_shell_contract_is_present():
     for required in (
         "def _build_menu", "def _build_sidebar", "def _build_generator_panel",
         "def _build_mapping_workspace", "def _show_workspace", '"AI Helper"',
-        '"Create Progress Bar"', '"Mapping"', '"Export"', '"Settings"',
+        '"Create Progress Bar"', '"Mapping"', '"Export"', '"Rebuild"', '"Settings"',
     ):
         assert required in source
 
