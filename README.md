@@ -193,3 +193,24 @@ The renderer reads this config for all populated Payment periods. `colors` maps
 font size, corner radius, text color, and anchor offset. Payment line geometry
 remains cell-border based.
 
+### Embedded Payment workflow
+
+Payment now uses one workbook from preparation through rebuild.
+
+User-facing sheets:
+- `Dashboard`
+- `main`
+- `Payment Input`
+- `Payment`
+- `main_monthly`
+- `progress`
+
+Generated/support sheets remain available to the engine but are hidden. In particular,
+`progress_table` is a value-only snapshot and is rebuilt (not patched) whenever the
+Payment workbook is rebuilt. `Payment` is also deleted/recreated from the current
+`main` + `Payment Input`.
+
+`Payment Input` is persistent user data. Existing percentages are reconciled by
+Activity ID; new activities receive suggested values. Payment Date is no longer an
+input because Planned Eligible Date is calculated from the latest required Activity point.
+

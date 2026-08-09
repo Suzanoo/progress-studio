@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+
+from openpyxl import load_workbook
 
 from progress_studio.domain.payment_models import (
     PaymentInputData,
@@ -17,7 +20,8 @@ from progress_studio.infrastructure.excel.payment_input_reader import PaymentInp
 from progress_studio.infrastructure.excel.payment_input_workbook import PaymentInputWorkbook
 from progress_studio.infrastructure.excel.payment_line_renderer import PaymentLineRenderer
 from progress_studio.infrastructure.excel.payment_progress_index import ActivityProgressIndexReader
-from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookSnapshotter
+from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError, PaymentWorkbookSnapshotter
+from progress_studio.infrastructure.excel.okd_workbook import build_progress_table_from_source
 from progress_studio.services.payment_position_engine import PaymentPositionEngine
 
 
@@ -37,6 +41,56 @@ class PaymentService:
         self.progress_index_reader = progress_index_reader or ActivityProgressIndexReader()
         self.position_engine = position_engine or PaymentPositionEngine()
         self.line_renderer = line_renderer or PaymentLineRenderer()
+
+    def rebuild_embedded_workbook(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+        periods: int | None = None,
+    ) -> PaymentMultiLineRenderResult | None:
+        """Rebuild the one-workbook Payment workflow.
+
+        Persistent: main + Payment Input.
+        Generated/replaced: progress_table + Payment.
+        """
+        source = Path(source_workbook)
+        output = Path(output_workbook)
+        if not source.is_file():
+            raise PaymentWorkbookError(f"Workbook was not found: {source}")
+        if output.resolve() != source.resolve():
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, output)
+
+        preserved = None
+        try:
+            preserved = self.payment_reader.read(source)
+        except PaymentWorkbookError:
+            preserved = None
+
+        wb = load_workbook(output)
+        try:
+            if "main" not in wb.sheetnames:
+                raise PaymentWorkbookError("Worksheet 'main' was not found.")
+            # Payment rebuild intentionally refreshes only the two generated snapshots:
+            # progress_table here, Payment after the workbook is saved.
+            build_progress_table_from_source(wb, wb["main"])
+            if "progress_table" in wb.sheetnames:
+                wb["progress_table"].sheet_state = "hidden"
+            self.payment_input.embed(wb, preserved=preserved, periods=periods)
+            # Payment is generated; remove stale content before saving the source
+            # used by the line renderer.
+            if "Payment" in wb.sheetnames:
+                del wb["Payment"]
+            wb.save(output)
+        finally:
+            wb.close()
+
+        try:
+            return self.render_payment_backbones(output, output, output)
+        except PaymentWorkbookError as exc:
+            if "no resolved requirements" not in str(exc).lower():
+                raise
+            return None
 
     def validate_workbook(self, workbook: Path) -> PaymentWorkbookValidation:
         return self.snapshotter.validate(Path(workbook))
@@ -104,7 +158,6 @@ class PaymentService:
                     selected.append(period)
 
         if not selected:
-            from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
             raise PaymentWorkbookError("Payment Input has no resolved requirements to render.")
         return self.line_renderer.render_periods(
             Path(progress_workbook), Path(output_workbook), tuple(selected)
@@ -121,10 +174,8 @@ class PaymentService:
         prepared = self.prepare_payment_input(Path(progress_workbook), Path(payment_workbook))
         period = next((item for item in prepared.positions.periods if item.period_id == period_id), None)
         if period is None:
-            from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
             raise PaymentWorkbookError(f"Payment period {period_id} was not found in Payment Input.")
         if not period.points:
-            from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
             raise PaymentWorkbookError(f"{period_id} has no resolved requirements to render.")
         return self.line_renderer.render_single_period(
             Path(progress_workbook), Path(output_workbook), period

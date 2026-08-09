@@ -26,6 +26,10 @@ from progress_studio.infrastructure.excel.monthly_main_workbook import build_mon
 from progress_studio.infrastructure.excel.okd_workbook import OKDExportError, build_progress_views_from_source
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 from progress_studio.infrastructure.excel.edited_workbook_migrator import migrate_edited_main_into_workbook
+from progress_studio.infrastructure.excel.payment_input_reader import PaymentInputSparseReader
+from progress_studio.infrastructure.excel.payment_input_workbook import PaymentInputWorkbook
+from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
+from progress_studio.services.payment_service import PaymentService
 from progress_studio.services.working_tree_schedule_source import WorkingTreeScheduleSource
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
 
@@ -131,8 +135,18 @@ class MappedWorkbookExporter:
             if progress_callback is not None and not can_generate:
                 for step, message in (("read", "Source workbook loaded."), ("main", "Main schedule prepared."), ("timescale", "Existing timescale preserved."), ("mapping", "Mapped amounts prepared."), ("progress", "Existing progress sheets preserved."), ("distribution", "Existing distribution preserved."), ("okd", "Existing OKD sheets preserved."), ("monthly", "Monthly main view prepared.")):
                     progress_callback(step, message, True)
+            # Payment Input is persistent user data. Read it sparsely from the
+            # edited workbook (or current source) before rebuilding generated sheets.
+            preserved_payment = None
+            payment_source = Path(edited_workbook).expanduser().resolve() if edited_workbook is not None else progress_file
+            try:
+                preserved_payment = PaymentInputSparseReader().read(payment_source)
+            except PaymentWorkbookError:
+                preserved_payment = None
+
             workbook = load_workbook(temp_file)
             migration = None
+            payment_reconcile = None
             try:
                 validate_progress_workbook_contract(workbook)
                 if not can_generate:
@@ -169,6 +183,22 @@ class MappedWorkbookExporter:
                 except OKDExportError as exc:
                     if "Weekly timescale not found" not in str(exc):
                         raise
+
+                # progress_table is a generated snapshot/support dataset. Keep it
+                # available to Dashboard/engine but out of the user's visible tabs.
+                if "progress_table" in workbook.sheetnames:
+                    workbook["progress_table"].sheet_state = "hidden"
+
+                # Payment Input is persistent and reconciled; Payment itself is a
+                # generated snapshot that will be replaced after this save.
+                try:
+                    payment_reconcile = PaymentInputWorkbook().embed(
+                        workbook,
+                        preserved=preserved_payment,
+                    )
+                except PaymentWorkbookError:
+                    payment_reconcile = None
+
                 build_monthly_main_view(workbook, require_timescale=False)
                 build_dashboard(workbook, project_name=output_file.stem)
                 configure_incremental_excel_recalculation(workbook)
@@ -177,6 +207,27 @@ class MappedWorkbookExporter:
                     progress_callback("finalize", "Workbook finalized.", True)
             finally:
                 workbook.close()
+
+            # Payment is disposable/generated: always recreate it from the final
+            # main + embedded Payment Input. This also replaces any stale Payment sheet.
+            if payment_reconcile is not None:
+                try:
+                    PaymentService().render_payment_backbones(
+                        temp_file,
+                        temp_file,
+                        temp_file,
+                    )
+                    if progress_callback is not None:
+                        progress_callback(
+                            "payment",
+                            f"Payment rebuilt from {payment_reconcile['periods']} periods.",
+                            True,
+                        )
+                except PaymentWorkbookError:
+                    # A valid embedded Payment Input may intentionally have no
+                    # populated requirements yet; leave Payment absent until later.
+                    pass
+
             validate_xlsx_tables(temp_file)
             _atomic_replace(temp_file, output_file)
             return ExportResult(output_file, validation, amount_rows, mapping_rows, migration)

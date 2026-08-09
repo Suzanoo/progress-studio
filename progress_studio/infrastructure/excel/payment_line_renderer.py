@@ -73,6 +73,11 @@ class PaymentLineRenderer:
                     main = wb[self.MAIN_SHEET]
                     payment = wb.copy_worksheet(main)
                     payment.title = self.PAYMENT_SHEET
+                    # Keep the user-facing Payment pair together: main -> Payment Input -> Payment.
+                    if "Payment Input" in wb.sheetnames:
+                        wb._sheets.remove(payment)
+                        input_index = wb.sheetnames.index("Payment Input")
+                        wb._sheets.insert(input_index + 1, payment)
                     payment.freeze_panes = main.freeze_panes
                     payment.sheet_view.showGridLines = main.sheet_view.showGridLines
                     payment.auto_filter.ref = main.auto_filter.ref
