@@ -382,3 +382,27 @@ New test modules must be classified in `tests/conftest.py`; collection aborts if
 make a new implementation pass—retire or change a frozen contract deliberately.
 See `docs/TESTING.md`.
 
+### MS-RB7.1 — Final sheet visibility contract
+
+Final portable workbook tabs are intentionally reduced to the user-facing set:
+
+Visible when present:
+- `main`
+- `main_monthly`
+- `Payment Input`
+- `Payment`
+- `Dashboard`
+
+Every other worksheet is set to Excel `veryHidden`, including generated support data,
+mapping lineage, audit sheets, and internal metadata. Missing user-facing sheets are
+allowed (for example, a workbook may not have Payment yet).
+
+The same central policy is applied after:
+- first mapped workbook export
+- Progress rebuild
+- Payment Input preparation/reconciliation
+- Payment line rendering / Payment-only rebuild
+
+RB7.1 changes visibility only. Cell/sheet protection and passwords are intentionally
+deferred to the next RB7 protection milestone.
+

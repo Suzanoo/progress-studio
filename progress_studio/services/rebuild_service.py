@@ -23,6 +23,7 @@ from progress_studio.infrastructure.excel.calculation_policy import (
     configure_incremental_excel_recalculation,
 )
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
+from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
 from progress_studio.services.payment_service import PaymentService
 
 from progress_studio.domain.rebuild_models import (
@@ -238,6 +239,7 @@ class WorkbookRebuildEngine:
                     wb["Dashboard_Data"].sheet_state = "hidden"
 
                 configure_incremental_excel_recalculation(wb)
+                apply_final_sheet_visibility(wb)
                 wb.save(temp_path)
             finally:
                 wb.close()
@@ -302,6 +304,13 @@ class WorkbookRebuildEngine:
                 temp_path,
                 temp_path,
             )
+
+            visibility_wb = load_workbook(temp_path, read_only=False, data_only=False)
+            try:
+                apply_final_sheet_visibility(visibility_wb)
+                visibility_wb.save(temp_path)
+            finally:
+                visibility_wb.close()
 
             validate_xlsx_tables(temp_path)
             os.replace(temp_path, output)

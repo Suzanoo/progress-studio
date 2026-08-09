@@ -20,6 +20,7 @@ from progress_studio.domain.payment_models import (
     PaymentResolvedPoint,
 )
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
+from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
 
 
 class PaymentLineRenderer:
@@ -116,6 +117,7 @@ class PaymentLineRenderer:
                         colors.append((period.period_id, color))
                         rendered_points += len(period.points)
 
+                    apply_final_sheet_visibility(wb)
                     wb.save(temp_path)
                 finally:
                     wb.close()

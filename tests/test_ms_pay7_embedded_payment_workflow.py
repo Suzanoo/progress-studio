@@ -83,7 +83,7 @@ def test_one_workbook_rebuild_replaces_generated_views(tmp_path: Path) -> None:
         assert "Payment Input" in wb.sheetnames
         assert "Payment" in wb.sheetnames
         assert "progress_table" in wb.sheetnames
-        assert wb["progress_table"].sheet_state == "hidden"
+        assert wb["progress_table"].sheet_state == "veryHidden"
         assert wb.sheetnames.index("Payment") == wb.sheetnames.index("Payment Input") + 1
     finally:
         wb.close()

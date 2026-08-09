@@ -43,6 +43,7 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_ms_rb71_final_sheet_visibility.py",
     "test_ms_test1_test_suite_tiering.py",
     "test_ms115_workbook_generation_engine.py",
     "test_ms116_generation_progress_dialog.py",

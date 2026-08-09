@@ -99,8 +99,8 @@ def test_rb2_rebuild_progress_replaces_only_progress_owned_sheets(tmp_path: Path
             assert name in wb.sheetnames
             assert wb[name]["A1"].value != "STALE"
 
-        assert wb["progress_table"].sheet_state == "hidden"
-        assert wb["Dashboard_Data"].sheet_state == "hidden"
+        assert wb["progress_table"].sheet_state == "veryHidden"
+        assert wb["Dashboard_Data"].sheet_state == "veryHidden"
 
         # Snapshot contract remains intact.
         assert not any(
