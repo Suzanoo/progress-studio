@@ -136,3 +136,13 @@ class PaymentPositionResult:
 class PaymentPreparationResult:
     validation: PaymentInputValidation
     positions: PaymentPositionResult
+
+
+@dataclass(frozen=True)
+class PaymentLineRenderResult:
+    source_workbook: Path
+    output_workbook: Path
+    payment_sheet: str
+    period_id: str
+    rendered_points: int
+    color: str

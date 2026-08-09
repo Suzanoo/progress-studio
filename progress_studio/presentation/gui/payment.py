@@ -12,11 +12,11 @@ from progress_studio.services.payment_service import PaymentService
 
 
 class PaymentFrame(ttk.Frame):
-    """Payment workflow UI before line rendering.
+    """Payment workflow UI through MS-PAY6 single-line rendering.
 
     Step 1: select Progress workbook and optionally create the Payment snapshot.
-    Step 2: generate a lightweight editable fake Payment Requirement workbook.
-    Step 3: upload/validate the edited Payment Requirement file for the renderer.
+    Step 2: generate/edit the lightweight Payment Requirement workbook.
+    Step 3: upload/validate it, then render P01 as a cell-border staircase.
     """
 
     def __init__(self, master, service: PaymentService | None = None) -> None:
@@ -31,10 +31,12 @@ class PaymentFrame(ttk.Frame):
         self.payment_input_var = tk.StringVar()
         self.payment_status_var = tk.StringVar(value="Upload the edited Payment Requirement workbook when ready.")
         self.snapshot_status_var = tk.StringVar(value="Payment snapshot has not been created yet.")
+        self.render_status_var = tk.StringVar(value="MS-PAY6 renders P01 only. No Shapes or pixel anchors are used.")
 
         self._validated_progress: Path | None = None
         self._snapshot_path: Path | None = None
         self._payment_input_path: Path | None = None
+        self._render_output_path: Path | None = None
         self._worker: threading.Thread | None = None
         self._build_ui()
 
@@ -46,7 +48,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(panel, text="Payment", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             panel,
-            text="Prepare the Payment sheet and a lightweight Payment Requirement input. Line rendering is intentionally deferred to the next milestone.",
+            text="Prepare the Payment sheet, edit lightweight requirements, and render the first P01 payment line on the timescale grid.",
             style="Muted.TLabel",
             wraplength=840,
         ).grid(row=1, column=0, sticky="w", pady=(6, 16))
@@ -139,13 +141,21 @@ class PaymentFrame(ttk.Frame):
             row=3, column=1, columnspan=2, sticky="w", pady=(8, 0)
         )
 
-        self.render_ready_button = ttk.Button(card, text="Render Payment Lines", style="Accent.TButton", state="disabled")
-        self.render_ready_button.grid(row=4, column=1, sticky="w", pady=(10, 0))
-        ttk.Label(
-            card,
-            text="Renderer is intentionally disabled in this milestone. A valid Payment Workbook will show Ready for Render above.",
-            style="Muted.TLabel",
-        ).grid(row=5, column=1, columnspan=2, sticky="w", pady=(6, 0))
+        actions = ttk.Frame(card, style="Surface.TFrame")
+        actions.grid(row=4, column=1, columnspan=2, sticky="w", pady=(10, 0))
+        self.render_ready_button = ttk.Button(
+            actions,
+            text="Render P01 Line",
+            style="Accent.TButton",
+            command=self._render_p01,
+            state="disabled",
+        )
+        self.render_ready_button.pack(side="left")
+        self.open_render_button = ttk.Button(actions, text="Open Result", command=self._open_render_result, state="disabled")
+        self.open_render_button.pack(side="left", padx=(8, 0))
+        ttk.Label(card, textvariable=self.render_status_var, style="Muted.TLabel", wraplength=740).grid(
+            row=5, column=1, columnspan=2, sticky="w", pady=(6, 0)
+        )
 
     def _browse_progress(self) -> None:
         selected = filedialog.askopenfilename(
@@ -163,6 +173,7 @@ class PaymentFrame(ttk.Frame):
         self.fake_button.configure(state="disabled")
         self.period_spinbox.configure(state="disabled")
         self.payment_browse_button.configure(state="disabled")
+        self.render_ready_button.configure(state="disabled")
         try:
             result = self.service.validate_workbook(source)
         except PaymentWorkbookError as exc:
@@ -283,6 +294,9 @@ class PaymentFrame(ttk.Frame):
 
     def _validate_payment_input(self, payment_file: Path) -> None:
         progress = self._validated_progress
+        self.render_ready_button.configure(state="disabled")
+        self.open_render_button.configure(state="disabled")
+        self._render_output_path = None
         try:
             if progress is None:
                 result = self.service.validate_payment_input(payment_file, None)
@@ -292,22 +306,82 @@ class PaymentFrame(ttk.Frame):
                 result = preparation.validation
         except PaymentWorkbookError as exc:
             self.payment_status_var.set(f"Not ready — {exc}")
+            self.render_status_var.set("P01 render is disabled until the Payment Input is valid.")
             return
         self._payment_input_path = payment_file
         if result.missing_activities:
             self.payment_status_var.set(
                 f"Review — {result.payment_periods} payments • {result.matched_activities:,}/{result.activity_rows:,} Activity IDs matched • {result.missing_activities:,} missing"
             )
+            self.render_status_var.set("P01 render is disabled while Activity IDs are missing.")
         elif preparation is not None:
             positions = preparation.positions
+            p01 = next((period for period in positions.periods if period.period_id == "P01"), None)
+            p01_points = len(p01.points) if p01 is not None else 0
             self.payment_status_var.set(
                 f"Ready for Render — {result.payment_periods} payments • {result.populated_requirements:,} requirements • "
                 f"{positions.resolved_count:,} positions resolved • {len(positions.issues):,} issues"
             )
+            if p01_points:
+                self.render_ready_button.configure(state="normal")
+                self.render_status_var.set(f"P01 ready • {p01_points:,} resolved points • cell-boundary staircase renderer")
+            else:
+                self.render_status_var.set("P01 has no resolved requirements to render.")
         else:
             self.payment_status_var.set(
                 f"Ready — {result.payment_periods} payments • {result.populated_requirements:,} requirements"
             )
+
+
+    def _render_p01(self) -> None:
+        progress = self._require_progress()
+        payment = self._payment_input_path
+        if progress is None:
+            return
+        if payment is None:
+            messagebox.showwarning("Payment", "Upload a Payment Requirement workbook first.")
+            return
+        suffix = progress.suffix.lower() if progress.suffix.lower() in {".xlsx", ".xlsm"} else ".xlsx"
+        output = filedialog.asksaveasfilename(
+            title="Save P01 Payment line workbook",
+            defaultextension=suffix,
+            initialdir=str(progress.parent),
+            initialfile=f"{progress.stem}_payment_p01{suffix}",
+            filetypes=[("Excel workbook", f"*{suffix}"), ("All files", "*.*")],
+        )
+        if not output:
+            return
+        self.render_ready_button.configure(state="disabled")
+        self.render_status_var.set("Rendering P01 on Payment sheet...")
+        self._worker = threading.Thread(
+            target=self._render_worker,
+            args=(progress, payment, Path(output)),
+            daemon=True,
+        )
+        self._worker.start()
+
+    def _render_worker(self, progress: Path, payment: Path, output: Path) -> None:
+        try:
+            result = self.service.render_single_payment_line(progress, payment, output, "P01")
+        except Exception as exc:
+            self.after(0, lambda: self._render_failed(exc))
+            return
+        self.after(0, lambda: self._render_done(result.output_workbook, result.rendered_points))
+
+    def _render_done(self, output: Path, points: int) -> None:
+        self._render_output_path = output
+        self.render_status_var.set(f"Created {output.name} • P01 rendered • {points:,} points")
+        self.render_ready_button.configure(state="normal")
+        self.open_render_button.configure(state="normal")
+
+    def _render_failed(self, error: Exception) -> None:
+        self.render_ready_button.configure(state="normal")
+        self.render_status_var.set("P01 rendering failed.")
+        messagebox.showerror("Payment", str(error))
+
+    def _open_render_result(self) -> None:
+        if self._render_output_path is not None:
+            self._open_file(self._render_output_path)
 
     def _require_progress(self) -> Path | None:
         if self._validated_progress is not None:

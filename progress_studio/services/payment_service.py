@@ -6,6 +6,7 @@ from progress_studio.domain.payment_models import (
     PaymentInputData,
     PaymentInputResult,
     PaymentInputValidation,
+    PaymentLineRenderResult,
     PaymentPositionResult,
     PaymentPreparationResult,
     PaymentSnapshotResult,
@@ -13,6 +14,7 @@ from progress_studio.domain.payment_models import (
 )
 from progress_studio.infrastructure.excel.payment_input_reader import PaymentInputSparseReader
 from progress_studio.infrastructure.excel.payment_input_workbook import PaymentInputWorkbook
+from progress_studio.infrastructure.excel.payment_line_renderer import PaymentLineRenderer
 from progress_studio.infrastructure.excel.payment_progress_index import ActivityProgressIndexReader
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookSnapshotter
 from progress_studio.services.payment_position_engine import PaymentPositionEngine
@@ -26,12 +28,14 @@ class PaymentService:
         payment_reader: PaymentInputSparseReader | None = None,
         progress_index_reader: ActivityProgressIndexReader | None = None,
         position_engine: PaymentPositionEngine | None = None,
+        line_renderer: PaymentLineRenderer | None = None,
     ) -> None:
         self.snapshotter = snapshotter or PaymentWorkbookSnapshotter()
         self.payment_reader = payment_reader or PaymentInputSparseReader()
         self.payment_input = payment_input or PaymentInputWorkbook(reader=self.payment_reader)
         self.progress_index_reader = progress_index_reader or ActivityProgressIndexReader()
         self.position_engine = position_engine or PaymentPositionEngine()
+        self.line_renderer = line_renderer or PaymentLineRenderer()
 
     def validate_workbook(self, workbook: Path) -> PaymentWorkbookValidation:
         return self.snapshotter.validate(Path(workbook))
@@ -72,3 +76,24 @@ class PaymentService:
         payment = self.payment_reader.read(Path(payment_workbook))
         progress = self.progress_index_reader.read(Path(progress_workbook))
         return self.position_engine.resolve(payment, progress)
+
+
+    def render_single_payment_line(
+        self,
+        progress_workbook: Path,
+        payment_workbook: Path,
+        output_workbook: Path,
+        period_id: str = "P01",
+    ) -> PaymentLineRenderResult:
+        """MS-PAY6: resolve and render exactly one payment period."""
+        prepared = self.prepare_payment_input(Path(progress_workbook), Path(payment_workbook))
+        period = next((item for item in prepared.positions.periods if item.period_id == period_id), None)
+        if period is None:
+            from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
+            raise PaymentWorkbookError(f"Payment period {period_id} was not found in Payment Input.")
+        if not period.points:
+            from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
+            raise PaymentWorkbookError(f"{period_id} has no resolved requirements to render.")
+        return self.line_renderer.render_single_period(
+            Path(progress_workbook), Path(output_workbook), period
+        )
