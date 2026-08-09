@@ -216,8 +216,13 @@ class PaymentWorkbookSnapshotter:
             root = ET.fromstring(package.read(sheet_map[self.MAIN_SHEET]))
             return self._activity_ids(root, self._shared_strings(package))
 
-    def activity_plan_profiles(self, workbook_path: Path) -> list[dict]:
-        """Read activity name and weekly Plan values from ``main`` in one XML pass."""
+    def payment_tree_rows(self, workbook_path: Path) -> list[dict]:
+        """Read the lightweight WBS/activity hierarchy and weekly Plan values from main.
+
+        Only Plan-side WBS/Activity rows are returned. WBS rows carry hierarchy context;
+        Activity rows additionally carry the weekly incremental Plan values used to
+        generate sparse fake payment requirements.
+        """
         path = Path(workbook_path)
         with ZipFile(path, "r") as package:
             sheet_map = self._sheet_map(package)
@@ -238,7 +243,7 @@ class PaymentWorkbookSnapshotter:
                 m = re.match(r"([A-Z]+)", cell.attrib.get("r", ""))
                 if m:
                     values[self._cell_text(cell, shared).strip().lower()] = self._letters_to_col(m.group(1))
-            if "row type" in values and "activity id" in values and "description" in values:
+            if "row type" in values and "wbs" in values and "description" in values and "activity id" in values:
                 header_row = int(row.attrib.get("r", "0"))
                 cols = values
                 break
@@ -246,7 +251,6 @@ class PaymentWorkbookSnapshotter:
             return []
 
         date_row = next((r for r in rows if int(r.attrib.get("r", "0")) == header_row), None)
-        # Timescale dates live on the same row as field headers, to the right of fixed fields.
         week_dates: dict[int, date] = {}
         if date_row is not None:
             for cell in date_row.findall(f"{{{MAIN_NS}}}c"):
@@ -258,23 +262,45 @@ class PaymentWorkbookSnapshotter:
                 if d:
                     week_dates[col] = d
 
-        profiles = []
+        outline_col = cols.get("outline level")
+        pa_col = cols.get("p/a")
+        result: list[dict] = []
         for row in rows:
             row_num = int(row.attrib.get("r", "0"))
             if row_num <= header_row:
                 continue
-            cells = {}
+            cells: dict[int, ET.Element] = {}
             for cell in row.findall(f"{{{MAIN_NS}}}c"):
                 m = re.match(r"([A-Z]+)", cell.attrib.get("r", ""))
                 if m:
                     cells[self._letters_to_col(m.group(1))] = cell
+
             row_type = self._cell_text(cells.get(cols["row type"]), shared).strip().lower() if cells.get(cols["row type"]) is not None else ""
-            if row_type != "activity":
+            if row_type not in {"wbs", "activity"}:
                 continue
+            pa = self._cell_text(cells.get(pa_col), shared).strip().upper() if pa_col and cells.get(pa_col) is not None else "P"
+            if pa and pa != "P":
+                continue
+
+            wbs = self._cell_text(cells.get(cols["wbs"]), shared).strip() if cells.get(cols["wbs"]) is not None else ""
+            name = self._cell_text(cells.get(cols["description"]), shared).strip() if cells.get(cols["description"]) is not None else ""
+            outline = 0
+            if outline_col and cells.get(outline_col) is not None:
+                try:
+                    outline = int(float(self._cell_text(cells.get(outline_col), shared).strip() or 0))
+                except ValueError:
+                    outline = 0
+
+            if row_type == "wbs":
+                result.append({
+                    "row_type": "WBS", "wbs": wbs, "activity_id": "",
+                    "activity_name": name, "outline_level": outline, "weekly_plan": (),
+                })
+                continue
+
             activity_id = self._cell_text(cells.get(cols["activity id"]), shared).strip() if cells.get(cols["activity id"]) is not None else ""
             if not activity_id:
                 continue
-            name = self._cell_text(cells.get(cols["description"]), shared).strip() if cells.get(cols["description"]) is not None else ""
             weekly = []
             for col, d in sorted(week_dates.items()):
                 cell = cells.get(col)
@@ -289,8 +315,15 @@ class PaymentWorkbookSnapshotter:
                     continue
                 if value != 0:
                     weekly.append((d, value))
-            profiles.append({"activity_id": activity_id, "activity_name": name, "weekly_plan": tuple(weekly)})
-        return profiles
+            result.append({
+                "row_type": "ACT", "wbs": wbs, "activity_id": activity_id,
+                "activity_name": name, "outline_level": outline, "weekly_plan": tuple(weekly),
+            })
+        return result
+
+    def activity_plan_profiles(self, workbook_path: Path) -> list[dict]:
+        """Backward-compatible activity-only view used by existing payment code/tests."""
+        return [row for row in self.payment_tree_rows(workbook_path) if row["row_type"] == "ACT"]
 
     @staticmethod
     def _letters_to_col(letters: str) -> int:

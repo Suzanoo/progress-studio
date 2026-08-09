@@ -45,16 +45,19 @@ def test_generate_fake_payment_input_is_single_sheet_and_lightweight(tmp_path: P
     try:
         assert wb.sheetnames == ["Payment Input"]
         ws = wb["Payment Input"]
-        assert ws["A6"].value == "Activity ID"
-        assert ws["B6"].value == "Activity Name"
-        assert ws["C6"].value == "P01"
-        assert ws["Q6"].value == "P15"
-        assert ws["A8"].value == "A1000"
-        assert ws["B8"].value == "Mobilization"
-        assert ws["A10"].value == "A1020"
-        assert ws["Q7"].value is not None
-        assert ws["C8"].value is None  # fixture has no weekly plan payload
-        assert ws["C8"].number_format == "0%"
+        assert ws["A6"].value == "Type"
+        assert ws["B6"].value == "WBS"
+        assert ws["C6"].value == "Activity ID"
+        assert ws["D6"].value == "Activity Name"
+        assert ws["E6"].value == "P01"
+        assert ws["S6"].value == "P15"
+        assert ws["A8"].value == "ACT"
+        assert ws["C8"].value == "A1000"
+        assert ws["D8"].value == "Mobilization"
+        assert ws["C10"].value == "A1020"
+        assert ws["S7"].value is not None
+        assert ws["E8"].value is None  # fixture has no weekly plan payload
+        assert ws["E8"].number_format == "0%"
         assert ws.auto_filter.ref is None
     finally:
         wb.close()
@@ -79,7 +82,7 @@ def test_validate_payment_input_reports_missing_activity(tmp_path: Path) -> None
 
     wb = load_workbook(payment)
     ws = wb["Payment Input"]
-    ws["A9"] = "A9999"
+    ws["C9"] = "A9999"
     wb.save(payment)
     wb.close()
 
@@ -112,9 +115,42 @@ def test_fake_payment_uses_activity_name_and_sparse_plan_suggestions(tmp_path: P
     wb = load_workbook(output)
     try:
         ws = wb["Payment Input"]
-        assert ws["B8"].value == "Mobilization"
-        assert ws["C8"].value == 1.0
-        assert ws["C8"].number_format == "0%"
+        assert ws["D8"].value == "Mobilization"
+        assert ws["E8"].value == 1.0
+        assert ws["E8"].number_format == "0%"
+        assert ws.auto_filter.ref is None
+    finally:
+        wb.close()
+
+
+def test_fake_payment_includes_wbs_parent_rows(tmp_path: Path) -> None:
+    source = tmp_path / "progress_tree.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "main"
+    headers = ["Row Type", "WBS", "Description", "P/A", "Activity ID", "Task ID", "UID", "Outline Level", "Plan Start", "Plan Finish"]
+    for col, value in enumerate(headers, start=1):
+        ws.cell(4, col, value)
+    ws.append(["Project Summary", None, "Demo", "P", None, None, None, 0, datetime(2026, 2, 23), datetime(2026, 5, 31)])
+    ws.append(["WBS", "1", "Foundation Works", "P", None, None, None, 1, datetime(2026, 2, 23), datetime(2026, 5, 31)])
+    ws.append(["WBS", "1.1", "Footing", "P", None, None, None, 2, datetime(2026, 2, 23), datetime(2026, 4, 30)])
+    ws.append(["Activity", "1.1.1", "Footing Concrete", "P", "A1000", 1, 1, 3, datetime(2026, 2, 23), datetime(2026, 4, 30)])
+    wb.save(source); wb.close()
+
+    output = tmp_path / "payment_tree.xlsx"
+    result = PaymentInputWorkbook().create(source, output, 3)
+    assert result.activity_rows == 1
+    wb = load_workbook(output)
+    try:
+        ws = wb["Payment Input"]
+        assert [ws.cell(r, 1).value for r in range(8, 11)] == ["WBS", "WBS", "ACT"]
+        assert ws["B8"].value == "1"
+        assert ws["D8"].value == "Foundation Works"
+        assert ws["B9"].value == "1.1"
+        assert ws["D9"].value == "Footing"
+        assert ws["C10"].value == "A1000"
+        assert ws["D10"].value == "Footing Concrete"
+        assert ws["E8"].value is None and ws["E9"].value is None
         assert ws.auto_filter.ref is None
     finally:
         wb.close()

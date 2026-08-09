@@ -65,7 +65,12 @@ class PaymentInputSparseReader:
             raise PaymentWorkbookError("Payment Input header row was not found.")
 
         header_cells = self._row_cells(header)
-        if self._cell_text(header_cells.get(1), shared_strings).strip().lower() != "activity id":
+        activity_id_col = None
+        for col_idx, cell in header_cells.items():
+            if self._cell_text(cell, shared_strings).strip().lower() == "activity id":
+                activity_id_col = col_idx
+                break
+        if activity_id_col is None:
             raise PaymentWorkbookError("Payment Input header 'Activity ID' was not found.")
 
         periods: list[tuple[int, str]] = []
@@ -94,7 +99,7 @@ class PaymentInputSparseReader:
         for row_num in sorted(r for r in rows if r >= self.FIRST_ACTIVITY_ROW):
             row = rows[row_num]
             cells = self._row_cells(row)
-            activity_id = self._cell_text(cells.get(1), shared_strings).strip()
+            activity_id = self._cell_text(cells.get(activity_id_col), shared_strings).strip()
             if not activity_id:
                 continue
             if activity_id in seen_activities:

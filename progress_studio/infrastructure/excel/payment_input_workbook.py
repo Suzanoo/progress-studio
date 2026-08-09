@@ -38,8 +38,9 @@ class PaymentInputWorkbook:
         if validation.project_start is None or validation.project_finish is None:
             raise PaymentWorkbookError("Project Start / Finish could not be read from the main sheet.")
 
-        profiles = self.snapshotter.activity_plan_profiles(source)
-        if not profiles:
+        tree_rows = self.snapshotter.payment_tree_rows(source)
+        activity_rows = [row for row in tree_rows if row["row_type"] == "ACT"]
+        if not activity_rows:
             raise PaymentWorkbookError("No Activity rows were found in the main sheet.")
         payment_dates = self._spread_dates(validation.project_start, validation.project_finish, periods)
 
@@ -47,6 +48,8 @@ class PaymentInputWorkbook:
         ws = wb.active
         ws.title = self.SHEET
         ws.sheet_view.showGridLines = False
+        ws.sheet_properties.outlinePr.summaryBelow = False
+
         ws["A1"] = "Payment Requirement Input"
         ws["A1"].font = Font(bold=True, size=14)
         ws["A2"] = "Project Start"
@@ -57,13 +60,15 @@ class PaymentInputWorkbook:
         ws["B4"] = periods
         ws["B2"].number_format = ws["B3"].number_format = "dd-mmm-yy"
 
-        ws.cell(self.HEADER_ROW, 1, "Activity ID")
-        ws.cell(self.HEADER_ROW, 2, "Activity Name")
+        fixed_headers = ("Type", "WBS", "Activity ID", "Activity Name")
+        for col, label in enumerate(fixed_headers, start=1):
+            ws.cell(self.HEADER_ROW, col, label)
         ws.cell(self.DATE_ROW, 1, "Payment Date")
+
         header_fill = PatternFill("solid", fgColor="1F4E78")
         header_font = Font(color="FFFFFF", bold=True)
         for idx, payment_date in enumerate(payment_dates, start=1):
-            col = idx + 2
+            col = idx + len(fixed_headers)
             ws.cell(self.HEADER_ROW, col, f"P{idx:02d}")
             ws.cell(self.DATE_ROW, col, payment_date)
             ws.cell(self.DATE_ROW, col).number_format = "dd-mmm-yy"
@@ -74,21 +79,48 @@ class PaymentInputWorkbook:
             cell.alignment = Alignment(horizontal="center")
         ws.cell(self.DATE_ROW, 1).font = Font(bold=True)
 
-        for row_idx, profile in enumerate(profiles, start=self.FIRST_ACTIVITY_ROW):
-            ws.cell(row_idx, 1, profile["activity_id"])
-            ws.cell(row_idx, 2, profile["activity_name"])
-            fake_values = self._fake_requirements(profile["weekly_plan"], payment_dates, validation.project_start)
-            for idx, value in enumerate(fake_values, start=1):
-                cell = ws.cell(row_idx, idx + 2)
-                cell.number_format = "0%"
-                if value is not None:
-                    cell.value = value
+        wbs_fills = {
+            1: PatternFill("solid", fgColor="F4B183"),
+            2: PatternFill("solid", fgColor="F8CBAD"),
+            3: PatternFill("solid", fgColor="FCE4D6"),
+            4: PatternFill("solid", fgColor="FFF2CC"),
+        }
+        default_wbs_fill = PatternFill("solid", fgColor="F2F2F2")
 
-        last_col = get_column_letter(periods + 2)
-        ws.freeze_panes = "C8"
-        # Intentionally no AutoFilter: this is a small edit payload, not a report table.
-        ws.column_dimensions["A"].width = 18
-        ws.column_dimensions["B"].width = 42
+        out_row = self.FIRST_ACTIVITY_ROW
+        for item in tree_rows:
+            level = max(int(item.get("outline_level") or 0), 0)
+            ws.row_dimensions[out_row].outlineLevel = min(level, 7)
+            if item["row_type"] == "WBS":
+                ws.cell(out_row, 1, "WBS")
+                ws.cell(out_row, 2, item["wbs"])
+                ws.cell(out_row, 4, item["activity_name"])
+                fill = wbs_fills.get(level, default_wbs_fill)
+                for col in range(1, periods + len(fixed_headers) + 1):
+                    cell = ws.cell(out_row, col)
+                    cell.fill = fill
+                    cell.font = Font(bold=True)
+                ws.cell(out_row, 4).alignment = Alignment(indent=max(level - 1, 0))
+            else:
+                ws.cell(out_row, 1, "ACT")
+                ws.cell(out_row, 2, item["wbs"])
+                ws.cell(out_row, 3, item["activity_id"])
+                ws.cell(out_row, 4, item["activity_name"])
+                ws.cell(out_row, 4).alignment = Alignment(indent=max(level - 1, 0))
+                fake_values = self._fake_requirements(item["weekly_plan"], payment_dates, validation.project_start)
+                for idx, value in enumerate(fake_values, start=1):
+                    cell = ws.cell(out_row, idx + len(fixed_headers))
+                    cell.number_format = "0%"
+                    if value is not None:
+                        cell.value = value
+            out_row += 1
+
+        ws.freeze_panes = "E8"
+        # Intentionally no AutoFilter: hierarchy rows should stay visually attached to their children.
+        ws.column_dimensions["A"].width = 8
+        ws.column_dimensions["B"].width = 14
+        ws.column_dimensions["C"].width = 18
+        ws.column_dimensions["D"].width = 42
         output.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output)
         wb.close()
@@ -97,7 +129,7 @@ class PaymentInputWorkbook:
             source_workbook=source,
             output_workbook=output,
             payment_periods=periods,
-            activity_rows=len(profiles),
+            activity_rows=len(activity_rows),
             project_start=validation.project_start,
             project_finish=validation.project_finish,
         )
