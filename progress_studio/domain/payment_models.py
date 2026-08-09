@@ -112,8 +112,10 @@ class PaymentResolvedPoint:
 @dataclass(frozen=True)
 class PaymentResolvedPeriod:
     period_id: str
-    payment_date: date | None
+    payment_date: date | None  # legacy/reference input; not used for backbone placement
     points: tuple[PaymentResolvedPoint, ...]
+    planned_eligible_date: date | None = None
+    controlling_activity_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

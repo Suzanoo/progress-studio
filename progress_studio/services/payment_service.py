@@ -87,7 +87,7 @@ class PaymentService:
         output_workbook: Path,
         period_ids: tuple[str, ...] = ("P01", "P02", "P03"),
     ) -> PaymentMultiLineRenderResult:
-        """MS-PAY6.1: render selected periods as cell-based vertical backbones."""
+        """Render selected periods at their planned eligible boundaries (latest requirement)."""
         prepared = self.prepare_payment_input(Path(progress_workbook), Path(payment_workbook))
         by_id = {period.period_id: period for period in prepared.positions.periods}
         selected = []
@@ -112,7 +112,7 @@ class PaymentService:
         output_workbook: Path,
         period_id: str = "P01",
     ) -> PaymentLineRenderResult:
-        """MS-PAY6: resolve and render exactly one payment period."""
+        """Resolve and render one payment period at its planned eligible boundary."""
         prepared = self.prepare_payment_input(Path(progress_workbook), Path(payment_workbook))
         period = next((item for item in prepared.positions.periods if item.period_id == period_id), None)
         if period is None:

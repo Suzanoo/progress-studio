@@ -12,7 +12,7 @@ from progress_studio.services.payment_service import PaymentService
 
 
 class PaymentFrame(ttk.Frame):
-    """Payment workflow UI through MS-PAY6.2 vertical-backbone visual polish.
+    """Payment workflow UI through MS-PAY6.3 planned eligible payment backbones.
 
     Step 1: select Progress workbook and optionally create the Payment snapshot.
     Step 2: generate/edit the lightweight Payment Requirement workbook.
@@ -31,7 +31,7 @@ class PaymentFrame(ttk.Frame):
         self.payment_input_var = tk.StringVar()
         self.payment_status_var = tk.StringVar(value="Upload the edited Payment Requirement workbook when ready.")
         self.snapshot_status_var = tk.StringVar(value="Payment snapshot has not been created yet.")
-        self.render_status_var = tk.StringVar(value="MS-PAY6.2 renders polished P01-P03 vertical backbones. No Shapes or pixel anchors are used.")
+        self.render_status_var = tk.StringVar(value="P01-P03 backbones are calculated from the latest required Activity point. Input Payment Date is reference only.")
 
         self._validated_progress: Path | None = None
         self._snapshot_path: Path | None = None
@@ -48,7 +48,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(panel, text="Payment", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             panel,
-            text="Prepare the Payment sheet, edit lightweight requirements, and render P01-P03 vertical backbones on the timescale grid.",
+            text="Prepare Payment requirements and render P01-P03 planned eligible backbones from the latest required Activity point.",
             style="Muted.TLabel",
             wraplength=840,
         ).grid(row=1, column=0, sticky="w", pady=(6, 16))
@@ -329,7 +329,7 @@ class PaymentFrame(ttk.Frame):
             if first_three:
                 self.render_ready_button.configure(state="normal")
                 self.render_status_var.set(
-                    f"Vertical backbone ready • {labels} • {first_three_points:,} points total"
+                    f"Planned eligible backbone ready • {labels} • {first_three_points:,} points total"
                 )
             else:
                 self.render_status_var.set("P01-P03 have no resolved requirements to render.")
@@ -358,7 +358,7 @@ class PaymentFrame(ttk.Frame):
         if not output:
             return
         self.render_ready_button.configure(state="disabled")
-        self.render_status_var.set("Rendering P01-P03 vertical backbones on Payment sheet...")
+        self.render_status_var.set("Calculating planned eligible dates and rendering P01-P03 backbones...")
         self._worker = threading.Thread(
             target=self._render_worker,
             args=(progress, payment, Path(output)),

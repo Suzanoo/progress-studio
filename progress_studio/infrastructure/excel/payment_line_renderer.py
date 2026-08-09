@@ -23,9 +23,10 @@ from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkboo
 class PaymentLineRenderer:
     """Cell-based vertical-backbone Payment renderer.
 
-    Each Payment period gets one vertical backbone at its Payment Date on the
-    weekly timescale. Only sparse resolved Activity points are rendered. A short
-    horizontal branch connects the backbone to each resolved requirement point.
+    Each Payment period gets one vertical backbone at its planned eligible
+    position: the latest resolved requirement boundary among that period's sparse
+    Activity points. The Payment Date supplied in the input workbook is retained
+    only as legacy/reference metadata and never controls backbone placement.
     No Shapes, drawing anchors, or pixel coordinates are created.
     """
 
@@ -73,18 +74,13 @@ class PaymentLineRenderer:
                 if not timeline:
                     raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
 
-                used_boundaries: set[int] = set()
-                min_boundary = timeline[0][0]
-                max_boundary = timeline[-1][0] + 1
                 for period in active:
                     color = PAYMENT_LINE_COLORS.get(period.period_id, "7F7F7F")
                     line = Side(style=PAYMENT_LINE_STYLE, color=color)
                     endpoint = Side(style="thick", color=color)
-                    preferred = self._payment_boundary(period.payment_date, timeline)
-                    backbone = self._allocate_backbone_boundary(
-                        preferred, used_boundaries, min_boundary, max_boundary
-                    )
-                    used_boundaries.add(backbone)
+                    # The backbone is an output, not an input: it sits at the
+                    # latest resolved requirement boundary for this payment.
+                    backbone = max(self._boundary(point) for point in period.points)
                     self._paint_header_marker(payment, period, backbone, line)
                     self._paint_vertical_backbone(payment, period, backbone, line, endpoint)
                     colors.append((period.period_id, color))
@@ -162,34 +158,21 @@ class PaymentLineRenderer:
         self._vertical_boundary(ws, 1, self.HEADER_ROW, boundary, line)
         marker_col = boundary if boundary <= ws.max_column else ws.max_column
         marker_cell = ws.cell(self.HEADER_ROW, marker_col)
-        date_text = period.payment_date.isoformat() if period.payment_date else "no date"
-        marker_cell.comment = Comment(
-            f"{period.period_id} Payment backbone\nPayment date: {date_text}",
-            "Progress Studio",
+        eligible_text = (
+            period.planned_eligible_date.isoformat()
+            if period.planned_eligible_date else "unresolved"
         )
+        controllers = ", ".join(period.controlling_activity_ids) or "n/a"
+        legacy_text = period.payment_date.isoformat() if period.payment_date else "none"
+        note = (
+            f"{period.period_id} Planned Eligible Date: {eligible_text}\n"
+            f"Controlling Activity: {controllers}\n"
+            f"Input Payment Date (reference only): {legacy_text}"
+        )
+        if marker_cell.comment is not None and marker_cell.comment.text:
+            note = marker_cell.comment.text + "\n\n" + note
+        marker_cell.comment = Comment(note, "Progress Studio")
 
-    @staticmethod
-    def _allocate_backbone_boundary(
-        preferred: int,
-        used: set[int],
-        minimum: int,
-        maximum: int,
-    ) -> int:
-        """Keep coincident payments readable using the nearest free cell boundary.
-
-        First choice is the resolved Payment-Date boundary. For collisions, use
-        the opposite edge of that weekly cell, then the nearest neighbouring edge.
-        """
-        preferred = min(max(preferred, minimum), maximum)
-        if preferred not in used:
-            return preferred
-        distance = 1
-        while distance <= (maximum - minimum + 1):
-            for candidate in (preferred + distance, preferred - distance):
-                if minimum <= candidate <= maximum and candidate not in used:
-                    return candidate
-            distance += 1
-        return preferred
 
     def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:
         result: list[tuple[int, date]] = []
@@ -201,16 +184,6 @@ class PaymentLineRenderer:
                 result.append((col, value))
         return tuple(result)
 
-    @staticmethod
-    def _payment_boundary(payment_date: date | None, timeline: tuple[tuple[int, date], ...]) -> int:
-        # Boundary before the first weekly bucket whose date is on/after Payment Date.
-        # If the Payment Date is beyond the last bucket, use the last bucket's right edge.
-        if payment_date is None:
-            return timeline[0][0]
-        for col, bucket_date in timeline:
-            if bucket_date >= payment_date:
-                return col
-        return timeline[-1][0] + 1
 
     @staticmethod
     def _boundary(point: PaymentResolvedPoint) -> int:

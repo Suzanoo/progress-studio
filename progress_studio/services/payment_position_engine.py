@@ -17,6 +17,10 @@ class PaymentPositionEngine:
 
     EPSILON = 1e-12
 
+    @staticmethod
+    def _boundary(point: PaymentResolvedPoint) -> int:
+        return point.timescale_column if point.boundary_edge == "left" else point.timescale_column + 1
+
     def resolve(self, payment: PaymentInputData, progress: ActivityProgressIndex) -> PaymentPositionResult:
         periods: list[PaymentResolvedPeriod] = []
         issues: list[PaymentPositionIssue] = []
@@ -74,11 +78,25 @@ class PaymentPositionEngine:
                 )
 
             points.sort(key=lambda point: point.activity_row)
+
+            planned_eligible_date = None
+            controlling_activity_ids: tuple[str, ...] = ()
+            if points:
+                latest_boundary = max(self._boundary(point) for point in points)
+                controlling = tuple(
+                    point for point in points
+                    if self._boundary(point) == latest_boundary
+                )
+                planned_eligible_date = max(point.week_start for point in controlling)
+                controlling_activity_ids = tuple(point.activity_id for point in controlling)
+
             periods.append(
                 PaymentResolvedPeriod(
                     period_id=period.period_id,
                     payment_date=period.payment_date,
                     points=tuple(points),
+                    planned_eligible_date=planned_eligible_date,
+                    controlling_activity_ids=controlling_activity_ids,
                 )
             )
 

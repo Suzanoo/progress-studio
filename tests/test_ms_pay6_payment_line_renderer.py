@@ -102,28 +102,29 @@ def test_ms_pay6_single_period_uses_vertical_backbone_without_shapes(tmp_path: P
         assert not sheet._images
         assert not sheet._charts
 
-        # P01 date 13-Mar resolves to the boundary before T (16-Mar bucket).
-        # Backbone runs only from first sparse Activity row through the last one.
-        assert sheet["T6"].border.left.style == "medium"
-        assert sheet["T7"].border.left.style == "medium"
-        assert sheet["T8"].border.left.style == "medium"
-        assert sheet["T6"].border.left.color.rgb.endswith("C00000")
-        # MS-PAY6.2 carries the payment marker through the timescale header.
-        assert sheet["T4"].comment is not None
-        assert "P01 Payment backbone" in sheet["T4"].comment.text
+        # Backbone is no longer driven by the input Payment Date. P01 becomes
+        # eligible at the latest resolved requirement: A1000 at right edge of U,
+        # i.e. boundary before V. The backbone crosses the spacer/WBS row.
+        assert sheet["V6"].border.left.style == "thick"  # target cap overlaps backbone on controlling row
+        assert sheet["V7"].border.left.style == "medium"
+        assert sheet["V8"].border.left.style == "medium"
+        assert sheet["V7"].border.left.color.rgb.endswith("C00000")
 
-        # A1000 target = right edge of U => before V; branch T..V on row 6.
-        assert sheet["T6"].border.bottom.style == "medium"
-        assert sheet["U6"].border.bottom.style == "medium"
-        assert sheet["V6"].border.left.style == "thick"
+        # Header note reports the calculated eligible date and keeps input date
+        # only as reference metadata.
+        assert sheet["V4"].comment is not None
+        assert "Planned Eligible Date: 2026-03-23" in sheet["V4"].comment.text
+        assert "Controlling Activity: A1000" in sheet["V4"].comment.text
+        assert "reference only" in sheet["V4"].comment.text
 
-        # A1010 target = right edge of T => before U.
-        assert sheet["T8"].border.bottom.style == "medium"
+        # A1010 target is one bucket earlier (right edge of T => before U),
+        # so its branch runs back from the eligible backbone to U.
+        assert sheet["U8"].border.bottom.style == "medium"
         assert sheet["U8"].border.left.style == "thick"
 
         # Source of truth is untouched.
-        assert main["T6"].border.left.style != "medium"
-        assert main["U6"].border.bottom.style != "medium"
+        assert main["V7"].border.left.style != "medium"
+        assert main["U8"].border.bottom.style != "medium"
     finally:
         wb.close()
 
@@ -164,20 +165,27 @@ def test_ms_pay61_renders_three_colored_vertical_backbones(tmp_path: Path) -> No
         sheet = wb["Payment"]
         assert not sheet._images
         assert not sheet._charts
-        # Backbone payment-date boundaries: P01=T, P02=U, P03=W (after last bucket).
+        # Eligible boundaries come from the latest requirement point, not
+        # from the dates stored in the Payment Input row:
+        # P01=S-right => T, P02=U-right => V, P03=V-right => W.
         assert sheet["T6"].border.left.color.rgb.endswith("C00000")
-        assert sheet["U6"].border.left.color.rgb.endswith("0070C0")
-        # P03's far-right backbone uses right border of V because W is beyond max timeline.
+        assert sheet["V6"].border.left.color.rgb.endswith("0070C0")
         assert sheet["V6"].border.right.style in {"medium", "thick"}
         assert sheet["V6"].border.right.color.rgb.endswith("548235")
+        assert "Planned Eligible Date: 2026-03-09" in sheet["T4"].comment.text
+        assert "Planned Eligible Date: 2026-03-23" in sheet["V4"].comment.text
+        assert "Planned Eligible Date: 2026-03-30" in sheet["V4"].comment.text
     finally:
         wb.close()
 
 
-def test_ms_pay62_backbone_collision_uses_nearest_free_cell_edge() -> None:
-    from progress_studio.infrastructure.excel.payment_line_renderer import PaymentLineRenderer
 
-    used = {20}
-    assert PaymentLineRenderer._allocate_backbone_boundary(20, used, 18, 23) == 21
-    used.add(21)
-    assert PaymentLineRenderer._allocate_backbone_boundary(20, used, 18, 23) == 19
+def test_ms_pay63_eligible_date_ignores_input_payment_date(tmp_path: Path) -> None:
+    progress = _progress_workbook(tmp_path / "progress.xlsx")
+    payment = _payment_input(progress, tmp_path / "payment_input.xlsx")
+    prepared = PaymentService().prepare_payment_input(progress, payment)
+    p01 = next(period for period in prepared.positions.periods if period.period_id == "P01")
+
+    assert p01.payment_date.isoformat() == "2026-03-13"  # legacy/reference input
+    assert p01.planned_eligible_date.isoformat() == "2026-03-23"
+    assert p01.controlling_activity_ids == ("A1000",)
