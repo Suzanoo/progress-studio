@@ -23,12 +23,14 @@ from progress_studio.infrastructure.excel.calculation_policy import (
     configure_incremental_excel_recalculation,
 )
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
+from progress_studio.services.payment_service import PaymentService
 
 from progress_studio.domain.rebuild_models import (
     RebuildMode,
     RebuildSheetContract,
     RebuildWorkbookAnalysis,
     ProgressRebuildResult,
+    PaymentRebuildResult,
 )
 
 
@@ -79,9 +81,11 @@ class WorkbookRebuildEngine:
         self,
         contract: RebuildSheetContract | None = None,
         reader: RebuildWorkbookReader | None = None,
+        payment_service: PaymentService | None = None,
     ) -> None:
         self.contract = contract or DEFAULT_REBUILD_CONTRACT
         self.reader = reader or RebuildWorkbookReader()
+        self.payment_service = payment_service or PaymentService()
 
     def analyze(
         self,
@@ -253,6 +257,66 @@ class WorkbookRebuildEngine:
                 rebuilt_sheets=self.contract.generated_progress,
                 preserved_payment_sheet=preserved_payment_sheet,
                 preserved_payment_input_sheet=preserved_payment_input_sheet,
+            )
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
+
+
+    def rebuild_payment(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+    ) -> PaymentRebuildResult:
+        """Replace only ``Payment`` from current ``main`` + ``Payment Input``.
+
+        MS-RB4 deliberately does not rebuild or reconcile any Progress-generated
+        sheet. This makes Payment-only edits cheap and keeps the Progress workbook
+        exactly as the user last rebuilt it.
+        """
+        source = Path(source_workbook).expanduser().resolve()
+        output = Path(output_workbook).expanduser().resolve()
+
+        analysis = self.analyze(source, RebuildMode.PAYMENT)
+        source_probe = self.reader.probe(source)
+        if output.suffix.lower() not in {".xlsx", ".xlsm"}:
+            raise RebuildContractError("Rebuild output must use .xlsx or .xlsm.")
+
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{output.stem}.rb4.",
+            suffix=output.suffix,
+            dir=output.parent,
+        )
+        os.close(fd)
+        temp_path = Path(temp_name)
+
+        try:
+            shutil.copy2(source, temp_path)
+
+            # The existing Payment renderer already follows the correct ownership
+            # contract: it reads main + Payment Input, removes stale Payment, and
+            # writes a new Payment sheet while leaving every other sheet untouched.
+            rendered = self.payment_service.render_payment_backbones(
+                temp_path,
+                temp_path,
+                temp_path,
+            )
+
+            validate_xlsx_tables(temp_path)
+            os.replace(temp_path, output)
+
+            return PaymentRebuildResult(
+                source_workbook=source,
+                output_workbook=output,
+                rendered_periods=rendered.rendered_periods,
+                rendered_points=rendered.rendered_points,
+                period_ids=rendered.period_ids,
+                rebuilt_sheets=self.contract.generated_payment,
+                progress_generated_preserved=tuple(
+                    name for name in self.contract.generated_progress
+                    if name in source_probe.sheet_names
+                ),
             )
         except Exception:
             temp_path.unlink(missing_ok=True)

@@ -295,3 +295,27 @@ Monthly chart points are sampled from cumulative `progress`:
 No monthly SUM or multi-area LOOKUP formula is used, preventing the previous
 `#VALUE!` chain in Monthly Actual.
 
+### MS-RB4 — Payment-only rebuild
+
+`WorkbookRebuildEngine.rebuild_payment()` now owns the standalone Payment rebuild path.
+
+Input:
+- one workbook containing `main` + embedded `Payment Input`
+
+Rebuilt:
+- `Payment` only
+
+Preserved:
+- `main`
+- `Payment Input`
+- `main_monthly`
+- `progress`
+- `progress_table`
+- `Dashboard_Data`
+- `Dashboard`
+- internal metadata and user-created sheets
+
+The Payment renderer resolves Planned Eligible positions from current `main`, reads the
+current Payment requirements from `Payment Input`, removes stale `Payment`, and writes a
+new Payment sheet. Progress-generated views are deliberately not reconciled or rebuilt.
+

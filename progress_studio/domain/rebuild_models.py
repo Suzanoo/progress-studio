@@ -80,3 +80,13 @@ class ProgressRebuildResult:
     preserved_payment_sheet: bool
     preserved_payment_input_sheet: bool
 
+@dataclass(frozen=True, slots=True)
+class PaymentRebuildResult:
+    source_workbook: Path
+    output_workbook: Path
+    rendered_periods: int
+    rendered_points: int
+    period_ids: tuple[str, ...]
+    rebuilt_sheets: tuple[str, ...]
+    progress_generated_preserved: tuple[str, ...]
+
