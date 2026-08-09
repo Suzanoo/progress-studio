@@ -35,7 +35,7 @@ def test_dashboard_is_created_as_first_separate_sheet_with_controls_and_chart():
     assert dashboard["C5"].value == "Demo Project"
     assert dashboard["G5"].value == "Monthly"
     assert dashboard["K5"].value == date(2026, 1, 9)
-    assert len(dashboard.data_validations.dataValidation) == 2
+    assert len(dashboard.data_validations.dataValidation) == 3
     assert len(dashboard._charts) == 1
 
 

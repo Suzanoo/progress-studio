@@ -140,9 +140,10 @@ def _protect_dashboard(ws) -> None:
     _protect_sheet(ws)
 
     # Interactive controls stay editable while KPI/chart/formula/layout cells stay locked.
-    # G5 is the Weekly/Monthly selector; K5 is the Cutoff Date selector.
+    # G5 = Weekly/Monthly, K5 = Cutoff Date, P37 = Activity Status Focus.
     _set_unlocked(ws["G5"])
     _set_unlocked(ws["K5"])
+    _set_unlocked(ws["P37"])
 
 def _protect_payment_input(ws) -> None:
     _protect_sheet(ws)

@@ -13,7 +13,6 @@ from openpyxl.formatting.rule import DataBarRule, FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.worksheet.filters import FilterColumn
 
 from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 
@@ -364,6 +363,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
         "E": 14, "F": 14, "G": 14,
         "H": 14, "I": 14, "J": 14,
         "K": 14, "L": 14, "M": 14,
+        "N": 11, "O": 11, "P": 12, "Q": 12,
     }
     for col, width in widths.items():
         ws.column_dimensions[col].width = width
@@ -545,10 +545,38 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
     ws["B35"].alignment = Alignment(horizontal="left", vertical="center")
 
+    # Activity Progress keeps the OKD 2-row Plan/Actual contract.
+    # The status selector is intentionally outside the table header so column
+    # filter arrows are unnecessary and the outline hierarchy remains clean.
     _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
-    headers = ["WBS", "Activity", "Type", "Total", "Amount", "Progress"]
-    starts = ["B", "C", "F", "H", "J", "L"]
-    ends = ["B", "E", "G", "I", "K", "M"]
+    ws.merge_cells("N37:O37")
+    ws["N37"] = "Status"
+    ws["N37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
+    ws["N37"].alignment = Alignment(horizontal="right", vertical="center")
+
+    ws.merge_cells("P37:Q37")
+    ws["P37"] = "All"
+    ws["P37"].fill = _solid(LIGHT_BLUE)
+    ws["P37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
+    ws["P37"].alignment = Alignment(horizontal="center", vertical="center")
+    status_validation = DataValidation(
+        type="list",
+        formula1='"All,Behind,On Track,Complete,Not Started"',
+        allow_blank=False,
+    )
+    status_validation.prompt = "Focus Activity Progress by status."
+    status_validation.promptTitle = "Activity Status"
+    status_validation.showInputMessage = True
+    status_validation.showErrorMessage = True
+    ws.add_data_validation(status_validation)
+    status_validation.add(ws["P37"])
+
+    headers = [
+        "WBS", "Activity", "Type", "Total",
+        "Amount", "Progress", "Variance", "Status",
+    ]
+    starts = ["B", "C", "F", "H", "J", "L", "N", "P"]
+    ends = ["B", "E", "G", "I", "K", "M", "O", "Q"]
     for start_col, end_col, header in zip(starts, ends, headers):
         ws.merge_cells(f"{start_col}38:{end_col}38")
         cell = ws[f"{start_col}38"]
@@ -617,11 +645,25 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             ws.merge_cells(f"L{row}:M{row}")
             ws[f"J{row}"] = f'=IFERROR(\'{TABLE_SHEET}\'!$C${plan_row}*L{row},0)'
 
+            ws.merge_cells(f"N{row}:O{row}")
+            ws.merge_cells(f"P{row}:Q{row}")
+            if is_plan:
+                ws[f"N{row}"] = ""
+                ws[f"P{row}"] = ""
+            else:
+                plan_output_row = row - 1
+                ws[f"N{row}"] = f'=IFERROR(L{row}-L{plan_output_row},0)'
+                ws[f"P{row}"] = (
+                    f'=IF(L{row}<=0,"Not Started",'
+                    f'IF(L{row}>=1,"Complete",'
+                    f'IF(L{row}<L{plan_output_row},"Behind","On Track")))'
+                )
+
             base_fill = WHITE if pair_index % 2 == 0 else LIGHT_GRAY
             if kind in {"project", "wbs"}:
                 base_fill = LIGHT_BLUE if kind == "project" or wbs_depth == 0 else ("EEF4FA" if wbs_depth == 1 else "F5F8FC")
 
-            for row_cells in ws[f"B{row}:M{row}"]:
+            for row_cells in ws[f"B{row}:Q{row}"]:
                 for cell in row_cells:
                     cell.border = _thin_border()
                     cell.fill = _solid(base_fill)
@@ -641,6 +683,13 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             ws[f"F{row}"].alignment = Alignment(horizontal="center", vertical="center")
             ws[f"L{row}"].fill = _solid(pa_fill)
             ws[f"L{row}"].font = Font(name=_FONT, bold=True, color=pa_color, size=9)
+            if not is_plan:
+                ws[f"N{row}"].fill = _solid(LIGHT_GREEN)
+                ws[f"P{row}"].fill = _solid(LIGHT_GREEN)
+                ws[f"N{row}"].font = Font(name=_FONT, bold=True, color=GREEN, size=9)
+                ws[f"P{row}"].font = Font(name=_FONT, bold=True, color=GREEN, size=9)
+                ws[f"N{row}"].alignment = Alignment(horizontal="right", vertical="center")
+                ws[f"P{row}"].alignment = Alignment(horizontal="center", vertical="center")
 
             ws.row_dimensions[row].outlineLevel = outline_level
             ws.row_dimensions[row].hidden = False
@@ -650,6 +699,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             ws[f"H{row}"].number_format = "#,##0.00"
             ws[f"J{row}"].number_format = "#,##0.00"
             ws[f"L{row}"].number_format = "0.00%"
+            ws[f"N{row}"].number_format = "0.00%;[Red]-0.00%;0.00%"
             output_row += 1
 
         source_row += 2
@@ -661,13 +711,24 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws.sheet_properties.outlinePr.applyStyles = True
     ws.sheet_properties.outlinePr.showOutlineSymbols = True
 
-    ws.auto_filter.ref = f"B38:M{max(38, output_row - 1)}"
-    # Keep one purposeful filter control: WBS only. The filter range still spans
-    # the complete activity table so Excel keeps normal filter/sort behavior.
-    for col_id in range(1, 12):
-        ws.auto_filter.filterColumn.append(FilterColumn(colId=col_id, showButton=False))
+    # No column AutoFilter arrows. Status Focus is a macro-free selector:
+    # nonmatching Plan/Actual pairs are visually dimmed together while Outline
+    # grouping remains fully native and usable.
+    last_activity_row = max(39, output_row - 1)
+    focus_range = f"B39:Q{last_activity_row}"
+    ws.conditional_formatting.add(
+        focus_range,
+        FormulaRule(
+            formula=[
+                '=AND($P$37<>"All",'
+                'INDEX($P:$P,ROW()+IF(MOD(ROW()-39,2)=0,1,0))<>$P$37)'
+            ],
+            fill=_solid("F2F2F2"),
+            font=Font(name=_FONT, color="A6A6A6"),
+        ),
+    )
 
-    ws.print_area = f"B2:M{max(56, output_row - 1)}"
+    ws.print_area = f"B2:Q{max(56, output_row - 1)}"
 
 
 def build_dashboard(workbook, *, project_name: str | None = None) -> None:

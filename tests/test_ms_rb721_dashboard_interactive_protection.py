@@ -21,6 +21,7 @@ def test_rb721_dashboard_controls_remain_editable_when_sheet_is_protected(tmp_pa
         # Interactive dashboard controls.
         assert ws["G5"].protection.locked is False
         assert ws["K5"].protection.locked is False
+        assert ws["P37"].protection.locked is False
 
         # Labels, formulas and KPI cells remain protected.
         assert ws["F5"].protection.locked is True

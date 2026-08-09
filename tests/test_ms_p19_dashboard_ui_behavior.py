@@ -90,4 +90,4 @@ def test_ms_p19_chart_and_theme_layout_are_configurable_and_wide():
     assert chart.width >= 24
     assert chart.height >= 9
     assert ws["B35"].value.startswith("Plan curve = full baseline")
-    assert ws.print_area == "'Dashboard'!$B$2:$M$56"
+    assert ws.print_area == "'Dashboard'!$B$2:$Q$56"

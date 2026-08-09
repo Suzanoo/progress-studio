@@ -457,3 +457,25 @@ All labels, KPI formulas, chart support cells, and layout cells remain locked. T
 preserves Dashboard interactivity without exposing the generated sheet structure to
 accidental edits.
 
+### MS-P12.0 — Activity Progress status focus
+
+Dashboard Activity Progress keeps the OKD two-row `Plan / Actual` structure and native
+Excel outline hierarchy.
+
+Columns are now:
+
+`WBS | Activity | Type | Total | Amount | Progress | Variance | Status`
+
+Behavior:
+- `Variance` is shown on Actual rows as `Actual Progress - Plan Progress`.
+- `Status` is shown on Actual rows as `Not Started`, `Behind`, `On Track`, or `Complete`.
+- a Status selector sits above the table at the top-right with
+  `All / Behind / On Track / Complete / Not Started`.
+- column AutoFilter arrows are removed entirely.
+- native WBS outline grouping remains unchanged.
+- the selector is macro-free: nonmatching Plan/Actual pairs are dimmed together rather
+  than physically hiding rows, preserving `.xlsx` portability and avoiding VBA/event code.
+- `progress_table` schema is not changed.
+
+The Status selector cell remains editable under Dashboard sheet protection.
+
