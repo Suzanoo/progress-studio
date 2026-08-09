@@ -208,3 +208,77 @@ def test_ms_pay64_adds_only_one_label_drawing_per_payment(tmp_path: Path) -> Non
         assert not sheet._charts
     finally:
         wb.close()
+
+
+def test_ms_pay65_default_render_includes_every_populated_payment(tmp_path: Path) -> None:
+    progress = _progress_workbook(tmp_path / "progress.xlsx")
+    payment = _payment_input(progress, tmp_path / "payment_input.xlsx")
+
+    wb = load_workbook(payment)
+    ws = wb["Payment Input"]
+    activity_rows = {
+        ws.cell(row, 3).value: row
+        for row in range(8, ws.max_row + 1)
+        if ws.cell(row, 1).value == "ACT"
+    }
+    # Populate all three available periods in this fixture.
+    ws.cell(activity_rows["A1000"], 5, 0.25)
+    ws.cell(activity_rows["A1000"], 6, 0.60)
+    ws.cell(activity_rows["A1000"], 7, 1.00)
+    ws.cell(activity_rows["A1010"], 5, 0.25)
+    ws.cell(activity_rows["A1010"], 6, 0.50)
+    ws.cell(activity_rows["A1010"], 7, 1.00)
+    wb.save(payment)
+    wb.close()
+
+    output = tmp_path / "payment_all.xlsx"
+    result = PaymentService().render_payment_backbones(progress, payment, output)
+
+    assert result.period_ids == ("P01", "P02", "P03")
+    assert result.rendered_periods == 3
+    wb = load_workbook(output)
+    try:
+        assert len(wb["Payment"]._images) == 3
+    finally:
+        wb.close()
+
+
+def test_ms_pay65_payment_theme_config_controls_color_and_label_size(tmp_path: Path) -> None:
+    import json
+
+    from progress_studio.config.payment_theme import load_payment_line_theme
+    from progress_studio.infrastructure.excel.payment_line_renderer import PaymentLineRenderer
+
+    config = tmp_path / "payment_lines.json"
+    config.write_text(json.dumps({
+        "line": {"style": "thin", "endpoint_style": "medium", "fallback_color": "999999"},
+        "label": {
+            "width_px": 90,
+            "height_px": 18,
+            "font_size": 9,
+            "corner_radius_px": 3,
+            "text_color": "FFFFFF",
+            "anchor_column_offset": -1,
+            "anchor_row": 1
+        },
+        "colors": {"P01": "112233"}
+    }), encoding="utf-8")
+
+    progress = _progress_workbook(tmp_path / "progress.xlsx")
+    payment = _payment_input(progress, tmp_path / "payment_input.xlsx")
+    output = tmp_path / "payment_custom_theme.xlsx"
+
+    service = PaymentService(
+        line_renderer=PaymentLineRenderer(load_payment_line_theme(config))
+    )
+    result = service.render_single_payment_line(progress, payment, output, "P01")
+    assert result.color == "112233"
+
+    wb = load_workbook(output)
+    try:
+        sheet = wb["Payment"]
+        assert len(sheet._images) == 1
+        assert sheet._images[0].width == 90
+        assert sheet._images[0].height == 18
+    finally:
+        wb.close()

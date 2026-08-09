@@ -12,7 +12,7 @@ from progress_studio.services.payment_service import PaymentService
 
 
 class PaymentFrame(ttk.Frame):
-    """Payment workflow UI through MS-PAY6.4 planned eligible backbones + labels.
+    """Payment workflow UI through MS-PAY6.5 all planned eligible payment backbones.
 
     Step 1: select Progress workbook and optionally create the Payment snapshot.
     Step 2: generate/edit the lightweight Payment Requirement workbook.
@@ -31,7 +31,7 @@ class PaymentFrame(ttk.Frame):
         self.payment_input_var = tk.StringVar()
         self.payment_status_var = tk.StringVar(value="Upload the edited Payment Requirement workbook when ready.")
         self.snapshot_status_var = tk.StringVar(value="Payment snapshot has not been created yet.")
-        self.render_status_var = tk.StringVar(value="P01-P03 backbones use the latest required Activity point, with one lightweight floating label per Payment.")
+        self.render_status_var = tk.StringVar(value="All populated Payment periods use the latest required Activity point, with one lightweight floating label per Payment.")
 
         self._validated_progress: Path | None = None
         self._snapshot_path: Path | None = None
@@ -48,7 +48,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(panel, text="Payment", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             panel,
-            text="Prepare Payment requirements and render P01-P03 planned eligible backbones from the latest required Activity point.",
+            text="Prepare Payment requirements and render every populated Payment period from its planned eligible point.",
             style="Muted.TLabel",
             wraplength=840,
         ).grid(row=1, column=0, sticky="w", pady=(6, 16))
@@ -145,9 +145,9 @@ class PaymentFrame(ttk.Frame):
         actions.grid(row=4, column=1, columnspan=2, sticky="w", pady=(10, 0))
         self.render_ready_button = ttk.Button(
             actions,
-            text="Render P01-P03 Backbones",
+            text="Render All Payments",
             style="Accent.TButton",
-            command=self._render_first_three,
+            command=self._render_all_payments,
             state="disabled",
         )
         self.render_ready_button.pack(side="left")
@@ -316,30 +316,31 @@ class PaymentFrame(ttk.Frame):
             self.render_status_var.set("Backbone render is disabled while Activity IDs are missing.")
         elif preparation is not None:
             positions = preparation.positions
-            first_three = [
-                period for period in positions.periods
-                if period.period_id in {"P01", "P02", "P03"} and period.points
-            ]
-            first_three_points = sum(len(period.points) for period in first_three)
-            labels = ", ".join(f"{period.period_id}:{len(period.points)}" for period in first_three)
+            populated_periods = [period for period in positions.periods if period.points]
+            populated_points = sum(len(period.points) for period in populated_periods)
+            labels = ", ".join(
+                f"{period.period_id}:{len(period.points)}" for period in populated_periods[:8]
+            )
+            if len(populated_periods) > 8:
+                labels += f", +{len(populated_periods) - 8} more"
             self.payment_status_var.set(
                 f"Ready for Render — {result.payment_periods} payments • {result.populated_requirements:,} requirements • "
                 f"{positions.resolved_count:,} positions resolved • {len(positions.issues):,} issues"
             )
-            if first_three:
+            if populated_periods:
                 self.render_ready_button.configure(state="normal")
                 self.render_status_var.set(
-                    f"Planned eligible backbone ready • {labels} • {first_three_points:,} points total"
+                    f"All-payment backbone ready • {len(populated_periods)} payments • {populated_points:,} points • {labels}"
                 )
             else:
-                self.render_status_var.set("P01-P03 have no resolved requirements to render.")
+                self.render_status_var.set("No populated Payment periods have resolved requirements to render.")
         else:
             self.payment_status_var.set(
                 f"Ready — {result.payment_periods} payments • {result.populated_requirements:,} requirements"
             )
 
 
-    def _render_first_three(self) -> None:
+    def _render_all_payments(self) -> None:
         progress = self._require_progress()
         payment = self._payment_input_path
         if progress is None:
@@ -349,16 +350,16 @@ class PaymentFrame(ttk.Frame):
             return
         suffix = progress.suffix.lower() if progress.suffix.lower() in {".xlsx", ".xlsm"} else ".xlsx"
         output = filedialog.asksaveasfilename(
-            title="Save P01-P03 Payment backbone workbook",
+            title="Save all Payment backbones workbook",
             defaultextension=suffix,
             initialdir=str(progress.parent),
-            initialfile=f"{progress.stem}_payment_p01_p03{suffix}",
+            initialfile=f"{progress.stem}_payment_all{suffix}",
             filetypes=[("Excel workbook", f"*{suffix}"), ("All files", "*.*")],
         )
         if not output:
             return
         self.render_ready_button.configure(state="disabled")
-        self.render_status_var.set("Calculating planned eligible dates and rendering P01-P03 backbones...")
+        self.render_status_var.set("Calculating planned eligible dates and rendering all populated Payment backbones...")
         self._worker = threading.Thread(
             target=self._render_worker,
             args=(progress, payment, Path(output)),
@@ -369,7 +370,7 @@ class PaymentFrame(ttk.Frame):
     def _render_worker(self, progress: Path, payment: Path, output: Path) -> None:
         try:
             result = self.service.render_payment_backbones(
-                progress, payment, output, ("P01", "P02", "P03")
+                progress, payment, output
             )
         except Exception as exc:
             self.after(0, lambda: self._render_failed(exc))

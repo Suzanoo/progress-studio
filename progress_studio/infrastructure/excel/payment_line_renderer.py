@@ -12,7 +12,7 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Border, Side
 from PIL import Image, ImageDraw, ImageFont
 
-from progress_studio.config.payment_theme import PAYMENT_LINE_COLORS, PAYMENT_LINE_STYLE
+from progress_studio.config.payment_theme import PaymentLineTheme, load_payment_line_theme
 from progress_studio.domain.payment_models import (
     PaymentLineRenderResult,
     PaymentMultiLineRenderResult,
@@ -36,6 +36,9 @@ class PaymentLineRenderer:
     MAIN_SHEET = "main"
     PAYMENT_SHEET = "Payment"
     HEADER_ROW = 4
+
+    def __init__(self, theme: PaymentLineTheme | None = None) -> None:
+        self.theme = theme or load_payment_line_theme()
 
     def render_periods(
         self,
@@ -79,9 +82,9 @@ class PaymentLineRenderer:
                         raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
 
                     for period in active:
-                        color = PAYMENT_LINE_COLORS.get(period.period_id, "7F7F7F")
-                        line = Side(style=PAYMENT_LINE_STYLE, color=color)
-                        endpoint = Side(style="thick", color=color)
+                        color = self.theme.colors.get(period.period_id, self.theme.fallback_color)
+                        line = Side(style=self.theme.line_style, color=color)
+                        endpoint = Side(style=self.theme.endpoint_style, color=color)
                         # The backbone is an output, not an input: it sits at the
                         # latest resolved requirement boundary for this payment.
                         backbone = max(self._boundary(point) for point in period.points)
@@ -200,19 +203,20 @@ class PaymentLineRenderer:
         )
         label_text = f"{period.period_id} | {date_text}"
 
-        width, height = 116, 22
+        label = self.theme.label
+        width, height = label.width_px, label.height_px
         image = Image.new("RGBA", (width, height), (255, 255, 255, 0))
         draw = ImageDraw.Draw(image)
         draw.rounded_rectangle(
             (0, 0, width - 1, height - 1),
-            radius=5,
+            radius=label.corner_radius_px,
             fill=f"#{color}",
         )
         try:
-            font = ImageFont.truetype("arialbd.ttf", 11)
+            font = ImageFont.truetype("arialbd.ttf", label.font_size)
         except OSError:
             try:
-                font = ImageFont.load_default(size=11)
+                font = ImageFont.load_default(size=label.font_size)
             except TypeError:
                 font = ImageFont.load_default()
 
@@ -222,7 +226,7 @@ class PaymentLineRenderer:
         draw.text(
             ((width - text_w) / 2, (height - text_h) / 2 - bbox[1]),
             label_text,
-            fill="white",
+            fill=f"#{label.text_color}",
             font=font,
         )
 
@@ -233,8 +237,11 @@ class PaymentLineRenderer:
         badge.width = width
         badge.height = height
         marker_col = min(max(boundary, 1), ws.max_column)
-        anchor_col = max(marker_col - 1, 1)
-        badge.anchor = ws.cell(1, anchor_col).coordinate
+        anchor_col = min(
+            max(marker_col + label.anchor_column_offset, 1),
+            ws.max_column,
+        )
+        badge.anchor = ws.cell(label.anchor_row, anchor_col).coordinate
         ws.add_image(badge)
 
     def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:

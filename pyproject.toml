@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "openpyxl>=3.1,<4",
     "matplotlib>=3.8,<4",
+    "Pillow>=10,<12",
 ]
 
 [project.scripts]
@@ -26,3 +27,6 @@ include = ["progress_studio*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.setuptools.package-data]
+"progress_studio.config" = ["payment_lines.json"]

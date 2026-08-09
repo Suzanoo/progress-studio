@@ -181,3 +181,15 @@ Project-level KPI/chart data stays live from `progress`; Activity Progress reads
 - Activity Progress summary
 
 `Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. KPI values always follow the selected cutoff date; changing Weekly/Monthly only changes the chart reporting view. Dashboard colors and chart layout are configurable in `progress_studio/config/dashboard_theme.json`. `main` remains the editable Plan/Actual master, while `progress_table` is deliberately a lightweight snapshot refreshed by Export/Rebuild rather than a live weekly mirror.
+
+### Payment line theme config
+
+Payment backbone colors and lightweight label sizing are configured in:
+
+`progress_studio/config/payment_lines.json`
+
+The renderer reads this config for all populated Payment periods. `colors` maps
+`P01`, `P02`, ... to hex colors, while `label` controls badge width, height,
+font size, corner radius, text color, and anchor offset. Payment line geometry
+remains cell-border based.
+
