@@ -406,3 +406,21 @@ The same central policy is applied after:
 RB7.1 changes visibility only. Cell/sheet protection and passwords are intentionally
 deferred to the next RB7 protection milestone.
 
+### MS-RB7.1.1 — Hybrid progress contract
+
+`progress` is no longer fully frozen after standalone Progress rebuild.
+
+Hybrid source contract:
+- `project_start` = snapshot value
+- `project_finish` = snapshot value
+- `week_start` = snapshot value
+- `plan` = snapshot cumulative percent-points
+- `actual` = live formula to the cumulative Actual S-Curve row in `main`
+
+This keeps the workbook light while allowing a user to edit Actual in `main` and have
+the S-Curve/Dashboard Actual update immediately in Excel without running Rebuild.
+
+`main_monthly` and `progress_table` remain value-only snapshots. Dashboard weekly
+Actual reads `progress`; Dashboard monthly Actual uses one contiguous `progress`
+range per month, avoiding the previous multi-area LOOKUP error.
+

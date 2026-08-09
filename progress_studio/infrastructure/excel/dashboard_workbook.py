@@ -242,16 +242,22 @@ def _build_data_sheet(workbook, progress_ws) -> None:
             _source_percent_formula(progress_ws, last_row, columns["plan"]),
         )
 
-        # Actual is cumulative too. Take the last populated weekly Actual in the
-        # month. No SUM and no multi-area LOOKUP formula are required.
-        monthly_actual = None
-        for source_row in reversed(source_rows):
-            monthly_actual = _progress_percent_value(
-                progress_ws, source_row, columns["actual"]
-            )
-            if monthly_actual is not None:
-                break
-        ws.cell(output_row, 6, monthly_actual if monthly_actual is not None else "")
+        # Actual is cumulative and remains live in the hybrid progress contract.
+        # Use one contiguous progress range for the month, so Excel can pick the
+        # last nonblank weekly Actual without the old multi-area LOOKUP error.
+        actual_letter = progress_ws.cell(1, columns["actual"]).column_letter
+        first_actual_row = source_rows[0]
+        last_actual_row = source_rows[-1]
+        actual_range = (
+            f"'{PROGRESS_SHEET}'!{actual_letter}{first_actual_row}:"
+            f"{actual_letter}{last_actual_row}"
+        )
+        ws.cell(
+            output_row,
+            6,
+            f'=IF(COUNT({actual_range})=0,"",'
+            f'LOOKUP(2,1/({actual_range}<>""),{actual_range})/100)',
+        )
         ws.cell(output_row, 4).number_format = "mmm-yyyy"
         ws.cell(output_row, 5).number_format = "0.00%"
         ws.cell(output_row, 6).number_format = "0.00%"

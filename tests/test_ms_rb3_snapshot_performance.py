@@ -17,7 +17,7 @@ def _formula_count(ws) -> int:
     )
 
 
-def test_rb3_monthly_and_progress_are_value_only_snapshots(tmp_path: Path) -> None:
+def test_rb3_monthly_progress_table_snapshot_and_progress_actual_hybrid(tmp_path: Path) -> None:
     source = _full_rebuild_fixture(tmp_path / "source.xlsx")
     output = tmp_path / "rebuilt.xlsx"
 
@@ -26,12 +26,20 @@ def test_rb3_monthly_and_progress_are_value_only_snapshots(tmp_path: Path) -> No
     wb = load_workbook(output, data_only=False)
     try:
         assert _formula_count(wb["main_monthly"]) == 0
-        assert _formula_count(wb["progress"]) == 0
         assert _formula_count(wb["progress_table"]) == 0
 
-        # Dashboard support may keep lightweight formulas for view/cutoff controls,
-        # but no generated snapshot sheet may link back to main.
-        for sheet_name in ("main_monthly", "progress", "progress_table", "Dashboard_Data"):
+        progress = wb["progress"]
+        # Only Actual is live: one lightweight formula per reporting week.
+        assert _formula_count(progress) == 2
+        assert not isinstance(progress["D2"].value, str)
+        assert not isinstance(progress["D3"].value, str)
+        assert isinstance(progress["E2"].value, str) and progress["E2"].value.startswith("=")
+        assert isinstance(progress["E3"].value, str) and progress["E3"].value.startswith("=")
+        assert "main" in progress["E2"].value.lower()
+
+        # Large snapshots stay disconnected from main. Dashboard_Data may link
+        # only through the tiny progress adapter, never directly to main.
+        for sheet_name in ("main_monthly", "progress_table", "Dashboard_Data"):
             for row in wb[sheet_name].iter_rows():
                 for cell in row:
                     value = cell.value
@@ -58,7 +66,7 @@ def test_rb3_snapshot_keeps_expected_monthly_values(tmp_path: Path) -> None:
         progress = wb["progress"]
         assert progress["D2"].value == 50.0
         assert progress["D3"].value == 100.0
-        assert progress["E2"].value == 20.0
-        assert progress["E3"].value == 50.0
+        assert isinstance(progress["E2"].value, str)
+        assert isinstance(progress["E3"].value, str)
     finally:
         wb.close()

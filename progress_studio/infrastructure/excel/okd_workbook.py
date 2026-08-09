@@ -711,8 +711,9 @@ def build_progress_sheet(
 ) -> None:
     """Build the progress curve source sheet.
 
-    ``snapshot=True`` writes cached values from a data-only ``main`` worksheet so
-    editing main does not trigger a dependency chain through progress/dashboard.
+    Standalone rebuild uses a hybrid contract when ``snapshot=True``:
+    project dates, week dates and Plan are frozen values; Actual remains a small
+    live formula link to the cumulative Actual S-Curve row in ``main``.
     """
     remove_existing_sheet(wb, OKD_PROGRESS_SHEET)
     ws = wb.create_sheet(OKD_PROGRESS_SHEET)
@@ -734,13 +735,13 @@ def build_progress_sheet(
     plan_finish_col = find_column(headers, ("Plan Finish",), required=True)
     source_ref = excel_sheet_ref(source_ws.title)
 
-    snapshot_plan = snapshot_actual = None
+    snapshot_plan = None
     snapshot_start = snapshot_finish = None
     if snapshot:
         snapshot_start, snapshot_finish = project_dates(
             source_ws, headers, activities, wb.epoch
         )
-        snapshot_plan, snapshot_actual = cumulative_project_series(
+        snapshot_plan, _snapshot_actual = cumulative_project_series(
             activities, len(weeks)
         )
 
@@ -754,8 +755,14 @@ def build_progress_sheet(
             ws.cell(output_row, 2, snapshot_finish)
             ws.cell(output_row, 3, week_date)
             ws.cell(output_row, 4, snapshot_plan[output_row - 2])
-            actual_value = snapshot_actual[output_row - 2]
-            ws.cell(output_row, 5, actual_value if actual_value is not None else "")
+            # Hybrid contract: keep Actual live with only one lightweight formula
+            # per reporting week. The main cumulative Actual row is the authority.
+            ws.cell(
+                output_row,
+                5,
+                f'=IF({source_ref}!{source_col_letter}{acc_actual_row}="","",'
+                f'ROUND({source_ref}!{source_col_letter}{acc_actual_row}*100,6))',
+            )
         else:
             ws.cell(output_row, 1, f"={source_ref}!{plan_start_addr}")
             ws.cell(output_row, 2, f"={source_ref}!{plan_finish_addr}")

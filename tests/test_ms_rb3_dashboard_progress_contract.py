@@ -56,17 +56,19 @@ def test_monthly_curve_uses_last_cumulative_progress_value() -> None:
     build_dashboard(wb)
 
     data = wb[DATA_SHEET]
-    # March closes on 27-Mar.
+    # Monthly Plan remains a value sampled from cumulative progress.
     assert data["D2"].value == date(2026, 3, 27)
     assert data["E2"].value == 0.0048
-    assert data["F2"].value == 0.002
-
-    # April Plan closes on 17-Apr. Actual uses last populated cumulative
-    # value (10-Apr), not SUM and not a LOOKUP formula.
     assert data["D3"].value == date(2026, 4, 17)
     assert data["E3"].value == 0.025
-    assert abs(data["F3"].value - 0.0045) < 1e-12
-    assert not isinstance(data["F3"].value, str)
+
+    # Monthly Actual stays live through one contiguous range on progress.
+    assert isinstance(data["F2"].value, str)
+    assert isinstance(data["F3"].value, str)
+    assert "'progress'!E2:E3" in data["F2"].value
+    assert "'progress'!E4:E6" in data["F3"].value
+    assert "LOOKUP" in data["F3"].value
+    assert "," not in data["F3"].value.split("COUNT(", 1)[1].split(")", 1)[0]
 
 
 def test_dashboard_still_uses_progress_table_for_activity_rows() -> None:
