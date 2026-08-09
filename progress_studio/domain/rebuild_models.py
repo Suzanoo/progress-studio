@@ -67,3 +67,16 @@ class RebuildWorkbookAnalysis:
             return self.payment_input_present
         return True
 
+@dataclass(frozen=True, slots=True)
+class ProgressRebuildResult:
+    source_workbook: Path
+    output_workbook: Path
+    activity_count: int
+    week_count: int
+    progress_table_rows: int
+    progress_table_checked_cells: int
+    monthly_periods: int
+    rebuilt_sheets: tuple[str, ...]
+    preserved_payment_sheet: bool
+    preserved_payment_input_sheet: bool
+

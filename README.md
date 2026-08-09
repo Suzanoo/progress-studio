@@ -227,3 +227,30 @@ The standalone rebuild path treats the selected workbook itself as the project s
 - Workbook analysis is sparse: it reads workbook metadata plus `main` worksheet XML only,
   avoiding full openpyxl workbook loading before a rebuild is selected.
 
+### MS-RB2 — Progress rebuild execution
+
+`WorkbookRebuildEngine.rebuild_progress()` now executes the Progress rebuild contract.
+
+Input:
+- any Progress Studio `.xlsx` / `.xlsm` workbook with a valid `main` sheet.
+
+Preserved:
+- `main`
+- `Payment Input`
+- `Payment`
+- internal metadata sheets
+- unknown/user-created sheets
+
+Deleted and rebuilt from the current `main`:
+- `main_monthly`
+- `progress`
+- `progress_table`
+- `Dashboard_Data`
+- `Dashboard`
+
+The rebuild writes atomically through a temporary workbook. `progress_table` remains a
+value-only hidden snapshot, Dashboard_Data remains hidden, and Excel calculation policy
+is normalized before the final replace. MS-RB2 intentionally leaves the current
+formula-driven monthly/progress/dashboard behavior unchanged; snapshot/performance
+hardening belongs to MS-RB3.
+

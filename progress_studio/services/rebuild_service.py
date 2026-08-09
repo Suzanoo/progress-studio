@@ -1,16 +1,34 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import shutil
+import tempfile
+
+from openpyxl import load_workbook
 
 from progress_studio.infrastructure.excel.rebuild_workbook_reader import (
     RebuildWorkbookReadError,
     RebuildWorkbookReader,
 )
 
+from progress_studio.infrastructure.excel.okd_workbook import (
+    build_progress_views_from_source,
+)
+from progress_studio.infrastructure.excel.monthly_main_workbook import (
+    build_monthly_main_view,
+)
+from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.calculation_policy import (
+    configure_incremental_excel_recalculation,
+)
+from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
+
 from progress_studio.domain.rebuild_models import (
     RebuildMode,
     RebuildSheetContract,
     RebuildWorkbookAnalysis,
+    ProgressRebuildResult,
 )
 
 
@@ -121,6 +139,114 @@ class WorkbookRebuildEngine:
             unknown_sheets=unknown,
             contract=self.contract,
         )
+
+
+    def rebuild_progress(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+        *,
+        project_name: str | None = None,
+    ) -> ProgressRebuildResult:
+        """Delete and rebuild only Progress-generated sheets from current ``main``.
+
+        MS-RB2 execution contract:
+        - ``main`` is authoritative and preserved exactly as loaded.
+        - ``Payment Input`` and ``Payment`` are not touched.
+        - Internal metadata and unknown user sheets are preserved.
+        - Only Progress-owned generated sheets are replaced.
+        - Output is written atomically so a failed rebuild cannot corrupt input.
+        """
+        source = Path(source_workbook).expanduser().resolve()
+        output = Path(output_workbook).expanduser().resolve()
+
+        analysis = self.analyze(source, RebuildMode.PROGRESS)
+        if output.suffix.lower() not in {".xlsx", ".xlsm"}:
+            raise RebuildContractError(
+                "Rebuild output must use .xlsx or .xlsm."
+            )
+
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{output.stem}.rb2.",
+            suffix=output.suffix,
+            dir=output.parent,
+        )
+        os.close(fd)
+        temp_path = Path(temp_name)
+
+        keep_vba = source.suffix.lower() == ".xlsm"
+        try:
+            shutil.copy2(source, temp_path)
+            wb = load_workbook(temp_path, read_only=False, data_only=False, keep_vba=keep_vba)
+            try:
+                if self.MAIN_SHEET not in wb.sheetnames:
+                    raise RebuildContractError(
+                        "Worksheet 'main' disappeared during rebuild preparation."
+                    )
+
+                preserved_payment_sheet = "Payment" in wb.sheetnames
+                preserved_payment_input_sheet = "Payment Input" in wb.sheetnames
+
+                # Hard contract: delete only Progress-generated sheets. Builders are
+                # deterministic and may also remove their own target, but deleting
+                # here makes ownership explicit and prevents stale sheet remnants.
+                for sheet_name in self.contract.generated_progress:
+                    if sheet_name in wb.sheetnames:
+                        del wb[sheet_name]
+
+                main = wb[self.MAIN_SHEET]
+                (
+                    activity_count,
+                    week_count,
+                    progress_table_rows,
+                    checked_cells,
+                ) = build_progress_views_from_source(wb, main)
+
+                if "progress_table" in wb.sheetnames:
+                    wb["progress_table"].sheet_state = "hidden"
+
+                monthly_periods = build_monthly_main_view(
+                    wb,
+                    source_sheet=self.MAIN_SHEET,
+                    target_sheet="main_monthly",
+                    require_timescale=True,
+                )
+
+                build_dashboard(
+                    wb,
+                    project_name=project_name or output.stem,
+                )
+
+                # Re-assert visibility/support contract after builders.
+                if "progress_table" in wb.sheetnames:
+                    wb["progress_table"].sheet_state = "hidden"
+                if "Dashboard_Data" in wb.sheetnames:
+                    wb["Dashboard_Data"].sheet_state = "hidden"
+
+                configure_incremental_excel_recalculation(wb)
+                wb.save(temp_path)
+            finally:
+                wb.close()
+
+            validate_xlsx_tables(temp_path)
+            os.replace(temp_path, output)
+
+            return ProgressRebuildResult(
+                source_workbook=source,
+                output_workbook=output,
+                activity_count=activity_count,
+                week_count=week_count,
+                progress_table_rows=progress_table_rows,
+                progress_table_checked_cells=checked_cells,
+                monthly_periods=monthly_periods,
+                rebuilt_sheets=self.contract.generated_progress,
+                preserved_payment_sheet=preserved_payment_sheet,
+                preserved_payment_input_sheet=preserved_payment_input_sheet,
+            )
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
 
     def generated_sheets_for(self, mode: RebuildMode | str) -> tuple[str, ...]:
         """Return the only sheets a future rebuild execution may replace."""
