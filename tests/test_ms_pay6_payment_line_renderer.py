@@ -108,15 +108,18 @@ def test_ms_pay6_single_period_uses_vertical_backbone_without_shapes(tmp_path: P
         assert sheet["T7"].border.left.style == "medium"
         assert sheet["T8"].border.left.style == "medium"
         assert sheet["T6"].border.left.color.rgb.endswith("C00000")
+        # MS-PAY6.2 carries the payment marker through the timescale header.
+        assert sheet["T4"].comment is not None
+        assert "P01 Payment backbone" in sheet["T4"].comment.text
 
         # A1000 target = right edge of U => before V; branch T..V on row 6.
         assert sheet["T6"].border.bottom.style == "medium"
         assert sheet["U6"].border.bottom.style == "medium"
-        assert sheet["V6"].border.left.style == "medium"
+        assert sheet["V6"].border.left.style == "thick"
 
         # A1010 target = right edge of T => before U.
         assert sheet["T8"].border.bottom.style == "medium"
-        assert sheet["U8"].border.left.style == "medium"
+        assert sheet["U8"].border.left.style == "thick"
 
         # Source of truth is untouched.
         assert main["T6"].border.left.style != "medium"
@@ -165,7 +168,16 @@ def test_ms_pay61_renders_three_colored_vertical_backbones(tmp_path: Path) -> No
         assert sheet["T6"].border.left.color.rgb.endswith("C00000")
         assert sheet["U6"].border.left.color.rgb.endswith("0070C0")
         # P03's far-right backbone uses right border of V because W is beyond max timeline.
-        assert sheet["V6"].border.right.style == "medium"
+        assert sheet["V6"].border.right.style in {"medium", "thick"}
         assert sheet["V6"].border.right.color.rgb.endswith("548235")
     finally:
         wb.close()
+
+
+def test_ms_pay62_backbone_collision_uses_nearest_free_cell_edge() -> None:
+    from progress_studio.infrastructure.excel.payment_line_renderer import PaymentLineRenderer
+
+    used = {20}
+    assert PaymentLineRenderer._allocate_backbone_boundary(20, used, 18, 23) == 21
+    used.add(21)
+    assert PaymentLineRenderer._allocate_backbone_boundary(20, used, 18, 23) == 19

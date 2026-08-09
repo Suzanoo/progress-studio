@@ -12,11 +12,11 @@ from progress_studio.services.payment_service import PaymentService
 
 
 class PaymentFrame(ttk.Frame):
-    """Payment workflow UI through MS-PAY6.1 vertical-backbone rendering.
+    """Payment workflow UI through MS-PAY6.2 vertical-backbone visual polish.
 
     Step 1: select Progress workbook and optionally create the Payment snapshot.
     Step 2: generate/edit the lightweight Payment Requirement workbook.
-    Step 3: upload/validate it, then render P01-P03 as cell-based backbones.
+    Step 3: upload/validate it, then render P01-P03 as polished cell-based backbones.
     """
 
     def __init__(self, master, service: PaymentService | None = None) -> None:
@@ -31,7 +31,7 @@ class PaymentFrame(ttk.Frame):
         self.payment_input_var = tk.StringVar()
         self.payment_status_var = tk.StringVar(value="Upload the edited Payment Requirement workbook when ready.")
         self.snapshot_status_var = tk.StringVar(value="Payment snapshot has not been created yet.")
-        self.render_status_var = tk.StringVar(value="MS-PAY6.1 renders P01-P03 as vertical backbones. No Shapes or pixel anchors are used.")
+        self.render_status_var = tk.StringVar(value="MS-PAY6.2 renders polished P01-P03 vertical backbones. No Shapes or pixel anchors are used.")
 
         self._validated_progress: Path | None = None
         self._snapshot_path: Path | None = None

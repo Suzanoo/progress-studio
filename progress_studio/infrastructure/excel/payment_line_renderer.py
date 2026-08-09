@@ -7,6 +7,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Border, Side
 
 from progress_studio.config.payment_theme import PAYMENT_LINE_COLORS, PAYMENT_LINE_STYLE
@@ -72,11 +73,20 @@ class PaymentLineRenderer:
                 if not timeline:
                     raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
 
+                used_boundaries: set[int] = set()
+                min_boundary = timeline[0][0]
+                max_boundary = timeline[-1][0] + 1
                 for period in active:
                     color = PAYMENT_LINE_COLORS.get(period.period_id, "7F7F7F")
                     line = Side(style=PAYMENT_LINE_STYLE, color=color)
-                    backbone = self._payment_boundary(period.payment_date, timeline)
-                    self._paint_vertical_backbone(payment, period, backbone, line)
+                    endpoint = Side(style="thick", color=color)
+                    preferred = self._payment_boundary(period.payment_date, timeline)
+                    backbone = self._allocate_backbone_boundary(
+                        preferred, used_boundaries, min_boundary, max_boundary
+                    )
+                    used_boundaries.add(backbone)
+                    self._paint_header_marker(payment, period, backbone, line)
+                    self._paint_vertical_backbone(payment, period, backbone, line, endpoint)
                     colors.append((period.period_id, color))
                     rendered_points += len(period.points)
 
@@ -125,6 +135,7 @@ class PaymentLineRenderer:
         period: PaymentResolvedPeriod,
         backbone_boundary: int,
         line: Side,
+        endpoint: Side,
     ) -> None:
         points = tuple(sorted(period.points, key=lambda p: p.activity_row))
         if not points:
@@ -136,8 +147,49 @@ class PaymentLineRenderer:
         for point in points:
             target_boundary = self._boundary(point)
             self._horizontal_boundary(ws, point.activity_row, backbone_boundary, target_boundary, line)
-            # A one-row target cap makes the resolved requirement boundary explicit.
-            self._vertical_boundary(ws, point.activity_row, point.activity_row, target_boundary, line)
+            # A stronger one-row cap marks the actual resolved % target without
+            # writing into the weekly Plan cells.
+            self._vertical_boundary(ws, point.activity_row, point.activity_row, target_boundary, endpoint)
+
+    def _paint_header_marker(
+        self,
+        ws,
+        period: PaymentResolvedPeriod,
+        boundary: int,
+        line: Side,
+    ) -> None:
+        """Carry the backbone through the timescale header and attach a lightweight note."""
+        self._vertical_boundary(ws, 1, self.HEADER_ROW, boundary, line)
+        marker_col = boundary if boundary <= ws.max_column else ws.max_column
+        marker_cell = ws.cell(self.HEADER_ROW, marker_col)
+        date_text = period.payment_date.isoformat() if period.payment_date else "no date"
+        marker_cell.comment = Comment(
+            f"{period.period_id} Payment backbone\nPayment date: {date_text}",
+            "Progress Studio",
+        )
+
+    @staticmethod
+    def _allocate_backbone_boundary(
+        preferred: int,
+        used: set[int],
+        minimum: int,
+        maximum: int,
+    ) -> int:
+        """Keep coincident payments readable using the nearest free cell boundary.
+
+        First choice is the resolved Payment-Date boundary. For collisions, use
+        the opposite edge of that weekly cell, then the nearest neighbouring edge.
+        """
+        preferred = min(max(preferred, minimum), maximum)
+        if preferred not in used:
+            return preferred
+        distance = 1
+        while distance <= (maximum - minimum + 1):
+            for candidate in (preferred + distance, preferred - distance):
+                if minimum <= candidate <= maximum and candidate not in used:
+                    return candidate
+            distance += 1
+        return preferred
 
     def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:
         result: list[tuple[int, date]] = []

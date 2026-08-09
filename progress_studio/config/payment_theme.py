@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# Payment line palette is centralized so multi-payment rendering stays consistent.
+# Payment line palette is centralized so multi-payment rendering stays consistent.\n# Backbone/branch = medium; resolved target cap = thick (renderer visual polish).
 PAYMENT_LINE_COLORS = {
     "P01": "C00000",  # red
     "P02": "0070C0",  # blue
