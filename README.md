@@ -319,3 +319,22 @@ The Payment renderer resolves Planned Eligible positions from current `main`, re
 current Payment requirements from `Payment Input`, removes stale `Payment`, and writes a
 new Payment sheet. Progress-generated views are deliberately not reconciled or rebuilt.
 
+### MS-RB5 — Payment collision lanes and label polish
+
+Payment business logic remains unchanged: each period has a true Planned Eligible
+boundary calculated from its sparse Activity requirements.
+
+Rendering now separates only the visual geometry when multiple Payment periods would
+occupy the same Excel boundary. Nearby lanes are allocated using configurable offsets,
+while every horizontal branch still ends at the true Activity target. Shifted header
+notes explicitly mark the visual offset as display-only.
+
+Default Payment label style is now:
+- width: 145 px
+- height: 26 px
+- font: 12
+- rounded corner radius: 6 px
+
+Collision and label settings live in `progress_studio/config/payment_lines.json`,
+including `collision_max_offset` and `collision_row_step`.
+

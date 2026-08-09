@@ -10,13 +10,14 @@ CONFIG_PATH = Path(__file__).with_name("payment_lines.json")
 
 @dataclass(frozen=True)
 class PaymentLabelTheme:
-    width_px: int = 116
-    height_px: int = 22
-    font_size: int = 11
-    corner_radius_px: int = 5
+    width_px: int = 145
+    height_px: int = 26
+    font_size: int = 12
+    corner_radius_px: int = 6
     text_color: str = "FFFFFF"
     anchor_column_offset: int = -1
     anchor_row: int = 1
+    collision_row_step: int = 1
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class PaymentLineTheme:
     line_style: str = "medium"
     endpoint_style: str = "thick"
     fallback_color: str = "7F7F7F"
+    collision_max_offset: int = 3
     label: PaymentLabelTheme = PaymentLabelTheme()
 
 
@@ -66,14 +68,16 @@ def load_payment_line_theme(path: Path | None = None) -> PaymentLineTheme:
         line_style=str(line.get("style") or "medium"),
         endpoint_style=str(line.get("endpoint_style") or "thick"),
         fallback_color=_hex(line.get("fallback_color"), "7F7F7F"),
+        collision_max_offset=max(int(line.get("collision_max_offset", 3)), 0),
         label=PaymentLabelTheme(
-            width_px=max(int(label.get("width_px", 116)), 40),
-            height_px=max(int(label.get("height_px", 22)), 14),
-            font_size=max(int(label.get("font_size", 11)), 6),
-            corner_radius_px=max(int(label.get("corner_radius_px", 5)), 0),
+            width_px=max(int(label.get("width_px", 145)), 40),
+            height_px=max(int(label.get("height_px", 26)), 14),
+            font_size=max(int(label.get("font_size", 12)), 6),
+            corner_radius_px=max(int(label.get("corner_radius_px", 6)), 0),
             text_color=_hex(label.get("text_color"), "FFFFFF"),
             anchor_column_offset=int(label.get("anchor_column_offset", -1)),
             anchor_row=max(int(label.get("anchor_row", 1)), 1),
+            collision_row_step=max(int(label.get("collision_row_step", 1)), 0),
         ),
     )
 

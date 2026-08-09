@@ -2,16 +2,18 @@
   "line": {
     "style": "medium",
     "endpoint_style": "thick",
-    "fallback_color": "7F7F7F"
+    "fallback_color": "7F7F7F",
+    "collision_max_offset": 3
   },
   "label": {
-    "width_px": 116,
-    "height_px": 22,
-    "font_size": 11,
-    "corner_radius_px": 5,
+    "width_px": 145,
+    "height_px": 26,
+    "font_size": 12,
+    "corner_radius_px": 6,
     "text_color": "FFFFFF",
     "anchor_column_offset": -1,
-    "anchor_row": 1
+    "anchor_row": 1,
+    "collision_row_step": 1
   },
   "colors": {
     "P01": "C00000",

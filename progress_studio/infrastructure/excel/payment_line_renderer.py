@@ -25,12 +25,11 @@ from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkboo
 class PaymentLineRenderer:
     """Cell-based vertical-backbone Payment renderer.
 
-    Each Payment period gets one vertical backbone at its planned eligible
-    position: the latest resolved requirement boundary among that period's sparse
-    Activity points. The Payment Date supplied in the input workbook is retained
-    only as legacy/reference metadata and never controls backbone placement.
-    Line geometry remains cell-border based. A single lightweight, cell-anchored
-    badge image is added per Payment only for the visible label.
+    Each Payment period keeps a true planned-eligible boundary from the latest
+    resolved sparse Activity point. When multiple periods collide visually, a
+    nearby weekly boundary is allocated only as a display lane; the business date
+    and Activity targets remain unchanged. Line geometry stays cell-border based,
+    with one lightweight label badge per Payment.
     """
 
     MAIN_SHEET = "main"
@@ -86,21 +85,33 @@ class PaymentLineRenderer:
                     if not timeline:
                         raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
 
+                    lane_plan = self._allocate_visual_lanes(active, timeline)
                     for period in active:
                         color = self.theme.colors.get(period.period_id, self.theme.fallback_color)
                         line = Side(style=self.theme.line_style, color=color)
                         endpoint = Side(style=self.theme.endpoint_style, color=color)
-                        # The backbone is an output, not an input: it sits at the
-                        # latest resolved requirement boundary for this payment.
-                        backbone = max(self._boundary(point) for point in period.points)
-                        self._paint_header_marker(payment, period, backbone, line)
-                        self._paint_vertical_backbone(payment, period, backbone, line, endpoint)
+                        true_boundary, visual_boundary, collision_index = lane_plan[period.period_id]
+                        self._paint_header_marker(
+                            payment,
+                            period,
+                            visual_boundary,
+                            line,
+                            true_boundary=true_boundary,
+                        )
+                        self._paint_vertical_backbone(
+                            payment,
+                            period,
+                            visual_boundary,
+                            line,
+                            endpoint,
+                        )
                         self._add_payment_label(
                             payment,
                             period,
-                            backbone,
+                            visual_boundary,
                             color,
                             Path(label_dir),
+                            collision_index=collision_index,
                         )
                         colors.append((period.period_id, color))
                         rendered_points += len(period.points)
@@ -172,6 +183,8 @@ class PaymentLineRenderer:
         period: PaymentResolvedPeriod,
         boundary: int,
         line: Side,
+        *,
+        true_boundary: int | None = None,
     ) -> None:
         """Carry the backbone through the timescale header and attach a lightweight note."""
         self._vertical_boundary(ws, 1, self.HEADER_ROW, boundary, line)
@@ -183,10 +196,17 @@ class PaymentLineRenderer:
         )
         controllers = ", ".join(period.controlling_activity_ids) or "n/a"
         legacy_text = period.payment_date.isoformat() if period.payment_date else "none"
+        visual_note = ""
+        if true_boundary is not None and true_boundary != boundary:
+            visual_note = (
+                f"\nVisual lane offset: {boundary - true_boundary:+d} weekly boundary "
+                "(display only)"
+            )
         note = (
             f"{period.period_id} Planned Eligible Date: {eligible_text}\n"
             f"Controlling Activity: {controllers}\n"
             f"Input Payment Date (reference only): {legacy_text}"
+            f"{visual_note}"
         )
         if marker_cell.comment is not None and marker_cell.comment.text:
             note = marker_cell.comment.text + "\n\n" + note
@@ -200,6 +220,8 @@ class PaymentLineRenderer:
         boundary: int,
         color: str,
         label_dir: Path,
+        *,
+        collision_index: int = 0,
     ) -> None:
         """Add one small floating badge per Payment; line geometry stays cell-based."""
         date_text = (
@@ -246,8 +268,64 @@ class PaymentLineRenderer:
             max(marker_col + label.anchor_column_offset, 1),
             ws.max_column,
         )
-        badge.anchor = ws.cell(label.anchor_row, anchor_col).coordinate
+        anchor_row = label.anchor_row + collision_index * label.collision_row_step
+        badge.anchor = ws.cell(anchor_row, anchor_col).coordinate
         ws.add_image(badge)
+
+    def _allocate_visual_lanes(
+        self,
+        periods: tuple[PaymentResolvedPeriod, ...],
+        timeline: tuple[tuple[int, date], ...],
+    ) -> dict[str, tuple[int, int, int]]:
+        """Allocate nearby visual boundaries when true eligible boundaries collide.
+
+        Returns ``period_id -> (true_boundary, visual_boundary, collision_index)``.
+        Business logic always remains on ``true_boundary``; only drawing geometry
+        may shift to a nearby free weekly boundary.
+        """
+        if not periods:
+            return {}
+
+        min_boundary = min(col for col, _ in timeline)
+        max_boundary = max(col for col, _ in timeline) + 1
+        by_true: dict[int, list[PaymentResolvedPeriod]] = {}
+        for period in periods:
+            true_boundary = max(self._boundary(point) for point in period.points)
+            by_true.setdefault(true_boundary, []).append(period)
+
+        used: set[int] = set()
+        result: dict[str, tuple[int, int, int]] = {}
+        max_offset = self.theme.collision_max_offset
+
+        def candidates(true_boundary: int):
+            yield true_boundary
+            for distance in range(1, max_offset + 1):
+                yield true_boundary + distance
+                yield true_boundary - distance
+
+        for true_boundary in sorted(by_true):
+            group = by_true[true_boundary]
+            for collision_index, period in enumerate(group):
+                visual = None
+                for candidate in candidates(true_boundary):
+                    if not (min_boundary <= candidate <= max_boundary):
+                        continue
+                    if candidate in used:
+                        continue
+                    visual = candidate
+                    break
+                if visual is None:
+                    # Extremely dense schedules may exhaust configured nearby
+                    # lanes. Preserve the business boundary rather than inventing
+                    # a distant visual date.
+                    visual = true_boundary
+                used.add(visual)
+                result[period.period_id] = (
+                    true_boundary,
+                    visual,
+                    collision_index,
+                )
+        return result
 
     def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:
         result: list[tuple[int, date]] = []
