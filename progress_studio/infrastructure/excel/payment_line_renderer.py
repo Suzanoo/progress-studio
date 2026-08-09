@@ -3,48 +3,56 @@ from __future__ import annotations
 import shutil
 import tempfile
 from copy import copy
+from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.styles import Border, Side
 
 from progress_studio.config.payment_theme import PAYMENT_LINE_COLORS, PAYMENT_LINE_STYLE
-from progress_studio.domain.payment_models import PaymentLineRenderResult, PaymentResolvedPeriod, PaymentResolvedPoint
-from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError, PaymentWorkbookSnapshotter
+from progress_studio.domain.payment_models import (
+    PaymentLineRenderResult,
+    PaymentMultiLineRenderResult,
+    PaymentResolvedPeriod,
+    PaymentResolvedPoint,
+)
+from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
 
 
 class PaymentLineRenderer:
-    """Render one sparse Payment period as a cell-border staircase.
+    """Cell-based vertical-backbone Payment renderer.
 
-    The renderer intentionally knows nothing about payment percentages or Plan
-    distributions.  It receives already-resolved row/column boundaries and only
-    paints cell borders.  No Shape objects, pixel coordinates, or drawing anchors
-    are used, so the line remains attached to the worksheet grid while zooming.
+    Each Payment period gets one vertical backbone at its Payment Date on the
+    weekly timescale. Only sparse resolved Activity points are rendered. A short
+    horizontal branch connects the backbone to each resolved requirement point.
+    No Shapes, drawing anchors, or pixel coordinates are created.
     """
 
     MAIN_SHEET = "main"
     PAYMENT_SHEET = "Payment"
+    HEADER_ROW = 4
 
-    def render_single_period(
+    def render_periods(
         self,
         source_workbook: Path,
         output_workbook: Path,
-        period: PaymentResolvedPeriod,
-    ) -> PaymentLineRenderResult:
+        periods: tuple[PaymentResolvedPeriod, ...],
+    ) -> PaymentMultiLineRenderResult:
         source = Path(source_workbook)
         output = Path(output_workbook)
-        if not period.points:
-            raise PaymentWorkbookError(f"{period.period_id} has no resolved Payment points to render.")
+        active = tuple(period for period in periods if period.points)
+        if not active:
+            raise PaymentWorkbookError("No resolved Payment points were available to render.")
 
-        color = PAYMENT_LINE_COLORS.get(period.period_id, "C00000")
         output.parent.mkdir(parents=True, exist_ok=True)
         keep_vba = source.suffix.lower() == ".xlsm"
-
         with tempfile.NamedTemporaryFile(
-            prefix="payment_line_", suffix=output.suffix, dir=output.parent, delete=False
+            prefix="payment_backbone_", suffix=output.suffix, dir=output.parent, delete=False
         ) as handle:
             temp_path = Path(handle.name)
 
+        colors: list[tuple[str, str]] = []
+        rendered_points = 0
         try:
             wb = load_workbook(source, keep_vba=keep_vba)
             try:
@@ -60,9 +68,18 @@ class PaymentLineRenderer:
                 payment.sheet_view.showGridLines = main.sheet_view.showGridLines
                 payment.auto_filter.ref = main.auto_filter.ref
 
-                line = Side(style=PAYMENT_LINE_STYLE, color=color)
-                points = tuple(sorted(period.points, key=lambda p: p.activity_row))
-                self._paint_points_and_segments(payment, points, line)
+                timeline = self._timescale_boundaries(payment)
+                if not timeline:
+                    raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
+
+                for period in active:
+                    color = PAYMENT_LINE_COLORS.get(period.period_id, "7F7F7F")
+                    line = Side(style=PAYMENT_LINE_STYLE, color=color)
+                    backbone = self._payment_boundary(period.payment_date, timeline)
+                    self._paint_vertical_backbone(payment, period, backbone, line)
+                    colors.append((period.period_id, color))
+                    rendered_points += len(period.points)
+
                 wb.save(temp_path)
             finally:
                 wb.close()
@@ -70,37 +87,81 @@ class PaymentLineRenderer:
         except PaymentWorkbookError:
             raise
         except Exception as exc:
-            raise PaymentWorkbookError(f"Payment line could not be rendered: {exc}") from exc
+            raise PaymentWorkbookError(f"Payment lines could not be rendered: {exc}") from exc
         finally:
             temp_path.unlink(missing_ok=True)
 
-        return PaymentLineRenderResult(
+        return PaymentMultiLineRenderResult(
             source_workbook=source,
             output_workbook=output,
             payment_sheet=self.PAYMENT_SHEET,
+            period_ids=tuple(period.period_id for period in active),
+            rendered_points=rendered_points,
+            rendered_periods=len(active),
+            colors=tuple(colors),
+        )
+
+    def render_single_period(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+        period: PaymentResolvedPeriod,
+    ) -> PaymentLineRenderResult:
+        """Compatibility wrapper: single period rendered with the backbone engine."""
+        result = self.render_periods(source_workbook, output_workbook, (period,))
+        color = result.colors[0][1]
+        return PaymentLineRenderResult(
+            source_workbook=result.source_workbook,
+            output_workbook=result.output_workbook,
+            payment_sheet=result.payment_sheet,
             period_id=period.period_id,
-            rendered_points=len(period.points),
+            rendered_points=result.rendered_points,
             color=color,
         )
 
-    def _paint_points_and_segments(self, ws, points: tuple[PaymentResolvedPoint, ...], line: Side) -> None:
-        # A single point is still visible as one vertical boundary on its activity row.
-        for point in points:
-            self._vertical_boundary(ws, point.activity_row, point.activity_row, self._boundary(point), line)
+    def _paint_vertical_backbone(
+        self,
+        ws,
+        period: PaymentResolvedPeriod,
+        backbone_boundary: int,
+        line: Side,
+    ) -> None:
+        points = tuple(sorted(period.points, key=lambda p: p.activity_row))
+        if not points:
+            return
+        first_row = points[0].activity_row
+        last_row = points[-1].activity_row
+        self._vertical_boundary(ws, first_row, last_row, backbone_boundary, line)
 
-        # Staircase contract: from each target, walk horizontally on that activity
-        # row to the next target's boundary, then vertically down to the next row.
-        # All geometry is expressed only in worksheet row/column indices.
-        for current, nxt in zip(points, points[1:]):
-            b1 = self._boundary(current)
-            b2 = self._boundary(nxt)
-            self._horizontal_boundary(ws, current.activity_row, b1, b2, line)
-            self._vertical_boundary(ws, current.activity_row, nxt.activity_row, b2, line)
+        for point in points:
+            target_boundary = self._boundary(point)
+            self._horizontal_boundary(ws, point.activity_row, backbone_boundary, target_boundary, line)
+            # A one-row target cap makes the resolved requirement boundary explicit.
+            self._vertical_boundary(ws, point.activity_row, point.activity_row, target_boundary, line)
+
+    def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:
+        result: list[tuple[int, date]] = []
+        for col in range(1, ws.max_column + 1):
+            value = ws.cell(self.HEADER_ROW, col).value
+            if isinstance(value, datetime):
+                result.append((col, value.date()))
+            elif isinstance(value, date):
+                result.append((col, value))
+        return tuple(result)
+
+    @staticmethod
+    def _payment_boundary(payment_date: date | None, timeline: tuple[tuple[int, date], ...]) -> int:
+        # Boundary before the first weekly bucket whose date is on/after Payment Date.
+        # If the Payment Date is beyond the last bucket, use the last bucket's right edge.
+        if payment_date is None:
+            return timeline[0][0]
+        for col, bucket_date in timeline:
+            if bucket_date >= payment_date:
+                return col
+        return timeline[-1][0] + 1
 
     @staticmethod
     def _boundary(point: PaymentResolvedPoint) -> int:
-        # Boundary N means the grid line immediately before column N.  Therefore
-        # the right edge of column C is the same boundary as the left edge of C+1.
         return point.timescale_column if point.boundary_edge == "left" else point.timescale_column + 1
 
     @staticmethod
@@ -122,8 +183,6 @@ class PaymentLineRenderer:
 
     def _vertical_boundary(self, ws, row1: int, row2: int, boundary: int, line: Side) -> None:
         start, end = sorted((row1, row2))
-        # Prefer the left border of the cell to the right of the boundary.  At the
-        # worksheet's far-right edge, fall back to the right border of the last cell.
         if boundary <= ws.max_column:
             for row in range(start, end + 1):
                 self._replace_border(ws.cell(row, boundary), left=line)
@@ -137,8 +196,6 @@ class PaymentLineRenderer:
             return
         left = min(boundary1, boundary2)
         right = max(boundary1, boundary2)
-        # Bottom borders create a crisp horizontal step without introducing any
-        # drawing object. Boundaries [left, right] span cells left..right-1.
         for col in range(left, right):
             if 1 <= col <= ws.max_column:
                 self._replace_border(ws.cell(row, col), bottom=line)

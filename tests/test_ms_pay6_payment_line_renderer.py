@@ -83,7 +83,7 @@ def _payment_input(progress: Path, path: Path) -> Path:
     return path
 
 
-def test_ms_pay6_renders_p01_as_cell_border_staircase_without_shapes(tmp_path: Path) -> None:
+def test_ms_pay6_single_period_uses_vertical_backbone_without_shapes(tmp_path: Path) -> None:
     progress = _progress_workbook(tmp_path / "progress.xlsx")
     payment = _payment_input(progress, tmp_path / "payment_input.xlsx")
     output = tmp_path / "payment_p01.xlsx"
@@ -102,19 +102,70 @@ def test_ms_pay6_renders_p01_as_cell_border_staircase_without_shapes(tmp_path: P
         assert not sheet._images
         assert not sheet._charts
 
-        # A1000 60% resolves at U right edge => boundary before V.
-        assert sheet["V6"].border.left.style == "medium"
-        assert sheet["V6"].border.left.color.rgb.endswith("C00000")
+        # P01 date 13-Mar resolves to the boundary before T (16-Mar bucket).
+        # Backbone runs only from first sparse Activity row through the last one.
+        assert sheet["T6"].border.left.style == "medium"
+        assert sheet["T7"].border.left.style == "medium"
+        assert sheet["T8"].border.left.style == "medium"
+        assert sheet["T6"].border.left.color.rgb.endswith("C00000")
 
-        # A1010 25% resolves at T right edge => boundary before U.
-        # The step runs horizontally on row 6, then vertically through row 8.
+        # A1000 target = right edge of U => before V; branch T..V on row 6.
+        assert sheet["T6"].border.bottom.style == "medium"
         assert sheet["U6"].border.bottom.style == "medium"
-        assert sheet["U6"].border.left.style == "medium"
-        assert sheet["U7"].border.left.style == "medium"
+        assert sheet["V6"].border.left.style == "medium"
+
+        # A1010 target = right edge of T => before U.
+        assert sheet["T8"].border.bottom.style == "medium"
         assert sheet["U8"].border.left.style == "medium"
 
         # Source of truth is untouched.
-        assert main["V6"].border.left.style != "medium"
+        assert main["T6"].border.left.style != "medium"
         assert main["U6"].border.bottom.style != "medium"
+    finally:
+        wb.close()
+
+
+def test_ms_pay61_renders_three_colored_vertical_backbones(tmp_path: Path) -> None:
+    progress = _progress_workbook(tmp_path / "progress.xlsx")
+    payment = _payment_input(progress, tmp_path / "payment_input.xlsx")
+
+    wb = load_workbook(payment)
+    ws = wb["Payment Input"]
+    activity_rows = {
+        ws.cell(row, 3).value: row
+        for row in range(8, ws.max_row + 1)
+        if ws.cell(row, 1).value == "ACT"
+    }
+    # Tree layout: E=P01, F=P02, G=P03. Keep all three periods sparse.
+    ws.cell(activity_rows["A1000"], 5, 0.25)
+    ws.cell(activity_rows["A1000"], 6, 0.60)
+    ws.cell(activity_rows["A1000"], 7, 1.00)
+    ws.cell(activity_rows["A1010"], 5).value = None
+    ws.cell(activity_rows["A1010"], 6, 0.25)
+    ws.cell(activity_rows["A1010"], 7, 1.00)
+    wb.save(payment)
+    wb.close()
+
+    output = tmp_path / "payment_three.xlsx"
+    result = PaymentService().render_payment_backbones(
+        progress, payment, output, ("P01", "P02", "P03")
+    )
+
+    assert result.period_ids == ("P01", "P02", "P03")
+    assert result.rendered_periods == 3
+    assert result.rendered_points == 5
+    assert dict(result.colors) == {"P01": "C00000", "P02": "0070C0", "P03": "548235"}
+
+    wb = load_workbook(output)
+    try:
+        sheet = wb["Payment"]
+        assert not sheet._images
+        assert not sheet._charts
+        # Backbone payment-date boundaries: P01=T, P02=U, P03=W (after last bucket).
+        assert sheet["T6"].border.left.color.rgb.endswith("C00000")
+        assert sheet["U6"].border.left.color.rgb.endswith("0070C0")
+        # P03's far-right backbone uses right border of V because W is beyond max timeline.
+        assert sheet["V6"].border.right.style == "medium"
+        assert sheet["V6"].border.right.color.rgb.endswith("548235")
     finally:
         wb.close()

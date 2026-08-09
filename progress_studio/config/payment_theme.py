@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-# MS-PAY6 renders P01 only. Keep the palette centralized so MS-PAY7 can
-# add P02..Pn without scattering colors through renderer code.
+# Payment line palette is centralized so multi-payment rendering stays consistent.
 PAYMENT_LINE_COLORS = {
-    "P01": "C00000",  # strong red; high contrast against the blue Plan bar
+    "P01": "C00000",  # red
+    "P02": "0070C0",  # blue
+    "P03": "548235",  # green
+    "P04": "7030A0",
+    "P05": "ED7D31",
 }
 
 PAYMENT_LINE_STYLE = "medium"

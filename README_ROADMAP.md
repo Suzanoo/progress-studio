@@ -245,7 +245,8 @@ Tkinter presentation
 - [x] MS-PAY3 - Sparse XML Payment Input reader; blank cells are not materialized, explicit 0% is preserved.
 - [x] MS-PAY4 - Activity Progress Index from current `main` Plan rows and weekly distributions.
 - [x] MS-PAY5 - Cell-boundary Payment Position Engine; no line rendering yet.
-- [x] MS-PAY6 - Single P01 payment line renderer using cell-border staircase; no Shapes/pixel anchors.
+- [x] MS-PAY6 - Single P01 payment line renderer using cell boundaries; no Shapes/pixel anchors.
+- [x] MS-PAY6.1 - Vertical-backbone renderer for P01-P03 with per-payment colors and sparse Activity branches.
 - [ ] MS-PAY7 - Multi-payment lines with per-payment colors.
 - [ ] MS-PAY8 - Edge cases, validation and audit.
 - [ ] MS-PAY9 - Rebuild / edited-workbook compatibility.

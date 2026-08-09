@@ -146,3 +146,14 @@ class PaymentLineRenderResult:
     period_id: str
     rendered_points: int
     color: str
+
+
+@dataclass(frozen=True)
+class PaymentMultiLineRenderResult:
+    source_workbook: Path
+    output_workbook: Path
+    payment_sheet: str
+    period_ids: tuple[str, ...]
+    rendered_points: int
+    rendered_periods: int
+    colors: tuple[tuple[str, str], ...]

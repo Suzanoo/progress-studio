@@ -7,6 +7,7 @@ from progress_studio.domain.payment_models import (
     PaymentInputResult,
     PaymentInputValidation,
     PaymentLineRenderResult,
+    PaymentMultiLineRenderResult,
     PaymentPositionResult,
     PaymentPreparationResult,
     PaymentSnapshotResult,
@@ -77,6 +78,32 @@ class PaymentService:
         progress = self.progress_index_reader.read(Path(progress_workbook))
         return self.position_engine.resolve(payment, progress)
 
+
+
+    def render_payment_backbones(
+        self,
+        progress_workbook: Path,
+        payment_workbook: Path,
+        output_workbook: Path,
+        period_ids: tuple[str, ...] = ("P01", "P02", "P03"),
+    ) -> PaymentMultiLineRenderResult:
+        """MS-PAY6.1: render selected periods as cell-based vertical backbones."""
+        prepared = self.prepare_payment_input(Path(progress_workbook), Path(payment_workbook))
+        by_id = {period.period_id: period for period in prepared.positions.periods}
+        selected = []
+        for period_id in period_ids:
+            period = by_id.get(period_id)
+            if period is None:
+                from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
+                raise PaymentWorkbookError(f"Payment period {period_id} was not found in Payment Input.")
+            if period.points:
+                selected.append(period)
+        if not selected:
+            from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
+            raise PaymentWorkbookError("P01-P03 have no resolved requirements to render.")
+        return self.line_renderer.render_periods(
+            Path(progress_workbook), Path(output_workbook), tuple(selected)
+        )
 
     def render_single_payment_line(
         self,

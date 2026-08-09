@@ -12,11 +12,11 @@ from progress_studio.services.payment_service import PaymentService
 
 
 class PaymentFrame(ttk.Frame):
-    """Payment workflow UI through MS-PAY6 single-line rendering.
+    """Payment workflow UI through MS-PAY6.1 vertical-backbone rendering.
 
     Step 1: select Progress workbook and optionally create the Payment snapshot.
     Step 2: generate/edit the lightweight Payment Requirement workbook.
-    Step 3: upload/validate it, then render P01 as a cell-border staircase.
+    Step 3: upload/validate it, then render P01-P03 as cell-based backbones.
     """
 
     def __init__(self, master, service: PaymentService | None = None) -> None:
@@ -31,7 +31,7 @@ class PaymentFrame(ttk.Frame):
         self.payment_input_var = tk.StringVar()
         self.payment_status_var = tk.StringVar(value="Upload the edited Payment Requirement workbook when ready.")
         self.snapshot_status_var = tk.StringVar(value="Payment snapshot has not been created yet.")
-        self.render_status_var = tk.StringVar(value="MS-PAY6 renders P01 only. No Shapes or pixel anchors are used.")
+        self.render_status_var = tk.StringVar(value="MS-PAY6.1 renders P01-P03 as vertical backbones. No Shapes or pixel anchors are used.")
 
         self._validated_progress: Path | None = None
         self._snapshot_path: Path | None = None
@@ -48,7 +48,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(panel, text="Payment", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             panel,
-            text="Prepare the Payment sheet, edit lightweight requirements, and render the first P01 payment line on the timescale grid.",
+            text="Prepare the Payment sheet, edit lightweight requirements, and render P01-P03 vertical backbones on the timescale grid.",
             style="Muted.TLabel",
             wraplength=840,
         ).grid(row=1, column=0, sticky="w", pady=(6, 16))
@@ -145,9 +145,9 @@ class PaymentFrame(ttk.Frame):
         actions.grid(row=4, column=1, columnspan=2, sticky="w", pady=(10, 0))
         self.render_ready_button = ttk.Button(
             actions,
-            text="Render P01 Line",
+            text="Render P01-P03 Backbones",
             style="Accent.TButton",
-            command=self._render_p01,
+            command=self._render_first_three,
             state="disabled",
         )
         self.render_ready_button.pack(side="left")
@@ -306,34 +306,40 @@ class PaymentFrame(ttk.Frame):
                 result = preparation.validation
         except PaymentWorkbookError as exc:
             self.payment_status_var.set(f"Not ready — {exc}")
-            self.render_status_var.set("P01 render is disabled until the Payment Input is valid.")
+            self.render_status_var.set("Backbone render is disabled until the Payment Input is valid.")
             return
         self._payment_input_path = payment_file
         if result.missing_activities:
             self.payment_status_var.set(
                 f"Review — {result.payment_periods} payments • {result.matched_activities:,}/{result.activity_rows:,} Activity IDs matched • {result.missing_activities:,} missing"
             )
-            self.render_status_var.set("P01 render is disabled while Activity IDs are missing.")
+            self.render_status_var.set("Backbone render is disabled while Activity IDs are missing.")
         elif preparation is not None:
             positions = preparation.positions
-            p01 = next((period for period in positions.periods if period.period_id == "P01"), None)
-            p01_points = len(p01.points) if p01 is not None else 0
+            first_three = [
+                period for period in positions.periods
+                if period.period_id in {"P01", "P02", "P03"} and period.points
+            ]
+            first_three_points = sum(len(period.points) for period in first_three)
+            labels = ", ".join(f"{period.period_id}:{len(period.points)}" for period in first_three)
             self.payment_status_var.set(
                 f"Ready for Render — {result.payment_periods} payments • {result.populated_requirements:,} requirements • "
                 f"{positions.resolved_count:,} positions resolved • {len(positions.issues):,} issues"
             )
-            if p01_points:
+            if first_three:
                 self.render_ready_button.configure(state="normal")
-                self.render_status_var.set(f"P01 ready • {p01_points:,} resolved points • cell-boundary staircase renderer")
+                self.render_status_var.set(
+                    f"Vertical backbone ready • {labels} • {first_three_points:,} points total"
+                )
             else:
-                self.render_status_var.set("P01 has no resolved requirements to render.")
+                self.render_status_var.set("P01-P03 have no resolved requirements to render.")
         else:
             self.payment_status_var.set(
                 f"Ready — {result.payment_periods} payments • {result.populated_requirements:,} requirements"
             )
 
 
-    def _render_p01(self) -> None:
+    def _render_first_three(self) -> None:
         progress = self._require_progress()
         payment = self._payment_input_path
         if progress is None:
@@ -343,16 +349,16 @@ class PaymentFrame(ttk.Frame):
             return
         suffix = progress.suffix.lower() if progress.suffix.lower() in {".xlsx", ".xlsm"} else ".xlsx"
         output = filedialog.asksaveasfilename(
-            title="Save P01 Payment line workbook",
+            title="Save P01-P03 Payment backbone workbook",
             defaultextension=suffix,
             initialdir=str(progress.parent),
-            initialfile=f"{progress.stem}_payment_p01{suffix}",
+            initialfile=f"{progress.stem}_payment_p01_p03{suffix}",
             filetypes=[("Excel workbook", f"*{suffix}"), ("All files", "*.*")],
         )
         if not output:
             return
         self.render_ready_button.configure(state="disabled")
-        self.render_status_var.set("Rendering P01 on Payment sheet...")
+        self.render_status_var.set("Rendering P01-P03 vertical backbones on Payment sheet...")
         self._worker = threading.Thread(
             target=self._render_worker,
             args=(progress, payment, Path(output)),
@@ -362,21 +368,30 @@ class PaymentFrame(ttk.Frame):
 
     def _render_worker(self, progress: Path, payment: Path, output: Path) -> None:
         try:
-            result = self.service.render_single_payment_line(progress, payment, output, "P01")
+            result = self.service.render_payment_backbones(
+                progress, payment, output, ("P01", "P02", "P03")
+            )
         except Exception as exc:
             self.after(0, lambda: self._render_failed(exc))
             return
-        self.after(0, lambda: self._render_done(result.output_workbook, result.rendered_points))
+        self.after(
+            0,
+            lambda: self._render_done(
+                result.output_workbook, result.rendered_periods, result.rendered_points
+            ),
+        )
 
-    def _render_done(self, output: Path, points: int) -> None:
+    def _render_done(self, output: Path, periods: int, points: int) -> None:
         self._render_output_path = output
-        self.render_status_var.set(f"Created {output.name} • P01 rendered • {points:,} points")
+        self.render_status_var.set(
+            f"Created {output.name} • {periods} backbones rendered • {points:,} branches"
+        )
         self.render_ready_button.configure(state="normal")
         self.open_render_button.configure(state="normal")
 
     def _render_failed(self, error: Exception) -> None:
         self.render_ready_button.configure(state="normal")
-        self.render_status_var.set("P01 rendering failed.")
+        self.render_status_var.set("Payment backbone rendering failed.")
         messagebox.showerror("Payment", str(error))
 
     def _open_render_result(self) -> None:
