@@ -705,8 +705,15 @@ def build_progress_sheet(
     headers: dict[str, int],
     weeks,
     activities,
+    *,
+    snapshot: bool = False,
+    value_source=None,
 ) -> None:
-    """Build an interactive progress sheet using live Excel formulas."""
+    """Build the progress curve source sheet.
+
+    ``snapshot=True`` writes cached values from a data-only ``main`` worksheet so
+    editing main does not trigger a dependency chain through progress/dashboard.
+    """
     remove_existing_sheet(wb, OKD_PROGRESS_SHEET)
     ws = wb.create_sheet(OKD_PROGRESS_SHEET)
 
@@ -727,26 +734,44 @@ def build_progress_sheet(
     plan_finish_col = find_column(headers, ("Plan Finish",), required=True)
     source_ref = excel_sheet_ref(source_ws.title)
 
-    for output_row, (source_col, _) in enumerate(weeks, start=2):
+    snapshot_plan = snapshot_actual = None
+    snapshot_start = snapshot_finish = None
+    if snapshot:
+        snapshot_start, snapshot_finish = project_dates(
+            source_ws, headers, activities, wb.epoch
+        )
+        snapshot_plan, snapshot_actual = cumulative_project_series(
+            activities, len(weeks)
+        )
+
+    for output_row, (source_col, week_date) in enumerate(weeks, start=2):
         source_col_letter = get_column_letter(source_col)
         plan_start_addr = f"{get_column_letter(plan_start_col)}{project_plan_row}"
         plan_finish_addr = f"{get_column_letter(plan_finish_col)}{project_plan_row}"
 
-        ws.cell(output_row, 1, f"={source_ref}!{plan_start_addr}")
-        ws.cell(output_row, 2, f"={source_ref}!{plan_finish_addr}")
-        ws.cell(output_row, 3, f"={source_ref}!{source_col_letter}{HEADER_ROW}")
-        ws.cell(
-            output_row,
-            4,
-            f'=IF({source_ref}!{source_col_letter}{acc_plan_row}="","",'
-            f'ROUND({source_ref}!{source_col_letter}{acc_plan_row}*100,6))',
-        )
-        ws.cell(
-            output_row,
-            5,
-            f'=IF({source_ref}!{source_col_letter}{acc_actual_row}="","",'
-            f'ROUND({source_ref}!{source_col_letter}{acc_actual_row}*100,6))',
-        )
+        if snapshot:
+            ws.cell(output_row, 1, snapshot_start)
+            ws.cell(output_row, 2, snapshot_finish)
+            ws.cell(output_row, 3, week_date)
+            ws.cell(output_row, 4, snapshot_plan[output_row - 2])
+            actual_value = snapshot_actual[output_row - 2]
+            ws.cell(output_row, 5, actual_value if actual_value is not None else "")
+        else:
+            ws.cell(output_row, 1, f"={source_ref}!{plan_start_addr}")
+            ws.cell(output_row, 2, f"={source_ref}!{plan_finish_addr}")
+            ws.cell(output_row, 3, f"={source_ref}!{source_col_letter}{HEADER_ROW}")
+            ws.cell(
+                output_row,
+                4,
+                f'=IF({source_ref}!{source_col_letter}{acc_plan_row}="","",'
+                f'ROUND({source_ref}!{source_col_letter}{acc_plan_row}*100,6))',
+            )
+            ws.cell(
+                output_row,
+                5,
+                f'=IF({source_ref}!{source_col_letter}{acc_actual_row}="","",'
+                f'ROUND({source_ref}!{source_col_letter}{acc_actual_row}*100,6))',
+            )
 
     style_header(ws, "A1:E1")
     ws.freeze_panes = "A2"
@@ -944,7 +969,13 @@ def build_progress_table_sheet(
 
     return verify_progress_table_snapshot(ws, weeks, table_rows)
 
-def build_progress_views_from_source(wb, source_ws) -> tuple[int, int, int, int]:
+def build_progress_views_from_source(
+    wb,
+    source_ws,
+    *,
+    snapshot_progress: bool = False,
+    value_source=None,
+) -> tuple[int, int, int, int]:
     """Build both ``progress`` and ``progress_table`` from the current main sheet.
 
     This is the shared pre-mapping workbook contract.  The final OKD step may
@@ -956,7 +987,15 @@ def build_progress_views_from_source(wb, source_ws) -> tuple[int, int, int, int]
         source_ws, headers, weeks, wb.epoch
     )
     table_rows = build_table_rows(table_items, activities, len(weeks))
-    build_progress_sheet(wb, source_ws, headers, weeks, activities)
+    build_progress_sheet(
+        wb,
+        source_ws,
+        headers,
+        weeks,
+        activities,
+        snapshot=snapshot_progress,
+        value_source=value_source,
+    )
     table_rows_count, checked_links = build_progress_table_sheet(
         wb, source_ws, headers, weeks, table_rows
     )

@@ -104,8 +104,14 @@ def build_monthly_main_view(
     source_sheet: str = "main",
     target_sheet: str = "main_monthly",
     require_timescale: bool = True,
+    snapshot: bool = False,
+    value_source=None,
 ) -> int:
-    """Build a formula-driven monthly view from the weekly ``main`` sheet.
+    """Build the monthly view from the weekly ``main`` sheet.
+
+    When ``snapshot=True``, every formula copied from ``main`` is replaced with
+    its cached value from ``value_source`` and monthly timescale cells are written
+    as values. This is the standalone rebuild performance contract.
 
     ``main`` remains the editable/source schedule. The monthly sheet keeps the
     same row hierarchy and Activity Data columns, but every monthly timescale
@@ -138,6 +144,17 @@ def build_monthly_main_view(
     workbook._sheets.remove(monthly)
     workbook._sheets.insert(source_index + 1, monthly)
     monthly.cell(1, 1).value = "Activity Data — Monthly View"
+
+    if snapshot:
+        if value_source is None:
+            raise ValueError("Monthly snapshot requires a data-only main worksheet.")
+        # copy_worksheet also copies formula cells in Activity Data. Freeze those
+        # formula cells from Excel's cached values so main_monthly has no live
+        # dependency back to main.
+        for row in range(1, monthly.max_row + 1):
+            for col in range(1, first_timescale_col):
+                if isinstance(monthly.cell(row, col).value, str) and monthly.cell(row, col).value.startswith("="):
+                    monthly.cell(row, col).value = value_source.cell(row, col).value
 
     # Snapshot weekly row formatting before removing those columns.
     row_styles = {
@@ -191,13 +208,21 @@ def build_monthly_main_view(
             pa = str(monthly.cell(row, 4).value or "").strip().upper()
             row_type = _normalize(monthly.cell(row, 1).value)
             source_range = f"{source_ref}!{first_week_col}{row}:{last_week_col}{row}"
-            if row_type == "s-curve" and pa in {"AP", "AA"}:
-                # Cumulative S-curve rows use the last reporting value in month.
+
+            if snapshot:
+                values = [value_source.cell(row, col).value for col in weekly_cols]
+                numeric_values = [
+                    float(value) for value in values
+                    if isinstance(value, (int, float)) and not isinstance(value, bool)
+                ]
+                if row_type == "s-curve" and pa in {"AP", "AA"}:
+                    last_value = value_source.cell(row, weekly_cols[-1]).value
+                    cell.value = last_value if isinstance(last_value, (int, float)) else ""
+                else:
+                    cell.value = sum(numeric_values) if numeric_values else ""
+            elif row_type == "s-curve" and pa in {"AP", "AA"}:
                 cell.value = f"={source_ref}!{last_week_col}{row}"
             elif row_type == "activity" and pa == "P":
-                # Activity Plan distributions are generated numeric inputs in the
-                # weekly main sheet. Freeze their monthly sum as a value so the
-                # monthly view does not duplicate thousands of static formulas.
                 weekly_values = [source.cell(row, col).value for col in weekly_cols]
                 if all(value in (None, "") or isinstance(value, (int, float)) for value in weekly_values):
                     populated = [float(value) for value in weekly_values if value not in (None, "")]
@@ -205,8 +230,6 @@ def build_monthly_main_view(
                 else:
                     cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
             else:
-                # Actual and summary rows remain formula-driven so edits to weekly
-                # progress/Amount continue to flow through immediately.
                 cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
 
     _write_year_headers(monthly, first_timescale_col, buckets)

@@ -179,6 +179,7 @@ class WorkbookRebuildEngine:
         try:
             shutil.copy2(source, temp_path)
             wb = load_workbook(temp_path, read_only=False, data_only=False, keep_vba=keep_vba)
+            values_wb = load_workbook(source, read_only=False, data_only=True, keep_vba=keep_vba)
             try:
                 if self.MAIN_SHEET not in wb.sheetnames:
                     raise RebuildContractError(
@@ -196,12 +197,18 @@ class WorkbookRebuildEngine:
                         del wb[sheet_name]
 
                 main = wb[self.MAIN_SHEET]
+                values_main = values_wb[self.MAIN_SHEET]
                 (
                     activity_count,
                     week_count,
                     progress_table_rows,
                     checked_cells,
-                ) = build_progress_views_from_source(wb, main)
+                ) = build_progress_views_from_source(
+                    wb,
+                    main,
+                    snapshot_progress=True,
+                    value_source=values_main,
+                )
 
                 if "progress_table" in wb.sheetnames:
                     wb["progress_table"].sheet_state = "hidden"
@@ -211,6 +218,8 @@ class WorkbookRebuildEngine:
                     source_sheet=self.MAIN_SHEET,
                     target_sheet="main_monthly",
                     require_timescale=True,
+                    snapshot=True,
+                    value_source=values_main,
                 )
 
                 build_dashboard(
@@ -228,6 +237,7 @@ class WorkbookRebuildEngine:
                 wb.save(temp_path)
             finally:
                 wb.close()
+                values_wb.close()
 
             validate_xlsx_tables(temp_path)
             os.replace(temp_path, output)

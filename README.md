@@ -254,3 +254,26 @@ is normalized before the final replace. MS-RB2 intentionally leaves the current
 formula-driven monthly/progress/dashboard behavior unchanged; snapshot/performance
 hardening belongs to MS-RB3.
 
+### MS-RB3 — Snapshot performance hardening
+
+Standalone `Rebuild Progress` now breaks the live dependency chain from generated
+views back to `main`.
+
+RB3 snapshot contract:
+- `main_monthly` = value-only snapshot
+- `progress` = value-only snapshot derived from current Activity data
+- `progress_table` = value-only snapshot
+- `Dashboard_Data` may keep lightweight formulas for Dashboard view/cutoff controls,
+  but does not link to `main`
+- `Dashboard` remains interactive and reads generated support sheets
+- final calculation policy is always `auto`, `fullCalcOnLoad=False`,
+  `forceFullCalc=False`
+
+Existing export/monthly builders keep their previous default behavior; snapshot mode
+is enabled by the standalone rebuild engine only.
+
+Real NKC2_R03 benchmark:
+- RB2 generated-sheet formulas: 10,911
+- RB3 generated-sheet formulas: 2,306
+- no direct generated-sheet formula links to `main`
+
