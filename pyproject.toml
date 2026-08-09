@@ -27,6 +27,13 @@ include = ["progress_studio*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "--strict-markers"
+markers = [
+    "smoke: fastest high-value contract gate for local refactors",
+    "active: current workbook/dashboard/payment/rebuild regression suite",
+    "frozen: stable legacy regression; run before merge/release, not every milestone",
+    "release: complete release gate; every collected test belongs here",
+]
 
 [tool.setuptools.package-data]
 "progress_studio.config" = ["payment_lines.json"]

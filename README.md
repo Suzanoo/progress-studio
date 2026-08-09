@@ -359,3 +359,26 @@ Workspace ownership is also cleaned up:
 
 Rebuild execution runs on a worker thread and writes through the RB2/RB4 atomic engines.
 
+### MS-TEST1 — Test Suite Freeze & Tiering
+
+The test suite is now divided into explicit pytest tiers without deleting historical
+regression coverage:
+
+- `smoke` — fastest local contract gate
+- `active` — current workbook/dashboard/payment/rebuild regression
+- `frozen` — stable legacy regression, retained for subsystem/release checks
+- `release` — every collected test; full merge/tag/release gate
+
+Recommended Windows workflow:
+
+```powershell
+.\scripts\test-smoke.ps1
+.\scripts\test-active.ps1
+.\scripts\test-release.ps1
+```
+
+New test modules must be classified in `tests/conftest.py`; collection aborts if a
+`test_*.py` file is left unclassified. Frozen tests should not be rewritten merely to
+make a new implementation pass—retire or change a frozen contract deliberately.
+See `docs/TESTING.md`.
+
