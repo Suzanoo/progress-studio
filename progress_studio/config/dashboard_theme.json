@@ -1,0 +1,42 @@
+{
+  "name": "simple_corporate",
+  "font": "Aptos",
+  "colors": {
+    "navy": "17365D",
+    "blue": "2F75B5",
+    "green": "70AD47",
+    "red": "C00000",
+    "amber": "BF9000",
+    "light_blue": "EAF2F8",
+    "light_green": "EAF4E3",
+    "light_red": "FCE8E6",
+    "light_amber": "FFF4D6",
+    "light_gray": "F3F4F6",
+    "border": "D9DEE7",
+    "text": "1F2937",
+    "muted": "667085",
+    "white": "FFFFFF",
+    "chart_grid": "E5E7EB",
+    "chart_axis": "B8C2CC"
+  },
+  "layout": {
+    "title": "PROGRESS STUDIO DASHBOARD",
+    "chart_height": 9.2,
+    "chart_width": 25.0,
+    "chart_style": 2,
+    "chart_major_unit": 0.2,
+    "chart_markers": false,
+    "marker_size": 4,
+    "plan_line_width": 26000,
+    "actual_line_width": 26000,
+    "default_view": "Monthly"
+  },
+  "icons": {
+    "enabled": true,
+    "size": 32,
+    "planned": "planned.png",
+    "actual": "actual.png",
+    "schedule": "schedule.png",
+    "time_impact": "time_impact.png"
+  }
+}

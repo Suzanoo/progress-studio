@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
+import base64
 import hashlib
 import json
 import os
@@ -9,12 +10,20 @@ from pathlib import Path
 import tempfile
 from typing import Any, Callable
 
-from progress_studio.domain.mapping_models import AllocationRecord
+from openpyxl import load_workbook
+
+from progress_studio.domain.mapping_models import ActivityRow, AllocationRecord, SupplementalWBS
+from progress_studio.domain.working_tree import (
+    WorkingScheduleTree, WorkingTreeNode, WorkingNodeKind, WorkingNodeOrigin,
+)
+from progress_studio.infrastructure.platform_paths import user_data_dir
+
 from progress_studio.domain.mapping_session import (
     MappingSessionData,
     SESSION_FORMAT,
     SESSION_VERSION,
     WorkbookFingerprint,
+    WorkbookSnapshot,
 )
 
 
@@ -40,6 +49,67 @@ def _atomic_json_write(path: Path, payload: object) -> None:
         raise
 
 
+def _normalise_cell_value(value: object) -> str:
+    """Return a deterministic representation for workbook identity hashing."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat(timespec="microseconds")
+    if isinstance(value, (date, time)):
+        return value.isoformat()
+    if isinstance(value, float):
+        return format(value, ".17g")
+    if isinstance(value, bytes):
+        return value.hex()
+    return str(value)
+
+
+def semantic_fingerprint(path: Path) -> str:
+    """Hash workbook meaning rather than the XLSX/ZIP byte stream.
+
+    Excel commonly rewrites package metadata, style tables and ZIP ordering even
+    when worksheet data is unchanged. Those changes must not break project
+    relinking. This digest intentionally covers sheet order/names and every
+    non-empty cell's coordinate, data type, formula or value. Formatting, file
+    timestamps, calculation caches and document metadata are ignored.
+    """
+    keep_vba = path.suffix.lower() == ".xlsm"
+    try:
+        workbook = load_workbook(
+            path, read_only=True, data_only=False, keep_links=False, keep_vba=keep_vba
+        )
+    except Exception as exc:
+        raise SessionValidationError(
+            f"Workbook cannot be opened as an Excel file: {path}"
+        ) from exc
+
+    digest = hashlib.sha256()
+    try:
+        digest.update(b"progress-studio-workbook-identity-v1\0")
+        for sheet in workbook.worksheets:
+            digest.update(b"S\0")
+            digest.update(sheet.title.encode("utf-8", errors="surrogatepass"))
+            digest.update(b"\0")
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    digest.update(b"C\0")
+                    digest.update(cell.coordinate.encode("ascii"))
+                    digest.update(b"\0")
+                    digest.update(str(cell.data_type or "").encode("ascii", errors="ignore"))
+                    digest.update(b"\0")
+                    digest.update(
+                        _normalise_cell_value(cell.value).encode(
+                            "utf-8", errors="surrogatepass"
+                        )
+                    )
+                    digest.update(b"\0")
+    finally:
+        workbook.close()
+    return digest.hexdigest()
+
+
 def fingerprint(path: Path) -> WorkbookFingerprint:
     path = Path(path).expanduser().resolve()
     if not path.is_file():
@@ -49,12 +119,28 @@ def fingerprint(path: Path) -> WorkbookFingerprint:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     stat = path.stat()
+
+    semantic_sha256 = ""
+    identity_kind = "binary-sha256"
+    if path.suffix.lower() in {".xlsx", ".xlsm"}:
+        try:
+            semantic_sha256 = semantic_fingerprint(path)
+        except SessionValidationError:
+            # Preserve compatibility with legacy tests and corrupted/non-Excel
+            # files carrying an Excel suffix. The binary fingerprint remains
+            # available and validation stays strict.
+            semantic_sha256 = ""
+        else:
+            identity_kind = "excel-semantic-v1"
+
     return WorkbookFingerprint(
         path=str(path),
         filename=path.name,
         size=stat.st_size,
         modified_ns=stat.st_mtime_ns,
         sha256=digest.hexdigest(),
+        semantic_sha256=semantic_sha256,
+        identity_kind=identity_kind,
     )
 
 
@@ -70,8 +156,89 @@ def _migrate_v1_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
+def _migrate_v2_to_v3(payload: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(payload)
+    migrated.setdefault("supplemental_activities", [])
+    migrated["version"] = 3
+    return migrated
+
+
+def _migrate_v3_to_v4(payload: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(payload)
+    migrated.setdefault("supplemental_wbs", [])
+    migrated["version"] = 4
+    return migrated
+
+
+def _migrate_v4_to_v5(payload: dict[str, Any]) -> dict[str, Any]:
+    """Assign stable editor identities to previously created nodes."""
+    migrated = dict(payload)
+    activities = []
+    for item in migrated.get("supplemental_activities", []):
+        record = dict(item)
+        path = "/".join(part[0] for part in record.get("wbs_path", []))
+        record.setdefault(
+            "node_id",
+            WorkingScheduleTree.legacy_created_node_id(
+                "activity", f"{record.get('activity_id', '')}:{path}"
+            ),
+        )
+        activities.append(record)
+    wbs_nodes = []
+    for item in migrated.get("supplemental_wbs", []):
+        record = dict(item)
+        parent = "/".join(part[0] for part in record.get("parent_path", []))
+        record.setdefault(
+            "node_id",
+            WorkingScheduleTree.legacy_created_node_id(
+                "wbs", f"{parent}:{record.get('code', '')}"
+            ),
+        )
+        wbs_nodes.append(record)
+    migrated["supplemental_activities"] = activities
+    migrated["supplemental_wbs"] = wbs_nodes
+    migrated["version"] = 5
+    return migrated
+
+
+
+
+def _migrate_v5_to_v6(payload: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(payload)
+    migrated.setdefault("working_tree_nodes", [])
+    migrated["version"] = 6
+    return migrated
+
+
+def _migrate_v6_to_v7(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep legacy binary fingerprints; new saves gain semantic identities."""
+    migrated = dict(payload)
+    for key in ("progress", "boq"):
+        workbook = dict(migrated.get(key) or {})
+        workbook.setdefault("semantic_sha256", "")
+        workbook.setdefault("identity_kind", "binary-sha256")
+        migrated[key] = workbook
+    migrated["version"] = 7
+    return migrated
+
+
+def _migrate_v7_to_v8(payload: dict[str, Any]) -> dict[str, Any]:
+    """v8 projects may embed their source workbooks for standalone rebuilds."""
+    migrated = dict(payload)
+    migrated.setdefault("progress_snapshot", None)
+    migrated.setdefault("boq_snapshot", None)
+    migrated["version"] = 8
+    return migrated
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migrate_v1_to_v2,
+    2: _migrate_v2_to_v3,
+    3: _migrate_v3_to_v4,
+    4: _migrate_v4_to_v5,
+    5: _migrate_v5_to_v6,
+    6: _migrate_v6_to_v7,
+    7: _migrate_v7_to_v8,
 }
 
 
@@ -105,8 +272,63 @@ def _migrate_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def workbook_snapshot(path: Path) -> WorkbookSnapshot:
+    path = Path(path).expanduser().resolve()
+    if not path.is_file():
+        raise SessionValidationError(f"Workbook was not found: {path}")
+    raw = path.read_bytes()
+    return WorkbookSnapshot(
+        filename=path.name,
+        sha256=hashlib.sha256(raw).hexdigest(),
+        content_b64=base64.b64encode(raw).decode("ascii"),
+    )
+
+
+def materialize_workbook_snapshot(snapshot: WorkbookSnapshot, cache_dir: Path) -> Path:
+    """Restore one embedded workbook into a deterministic local cache."""
+    try:
+        raw = base64.b64decode(snapshot.content_b64.encode("ascii"), validate=True)
+    except Exception as exc:
+        raise SessionValidationError(
+            f"Embedded workbook snapshot is corrupt: {snapshot.filename}"
+        ) from exc
+    if hashlib.sha256(raw).hexdigest() != snapshot.sha256:
+        raise SessionValidationError(
+            f"Embedded workbook snapshot failed integrity check: {snapshot.filename}"
+        )
+    suffix = Path(snapshot.filename).suffix or ".xlsx"
+    target = Path(cache_dir) / f"{snapshot.sha256[:16]}{suffix}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists() or hashlib.sha256(target.read_bytes()).hexdigest() != snapshot.sha256:
+        fd, temp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+        temp = Path(temp_name)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, target)
+        except Exception:
+            temp.unlink(missing_ok=True)
+            raise
+    return target
+
+
 class MappingSessionRepository:
     """Persist mapping allocations as a small, atomic JSON sidecar."""
+
+    @staticmethod
+    def fingerprint(path: Path) -> WorkbookFingerprint:
+        """Compute a workbook identity at an explicit load/relink boundary."""
+        return fingerprint(path)
+
+    @staticmethod
+    def snapshot(path: Path) -> WorkbookSnapshot:
+        return workbook_snapshot(path)
+
+    @staticmethod
+    def materialize_snapshot(snapshot: WorkbookSnapshot) -> Path:
+        return materialize_workbook_snapshot(snapshot, user_data_dir() / "project_cache")
 
     def create(
         self,
@@ -114,13 +336,32 @@ class MappingSessionRepository:
         boq_file: Path,
         boq_sheet: str,
         allocations: list[AllocationRecord],
+        supplemental_activities: list[ActivityRow] | None = None,
+        supplemental_wbs: list[SupplementalWBS] | None = None,
+        working_tree_nodes: list[WorkingTreeNode] | None = None,
+        progress_fingerprint: WorkbookFingerprint | None = None,
+        boq_fingerprint: WorkbookFingerprint | None = None,
+        progress_snapshot: WorkbookSnapshot | None = None,
+        boq_snapshot: WorkbookSnapshot | None = None,
     ) -> MappingSessionData:
+        """Build session data, reusing identities already verified in memory.
+
+        Workbook hashing is intentionally optional here. Interactive callers cache
+        identities when a workbook is loaded or relinked, so high-frequency
+        autosaves only serialize the small project JSON. Non-GUI callers retain
+        the safe legacy behaviour by omitting the cached fingerprints.
+        """
         return MappingSessionData(
-            progress=fingerprint(progress_file),
-            boq=fingerprint(boq_file),
+            progress=progress_fingerprint or fingerprint(progress_file),
+            boq=boq_fingerprint or fingerprint(boq_file),
             boq_sheet=boq_sheet,
             allocations=tuple(allocations),
             saved_at=datetime.now(timezone.utc).isoformat(),
+            supplemental_activities=tuple(supplemental_activities or ()),
+            supplemental_wbs=tuple(supplemental_wbs or ()),
+            working_tree_nodes=tuple(working_tree_nodes or ()),
+            progress_snapshot=progress_snapshot or workbook_snapshot(progress_file),
+            boq_snapshot=boq_snapshot or workbook_snapshot(boq_file),
         )
 
     def save(self, path: Path, session: MappingSessionData) -> Path:
@@ -133,6 +374,11 @@ class MappingSessionRepository:
             "boq": asdict(session.boq),
             "boq_sheet": session.boq_sheet,
             "allocations": [asdict(record) for record in session.allocations],
+            "supplemental_activities": [asdict(record) for record in session.supplemental_activities],
+            "supplemental_wbs": [asdict(record) for record in session.supplemental_wbs],
+            "working_tree_nodes": [asdict(record) for record in session.working_tree_nodes],
+            "progress_snapshot": asdict(session.progress_snapshot) if session.progress_snapshot else None,
+            "boq_snapshot": asdict(session.boq_snapshot) if session.boq_snapshot else None,
         }
         _atomic_json_write(path, payload)
         return path
@@ -155,8 +401,35 @@ class MappingSessionRepository:
             progress = WorkbookFingerprint(**payload["progress"])
             boq = WorkbookFingerprint(**payload["boq"])
             allocations = tuple(AllocationRecord(**item) for item in payload.get("allocations", []))
+            supplemental_activities = tuple(
+                ActivityRow(**{**item, "wbs_path": tuple(tuple(part) for part in item.get("wbs_path", ()))})
+                for item in payload.get("supplemental_activities", [])
+            )
+            supplemental_wbs = tuple(
+                SupplementalWBS(**{**item, "parent_path": tuple(tuple(part) for part in item.get("parent_path", ()))})
+                for item in payload.get("supplemental_wbs", [])
+            )
+            working_tree_nodes = tuple(
+                WorkingTreeNode(
+                    **{
+                        **item,
+                        "kind": WorkingNodeKind(item["kind"]),
+                        "origin": WorkingNodeOrigin(item["origin"]),
+                        "source_path": tuple(tuple(part) for part in item.get("source_path", ())),
+                    }
+                )
+                for item in payload.get("working_tree_nodes", [])
+            )
             boq_sheet = str(payload["boq_sheet"]).strip()
             saved_at = str(payload["saved_at"])
+            progress_snapshot = (
+                WorkbookSnapshot(**payload["progress_snapshot"])
+                if payload.get("progress_snapshot") else None
+            )
+            boq_snapshot = (
+                WorkbookSnapshot(**payload["boq_snapshot"])
+                if payload.get("boq_snapshot") else None
+            )
         except (KeyError, TypeError, ValueError) as exc:
             raise SessionValidationError("The mapping session is incomplete or malformed.") from exc
         if not boq_sheet:
@@ -167,6 +440,11 @@ class MappingSessionRepository:
             boq_sheet=boq_sheet,
             allocations=allocations,
             saved_at=saved_at,
+            supplemental_activities=supplemental_activities,
+            supplemental_wbs=supplemental_wbs,
+            working_tree_nodes=working_tree_nodes,
+            progress_snapshot=progress_snapshot,
+            boq_snapshot=boq_snapshot,
         )
 
     @staticmethod
@@ -174,8 +452,10 @@ class MappingSessionRepository:
         """Return a verified workbook path.
 
         The saved absolute path is tried by default. A user-selected candidate may be
-        supplied when the workbook was moved or renamed. Only identical SHA-256 content
-        is accepted; changed workbooks are never merged automatically.
+        supplied when the workbook was moved or renamed. New sessions use a stable
+        Excel semantic identity, so harmless re-saves and formatting changes are
+        accepted while worksheet data changes are rejected. Legacy sessions retain
+        strict SHA-256 verification until they are saved again.
         """
         path = Path(candidate).expanduser().resolve() if candidate else saved.saved_path
         try:
@@ -187,11 +467,20 @@ class MappingSessionRepository:
                     "Browse for the moved or renamed workbook to continue."
                 ) from exc
             raise
-        if current.sha256 != saved.sha256:
+        if saved.has_semantic_identity and current.has_semantic_identity:
+            matches = current.semantic_sha256 == saved.semantic_sha256
+        else:
+            # Sessions created before v7 do not contain enough information to
+            # verify a changed binary safely, so they retain strict SHA-256
+            # behaviour. Re-saving the project upgrades it for future relinks.
+            matches = current.sha256 == saved.sha256
+
+        if not matches:
             source = "selected workbook" if candidate else "workbook at the saved location"
             raise SessionValidationError(
-                f"The {source} does not match the session copy: {saved.filename}. "
-                "Progress Studio will not merge a changed workbook automatically."
+                f"The {source} does not match the project workbook: {saved.filename}. "
+                "Progress Studio will not merge workbook data from another version "
+                "or project automatically."
             )
         return path
 
@@ -202,7 +491,7 @@ class RecentSessionRepository:
     MAX_ITEMS = 10
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or (Path.home() / ".progress_studio" / "recent_sessions.json")
+        self.path = path or (user_data_dir() / "recent_sessions.json")
 
     def list(self) -> list[Path]:
         try:

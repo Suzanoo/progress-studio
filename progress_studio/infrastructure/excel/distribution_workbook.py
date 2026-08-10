@@ -9,7 +9,6 @@ from pathlib import Path
 try:
     from openpyxl import load_workbook
     from openpyxl.styles import Alignment, Font, PatternFill
-    from progress_studio.infrastructure.excel.styles import normalize_argb
     from openpyxl.utils import get_column_letter
     from openpyxl.utils.datetime import from_excel
 except ImportError as exc:
@@ -17,6 +16,8 @@ except ImportError as exc:
         "openpyxl is not installed. Run: pip install openpyxl"
     ) from exc
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
+from progress_studio.infrastructure.excel.styles import normalize_argb
 from progress_studio.services.distribution import (
     AutoDecision,
     decide_distribution,
@@ -383,9 +384,7 @@ def generate_plan_distribution(
     create_report_sheet(wb, report_rows, method)
     update_info_sheet(wb, method, report_rows)
 
-    wb.calculation.calcMode = "auto"
-    wb.calculation.fullCalcOnLoad = True
-    wb.calculation.forceFullCalc = True
+    configure_incremental_excel_recalculation(wb)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_file)

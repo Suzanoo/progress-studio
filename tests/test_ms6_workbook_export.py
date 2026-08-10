@@ -90,7 +90,7 @@ def test_export_updates_amount_mapping_and_writes_reconciliation(tmp_path: Path)
         summary = wb["Mapping Summary"]
         assert summary["B5"].value == "Partial"
         assert summary["B14"].value == 1300
-        assert wb.calculation.fullCalcOnLoad is True
+        assert wb.calculation.fullCalcOnLoad is False
     finally:
         wb.close()
 
@@ -258,7 +258,7 @@ def test_export_rechecks_main_workbook_contract(tmp_path: Path) -> None:
         WorkbookExportService().export(source, tmp_path / "out.xlsx", make_store())
 
 
-def test_export_forces_excel_to_rebuild_formula_results(tmp_path: Path) -> None:
+def test_export_uses_incremental_excel_calculation_policy(tmp_path: Path) -> None:
     import zipfile
     from xml.etree import ElementTree as ET
 
@@ -269,9 +269,10 @@ def test_export_forces_excel_to_rebuild_formula_results(tmp_path: Path) -> None:
     wb = load_workbook(output, data_only=False)
     try:
         assert wb.calculation.calcMode == "auto"
-        assert wb.calculation.fullCalcOnLoad is True
-        assert wb.calculation.forceFullCalc is True
-        assert wb.calculation.calcId == 0
+        assert wb.calculation.fullCalcOnLoad is False
+        assert wb.calculation.forceFullCalc is False
+        assert wb.calculation.calcOnSave is True
+        assert wb.calculation.calcId != 0
     finally:
         wb.close()
 
@@ -282,6 +283,7 @@ def test_export_forces_excel_to_rebuild_formula_results(tmp_path: Path) -> None:
         calc = root.find("x:calcPr", namespace)
         assert calc is not None
         assert calc.attrib["calcMode"] == "auto"
-        assert calc.attrib["fullCalcOnLoad"] == "1"
-        assert calc.attrib["forceFullCalc"] == "1"
-        assert calc.attrib["calcId"] == "0"
+        assert calc.attrib["fullCalcOnLoad"] == "0"
+        assert calc.attrib["forceFullCalc"] == "0"
+        assert calc.attrib["calcOnSave"] == "1"
+        assert int(calc.attrib["calcId"]) > 0

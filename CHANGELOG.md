@@ -1,4 +1,81 @@
+## MS-P1.19 — Snapshot Progress Table
+
+- Changed `progress_table` from a large live weekly dependency matrix to a value-only Plan/Actual snapshot.
+- `main` remains the editable weekly master for Amount, Plan, and Actual inputs.
+- Project/WBS rows in the snapshot are recalculated from current Activity values at export/rebuild time.
+- Mapped/Rebuild export now refreshes `progress` and `progress_table` from the final `main` before building the Dashboard.
+- Dashboard Activity Progress continues to respond to Cutoff Date by summing snapshot values, but user edits in `main` enter the activity snapshot only on the next Export/Rebuild.
+- Preserved the historical `checked_links` metadata count for compatibility while validating that snapshot cells contain no formulas.
+
+## MS-R1 — Self-contained Rebuild Workbook
+
+- Upgraded `.progressstudio` project schema from v7 to v8.
+- Saved projects now embed verified Progress and BOQ workbook snapshots.
+- A v8 project can restore its sources from a local integrity-checked cache when the original files are missing, renamed, or on another machine.
+- Export workspace now presents **Rebuild Latest Workbook**, reusing the current generation/export engine and saved mapping/tree state.
+- Legacy v7 and older projects migrate safely but require one successful source relink/open and Save before standalone rebuild is available.
+- Actual Progress migration from an edited legacy workbook remains explicitly out of scope for MS-R1.
+
+## MS-P1.8 — Dashboard Data and Theme Refactor
+
+
+## MS-P1.14 — Progress-Source Dashboard
+
+- Dashboard KPI Plan/Actual now read the stable `progress` sheet directly at the selected cutoff.
+- Time Impact = rounded baseline project duration (`project_finish - project_start`) × absolute schedule variance.
+- Schedule Status and Time Impact cards use delay/ahead/on-schedule conditional colors.
+- `Dashboard_Data` remains a thin Weekly/Monthly chart adapter instead of duplicating schedule business logic.
+- Activity Progress now mirrors the main-sheet native Excel outline hierarchy for Project → WBS → Activity drill-down.
+
+## MS-P1.13 — Dashboard + Main Filter Polish
+
+- Dashboard Activity Progress now renders every progress row instead of stopping at eight.
+- Removed the Status column; the exception table now exposes only the WBS filter.
+- Main worksheet keeps a full AutoFilter range but shows filter buttons only on Row Type and P/A.
+
+- Fixed blank `Dashboard_Data` when `progress.week_start` contains worksheet-reference formulas.
+- Added dynamic progress-header discovery and date parsing.
+- Added a clear generation error when weekly dashboard data cannot be built.
+- Cleaned up Dashboard controls and initialized the cutoff date with a real value.
+- Added editable Dashboard theme config at `progress_studio/config/dashboard_theme.json`.
+- Dashboard remains generated before BOQ mapping.
+
 # Changelog
+
+## MS-P1.6 — Excel Dashboard
+
+- Added a separate `Dashboard` worksheet as the first workbook tab.
+- Added Weekly / Monthly and Cutoff Date dropdown controls.
+- Added formula-linked KPIs, S-Curve, and Activity Progress summary.
+- Added hidden `Dashboard_Data` helper sheet while preserving `main`, `progress`, and `progress_table`.
+- Integrated dashboard generation into both fresh workbook generation and mapped workbook export.
+- Added automated dashboard and generation-progress tests.
+
+## MS-P1.2 — Cached Workbook Identity
+
+- Cache Progress and BOQ workbook identities at load/relink boundaries.
+- Autosave now writes only the project JSON and no longer reopens or hashes Excel workbooks on every mapping action.
+- Manual Save and Save As reuse the verified in-memory identities.
+- Preserve safe relink and workbook mismatch protection from MS-P1.1.
+- Add regression coverage proving cached session creation performs no workbook fingerprinting.
+
+## MS-P1.1 — Workbook Identity & Safe Relink
+
+- Replaced binary-only workbook matching for new projects with a stable Excel semantic identity.
+- Allowed moved, renamed, re-saved, and formatting-only workbook changes to relink safely.
+- Continued rejecting worksheet data or formula changes that may invalidate mappings.
+- Preserved strict SHA-256 validation for legacy project sessions until they are saved again.
+- Upgraded the mapping session schema from version 6 to version 7 with automatic migration.
+- Updated relink guidance and added regression tests for Excel re-save, formatting, rename, mismatch, and legacy sessions.
+
+## MS9.1 — Production desktop UI foundation
+
+- Rebuilt the desktop shell around the approved production mockup: menu bar, navigation sidebar, six-stage workflow header, mapping-first workspace, and application status bar.
+- Preserved the existing mapping, session, allocation, export, and workbook-generation behavior.
+- Centralized the visual design system in `presentation/gui/theme.py`.
+- Centralized new English-first interface text in `presentation/gui/strings.py` for future localization.
+- Fixed release-version drift between desktop settings and `progress_studio.version`.
+- Added MS9.1 architecture tests and a headless desktop launch smoke test.
 
 ## MS-6.1 — Excel export compatibility hotfix
 
@@ -196,3 +273,58 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Renamed the desktop input from Primavera XML to Schedule XML.
 - Kept the former `PrimaveraXmlReader` as a compatibility adapter.
 - Isolated XML parsing and validation from the existing workbook, mapping, session, and export pipeline.
+
+## MS-P1.3 Combined Theme Refactor
+
+- Restored WBS level color hierarchy in the main-sheet timescale from the original MS-P1.3 build.
+- Kept the separate WBS level hierarchy in the Activity Data section.
+- Removed the dark top border from WBS level 1 Activity Data rows.
+- Centralized export color configuration in `progress_studio/infrastructure/excel/export_theme.py`.
+
+## MS-P1.5 - Actual Amount formulas
+
+- Calculate Activity Actual Amount from Plan Amount and Actual `% Complete`.
+- Roll up Actual Amount to WBS and Project Summary rows.
+- Keep weekly Actual progress weighted by full Plan Amount.
+- Show Actual Amount cells with the normal currency format instead of hiding them.
+
+## MS-P1.10 - Embedded Dashboard KPI Icons
+
+- Add four lightweight transparent PNG icons for Planned Progress, Actual Progress, Schedule Status, and Time Impact.
+- Embed KPI icons inside the generated XLSX so they remain visible on other computers without extra fonts or internet access.
+- Add dashboard icon settings to `progress_studio/config/dashboard_theme.json` for enable/disable, size, and asset filenames.
+- Add regression coverage that verifies all four icons survive workbook save/reopen.
+
+## MS-P1.18 - Workbook Performance
+
+### Changed
+
+- Use Excel automatic dependency calculation instead of forcing a full workbook recalculation on every open.
+- Keep `fullCalcOnLoad` and `forceFullCalc` disabled for normal generation/export while retaining an explicit full-rebuild escape hatch for repair/debug workflows.
+- Store generated Activity Plan weekly values as static values in `progress_table`; Actual rows, Amount links, and WBS/Project rollups remain live.
+- Store generated Activity Plan monthly values as static values in `main_monthly`; Actual and summary rows remain formula-driven.
+- Preserve a non-zero Excel calculation engine ID and request normal recalculation on save.
+
+## MS-R2 - Rebuild from Edited Workbook
+- Added an Export workspace action to rebuild the latest workbook while migrating user edits from an existing exported workbook.
+- Migration reads only `main` Activity inputs: Amount plus weekly Plan and Actual values.
+- Matching uses Activity ID first, then a conservative Description + Plan Start + Plan Finish fallback.
+- Weekly values are aligned by reporting date, not by worksheet column position.
+- Rebuild regenerates progress, value-only progress_table snapshot, main_monthly, and Dashboard from the migrated main sheet.
+- The `.progressstudio` project/mapping state is not modified by this workflow.
+
+
+## MS-PAY3 to MS-PAY5 - Sparse Requirements + Position Engine
+- Replaced Payment Input validation reads with a package-level sparse XML reader.
+- Blank requirement cells are skipped entirely; explicit `0%` remains a real requirement.
+- Added a one-pass Activity Progress Index from current `main` Plan rows and weekly incremental distributions.
+- Added cell-boundary position resolution: 0% -> left edge of first Plan bucket; 0-100% -> right edge of first bucket whose cumulative Plan reaches the requirement; 100% -> right edge of final Plan bucket.
+- Payment upload now prepares render positions without drawing lines and reports populated requirements, resolved positions and issues.
+- Real NKC2 check: 15 periods / 200 activities / 8 populated requirements resolved 8/8 in about 0.12 s.
+
+## MS-PAY1 - Payment Workspace + Main Snapshot
+- Added a dedicated Payment workspace in the desktop sidebar and Tools menu.
+- Added one-workbook upload/browse flow with fast Progress Studio `main` validation.
+- Added lightweight package-level `main` -> `Payment` snapshot generation.
+- Payment output uses Save As and replaces only an existing `Payment` sheet when present.
+- No payment lines, matrix, KPI, or payment tables are rendered in this milestone.

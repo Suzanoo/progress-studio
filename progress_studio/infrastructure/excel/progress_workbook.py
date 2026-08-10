@@ -18,8 +18,12 @@ except ImportError as exc:
         "openpyxl was not found.\nInstall it with: pip install openpyxl"
     ) from exc
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
+from progress_studio.infrastructure.excel.export_theme import DEFAULT_TIMESCALE_PALETTE
+from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 
-SCRIPT_VERSION = "6.3-acc-actual-cutoff-fix"
+
+SCRIPT_VERSION = "6.4-wbs-level-color-hierarchy"
 DEFAULT_SHEET = "main"
 HEADER_ROW = 4
 FIRST_DATA_ROW = 5
@@ -48,18 +52,23 @@ def solid_fill(rgb: str) -> PatternFill:
     )
 
 
-# Activity input colors
-ACTIVITY_PLAN_FILL = solid_fill("#DDEBF7")
-ACTIVITY_ACTUAL_FILL = solid_fill("#E2F0D9")
+# Export colors are configured in export_theme.py.
+_TIMESCALE = DEFAULT_TIMESCALE_PALETTE
+ACTIVITY_PLAN_FILL = solid_fill(_TIMESCALE.activity_plan_fill)
+ACTIVITY_ACTUAL_FILL = solid_fill(_TIMESCALE.activity_actual_fill)
+PROJECT_PLAN_FILL = solid_fill(_TIMESCALE.project_plan_fill)
+PROJECT_ACTUAL_FILL = solid_fill(_TIMESCALE.project_actual_fill)
+WBS_LEVEL1_PLAN_FILL = solid_fill(_TIMESCALE.wbs_level_1_plan_fill)
+WBS_LEVEL1_ACTUAL_FILL = solid_fill(_TIMESCALE.wbs_level_1_actual_fill)
+WBS_LEVEL2_PLAN_FILL = solid_fill(_TIMESCALE.wbs_level_2_plan_fill)
+WBS_LEVEL2_ACTUAL_FILL = solid_fill(_TIMESCALE.wbs_level_2_actual_fill)
 
-# WBS / Project calculated colors
-WBS_PLAN_FILL = solid_fill("#5B9BD5")
-WBS_ACTUAL_FILL = solid_fill("#70AD47")
-
-# S-Curve summary colors
-SCURVE_PLAN_FILL = solid_fill("#9DC3E6")
-SCURVE_ACTUAL_FILL = solid_fill("#A9D18E")
-SCURVE_ACC_FILL = solid_fill("#D9EAD3")
+# Backward-compatible aliases used by S-Curve styling.
+WBS_PLAN_FILL = WBS_LEVEL2_PLAN_FILL
+WBS_ACTUAL_FILL = WBS_LEVEL2_ACTUAL_FILL
+SCURVE_PLAN_FILL = solid_fill(_TIMESCALE.scurve_plan_fill)
+SCURVE_ACTUAL_FILL = solid_fill(_TIMESCALE.scurve_actual_fill)
+SCURVE_ACC_FILL = solid_fill(_TIMESCALE.scurve_acc_fill)
 
 
 def normalize_header(value: object) -> str:
@@ -342,8 +351,9 @@ def prepare_activity_amount_refs(
 
         actual_row = plan_row + 1
         if actual_row <= ws.max_row and normalize_header(ws.cell(actual_row, pa_col).value) == "a":
-            ws.cell(actual_row, amount_col).value = f"={amount_letter}{plan_row}"
-            ws.cell(actual_row, amount_col).number_format = ";;;"
+            # Actual Amount is calculated later, after % Complete formulas exist.
+            ws.cell(actual_row, amount_col).value = None
+            ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
     return with_amount, without_amount
 
 def rollup_amounts(
@@ -378,14 +388,14 @@ def rollup_amounts(
                 f'${pa_letter}${row + 1}:${pa_letter}${end_row},"P")'
             )
 
-        # WBS and Project Actual rows reference Plan amounts but hide the values.
+        # Parent Actual Amount is calculated later from descendant Activity Actual rows.
         actual_row = row + 1
         if (
             actual_row <= ws.max_row
             and normalize_header(ws.cell(actual_row, pa_col).value) == "a"
         ):
-            ws.cell(actual_row, amount_col).value = f"={amount_letter}{row}"
-            ws.cell(actual_row, amount_col).number_format = ";;;"
+            ws.cell(actual_row, amount_col).value = None
+            ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
 
         if row_type == "wbs":
             wbs_count += 1
@@ -478,11 +488,25 @@ def add_progress_formulas(
                         f'{week_letter}${first_child_row}:{week_letter}${end_row},"<>")'
                     )
 
+                # Weekly progress must always be weighted by the full Plan Amount.
+                # For Actual rows the full amount is on the preceding Plan row, while
+                # the visible Actual Amount column contains earned value.
+                if pa_code == "A":
+                    weight_range = (
+                        f'${amount_letter}${first_child_row - 1}:'
+                        f'${amount_letter}${end_row - 1}'
+                    )
+                else:
+                    weight_range = (
+                        f'${amount_letter}${first_child_row}:'
+                        f'${amount_letter}${end_row}'
+                    )
+
                 weighted_sum = (
                     f'SUMPRODUCT('
                     f'{activity_test},'
                     f'--(${pa_letter}${first_child_row}:${pa_letter}${end_row}="{pa_code}"),'
-                    f'${amount_letter}${first_child_row}:${amount_letter}${end_row},'
+                    f'{weight_range},'
                     f'{week_letter}${first_child_row}:{week_letter}${end_row})'
                 )
 
@@ -490,7 +514,7 @@ def add_progress_formulas(
                     f'SUMPRODUCT('
                     f'{activity_test},'
                     f'--(${pa_letter}${first_child_row}:${pa_letter}${end_row}="{pa_code}"),'
-                    f'${amount_letter}${first_child_row}:${amount_letter}${end_row})'
+                    f'{weight_range})'
                 )
 
                 formula = (
@@ -529,6 +553,69 @@ def add_percent_complete_formulas(
             )
             ws.cell(row, percent_complete_col).number_format = PERCENT_FORMAT
             ws.cell(row, percent_complete_col).protection = Protection(locked=True)
+
+
+def add_actual_amount_formulas(
+    ws,
+    plan_rows: list[dict[str, object]],
+    activity_id_col: int,
+    pa_col: int,
+    amount_col: int,
+    percent_complete_col: int,
+) -> None:
+    """Calculate earned Actual Amount for activities and roll it up to parents.
+
+    Activity Actual Amount = Plan Amount x Actual % Complete.
+    WBS/Project Actual Amount = sum of descendant Activity Actual Amounts.
+    """
+    activity_id_letter = get_column_letter(activity_id_col)
+    pa_letter = get_column_letter(pa_col)
+    amount_letter = get_column_letter(amount_col)
+    percent_letter = get_column_letter(percent_complete_col)
+
+    # Activities first so parent SUMIFS formulas can roll them up.
+    for item in plan_rows:
+        if str(item["row_type"]) != "activity":
+            continue
+        plan_row = int(item["row"])
+        actual_row = plan_row + 1
+        if (
+            actual_row > ws.max_row
+            or normalize_header(ws.cell(actual_row, pa_col).value) != "a"
+        ):
+            continue
+        ws.cell(actual_row, amount_col).value = (
+            f'=IF({percent_letter}{actual_row}="","",'
+            f'{amount_letter}{plan_row}*{percent_letter}{actual_row})'
+        )
+        ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
+        ws.cell(actual_row, amount_col).protection = Protection(locked=True)
+
+    # Roll up from deepest parent to Project Summary.
+    for index in range(len(plan_rows) - 1, -1, -1):
+        item = plan_rows[index]
+        row_type = str(item["row_type"])
+        if row_type not in {"wbs", "project summary"}:
+            continue
+        plan_row = int(item["row"])
+        actual_row = plan_row + 1
+        if (
+            actual_row > ws.max_row
+            or normalize_header(ws.cell(actual_row, pa_col).value) != "a"
+        ):
+            continue
+        end_row = find_descendant_physical_end(ws, plan_rows, index, pa_col)
+        first_child_row = plan_row + 2
+        if first_child_row > end_row:
+            ws.cell(actual_row, amount_col).value = 0
+        else:
+            ws.cell(actual_row, amount_col).value = (
+                f'=SUMIFS(${amount_letter}${first_child_row}:${amount_letter}${end_row},'
+                f'${activity_id_letter}${first_child_row}:${activity_id_letter}${end_row},"<>",'
+                f'${pa_letter}${first_child_row}:${pa_letter}${end_row},"A")'
+            )
+        ws.cell(actual_row, amount_col).number_format = CURRENCY_FORMAT
+        ws.cell(actual_row, amount_col).protection = Protection(locked=True)
 
 
 def add_percent_complete_warning(
@@ -608,6 +695,7 @@ def add_progress_conditional_formatting(
     row_type_col: int,
     activity_id_col: int,
     pa_col: int,
+    outline_level_col: int,
     last_progress_row: int,
 ) -> None:
     start_letter = get_column_letter(timescale_cols[0])
@@ -615,6 +703,7 @@ def add_progress_conditional_formatting(
     row_type_letter = get_column_letter(row_type_col)
     activity_id_letter = get_column_letter(activity_id_col)
     pa_letter = get_column_letter(pa_col)
+    outline_level_letter = get_column_letter(outline_level_col)
     target = f"{start_letter}{FIRST_DATA_ROW}:{end_letter}{last_progress_row}"
     first_week = start_letter
 
@@ -630,27 +719,61 @@ def add_progress_conditional_formatting(
             fill=ACTIVITY_ACTUAL_FILL,
             stopIfTrue=True,
         ),
-        # Use dark colors for WBS and Project Summary rows.
+        # Project summary: darkest band.
         FormulaRule(
-            formula=[f'AND(OR(${row_type_letter}{FIRST_DATA_ROW}="WBS",${row_type_letter}{FIRST_DATA_ROW}="Project Summary"),${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'],
-            fill=WBS_PLAN_FILL,
+            formula=[f'AND(${row_type_letter}{FIRST_DATA_ROW}="Project Summary",${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'],
+            fill=PROJECT_PLAN_FILL,
             font=Font(color="FFFFFFFF", bold=True),
             stopIfTrue=True,
         ),
         FormulaRule(
-            # WBS/Project Actual rows have no Row Type.
-            # Read Row Type from the Plan row immediately above.
             formula=[
-                f'AND('
-                f'OR('
-                f'${row_type_letter}{FIRST_DATA_ROW - 1}="WBS",'
-                f'${row_type_letter}{FIRST_DATA_ROW - 1}="Project Summary"'
-                f'),'
-                f'${pa_letter}{FIRST_DATA_ROW}="A",'
-                f'{first_week}{FIRST_DATA_ROW}<>""'
-                f')'
+                f'AND(${row_type_letter}{FIRST_DATA_ROW - 1}="Project Summary",'
+                f'${pa_letter}{FIRST_DATA_ROW}="A",{first_week}{FIRST_DATA_ROW}<>"")'
             ],
-            fill=WBS_ACTUAL_FILL,
+            fill=PROJECT_ACTUAL_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        # WBS level 1: parent WBS (1, 2, 3, ...).
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW}=1,'
+                f'${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL1_PLAN_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW - 1}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW - 1}=1,'
+                f'${pa_letter}{FIRST_DATA_ROW}="A",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL1_ACTUAL_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        # WBS level 2 and deeper: lighter than the parent WBS.
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW}>=2,'
+                f'${pa_letter}{FIRST_DATA_ROW}="P",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL2_PLAN_FILL,
+            font=Font(color="FFFFFFFF", bold=True),
+            stopIfTrue=True,
+        ),
+        FormulaRule(
+            formula=[
+                f'AND(${row_type_letter}{FIRST_DATA_ROW - 1}="WBS",'
+                f'${outline_level_letter}{FIRST_DATA_ROW - 1}>=2,'
+                f'${pa_letter}{FIRST_DATA_ROW}="A",{first_week}{FIRST_DATA_ROW}<>"")'
+            ],
+            fill=WBS_LEVEL2_ACTUAL_FILL,
             font=Font(color="FFFFFFFF", bold=True),
             stopIfTrue=True,
         ),
@@ -865,6 +988,14 @@ def prepare_progress_and_scurve(wb, ws) -> tuple[int, int, int, int, int]:
         pa_col,
         percent_complete_col,
     )
+    add_actual_amount_formulas(
+        ws,
+        plan_rows,
+        activity_id_col,
+        pa_col,
+        amount_col,
+        percent_complete_col,
+    )
 
     project_plan_row = next(
         int(item["row"])
@@ -886,6 +1017,7 @@ def prepare_progress_and_scurve(wb, ws) -> tuple[int, int, int, int, int]:
         row_type_col,
         activity_id_col,
         pa_col,
+        outline_level_col,
         last_activity_data_row,
     )
     add_percent_complete_warning(
@@ -899,9 +1031,13 @@ def prepare_progress_and_scurve(wb, ws) -> tuple[int, int, int, int, int]:
     )
 
     ws.freeze_panes = ws.cell(FIRST_DATA_ROW, timescale_cols[0])
-    if ws.auto_filter.ref:
-        last_col = get_column_letter(ws.max_column)
-        ws.auto_filter.ref = f"A{HEADER_ROW}:{last_col}{last_activity_data_row}"
+    configure_filter_buttons(
+        ws,
+        header_row=HEADER_ROW,
+        last_row=last_activity_data_row,
+        last_col=ws.max_column,
+        visible_columns={row_type_col, pa_col},
+    )
 
     return with_amount, without_amount, wbs_count, project_count, len(timescale_cols)
 
@@ -944,9 +1080,7 @@ def main() -> int:
             prepare_progress_and_scurve(wb, ws)
         )
 
-        wb.calculation.calcMode = "auto"
-        wb.calculation.fullCalcOnLoad = True
-        wb.calculation.forceFullCalc = True
+        configure_incremental_excel_recalculation(wb)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_file)
         wb.close()

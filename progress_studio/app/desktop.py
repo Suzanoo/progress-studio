@@ -13,6 +13,7 @@ from progress_studio.pipeline.amount_step import AmountStep
 from progress_studio.pipeline.distribution_step import DistributionStep
 from progress_studio.pipeline.import_step import ImportStep
 from progress_studio.pipeline.okd_step import OkdStep
+from progress_studio.pipeline.monthly_main_step import MonthlyMainStep
 from progress_studio.pipeline.progress_step import ProgressStep
 from progress_studio.pipeline.schedule_step import ScheduleStep
 from progress_studio.pipeline.timescale_step import TimescaleStep
@@ -21,6 +22,7 @@ from progress_studio.services.amount_service import AmountService
 from progress_studio.services.distribution_service import DistributionService
 from progress_studio.services.import_service import ImportService
 from progress_studio.services.okd_service import OkdService
+from progress_studio.services.monthly_main_service import MonthlyMainService
 from progress_studio.services.progress_service import ProgressService
 from progress_studio.services.schedule_service import ScheduleService
 from progress_studio.services.schedule_workbook_service import ScheduleWorkbookService
@@ -80,5 +82,6 @@ def build_desktop_pipeline(distribution_method: str = "auto") -> Pipeline:
                 DistributionService(), FixedDistributionPrompt(distribution_method)
             ),
             OkdStep(OkdService()),
+            MonthlyMainStep(MonthlyMainService()),
         ]
     )

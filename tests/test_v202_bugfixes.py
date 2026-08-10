@@ -75,9 +75,40 @@ class TestV202Bugfixes(unittest.TestCase):
         build_progress_table_sheet(wb, source, header_map, weeks, table_rows)
 
         table = wb["progress_table"]
-        self.assertTrue(str(table.cell(1, 6).value).startswith("="))
+        self.assertEqual(table.cell(1, 6).value, datetime(2026, 1, 23).date())
         self.assertEqual(table.cell(1, 6).number_format, "dd/mm/yyyy")
+        # progress_table is a rebuild snapshot: both Plan and Actual are values.
+        self.assertEqual(table.cell(2, 6).value, 10.0)
+        self.assertEqual(table.cell(2, 5).value, 10.0)
+        self.assertEqual(table.cell(3, 6).value, 5.0)
+        self.assertEqual(table.cell(3, 5).value, 5.0)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_boq_formula_fallback_reads_linked_project_value(tmp_path):
+    from openpyxl import Workbook, load_workbook
+    from progress_studio.infrastructure.excel.mapping_reader import _formula_fallback_value
+
+    path = tmp_path / "boq.xlsx"
+    workbook = Workbook()
+    source = workbook.active
+    source.title = "ARCH"
+    source["K5"] = 123.45
+    project = workbook.create_sheet("Project")
+    project["K5"] = '=IF(ARCH!K5="","",ARCH!K5)'
+    workbook.save(path)
+
+    values = load_workbook(path, data_only=True)
+    formulas = load_workbook(path, data_only=False)
+    try:
+        assert _formula_fallback_value(
+            values["Project"]["K5"].value,
+            formulas["Project"]["K5"].value,
+            values,
+        ) == 123.45
+    finally:
+        values.close()
+        formulas.close()

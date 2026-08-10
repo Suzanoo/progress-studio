@@ -15,6 +15,7 @@ except ImportError as exc:
         "openpyxl is not installed. Run: pip install openpyxl"
     ) from exc
 
+from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.styles import (
     ACTUAL_FILL,
     ACTUAL_FONT,
@@ -472,6 +473,59 @@ def read_schedule_items(ws, headers: dict[str, int], weeks, epoch):
     return activities, table_items
 
 
+def aggregate_table_item(
+    item: dict[str, object],
+    children: list[dict[str, object]],
+    week_count: int,
+) -> dict[str, object]:
+    """Return a value snapshot roll-up for one Project/WBS table row."""
+    if not children:
+        return {
+            **item,
+            "amount": 0.0,
+            "plan": [0.0] * week_count,
+            "actual": [None] * week_count,
+        }
+
+    weights = [max(0.0, float(activity["amount"])) for activity in children]
+    total_amount = sum(weights)
+    if total_amount <= 0:
+        weights = [1.0] * len(children)
+        divisor = float(len(children))
+    else:
+        divisor = total_amount
+
+    plan_values: list[float] = []
+    actual_values: list[float | None] = []
+
+    for week_index in range(week_count):
+        weighted_plan = 0.0
+        weighted_actual = 0.0
+        actual_has_data = False
+
+        for activity, weight in zip(children, weights):
+            plan_value = activity["plan"][week_index]
+            actual_value = activity["actual"][week_index]
+
+            if plan_value is not None:
+                weighted_plan += weight * float(plan_value)
+            if actual_value is not None:
+                weighted_actual += weight * float(actual_value)
+                actual_has_data = True
+
+        plan_values.append(weighted_plan / divisor)
+        actual_values.append(
+            weighted_actual / divisor if actual_has_data else None
+        )
+
+    return {
+        **item,
+        "amount": total_amount,
+        "plan": plan_values,
+        "actual": actual_values,
+    }
+
+
 def aggregate_wbs_item(
     item: dict[str, object],
     activities: list[dict[str, object]],
@@ -483,51 +537,7 @@ def aggregate_wbs_item(
         for activity in activities
         if belongs_to_wbs(str(activity["wbs"]), parent_wbs)
     ]
-
-    if not children:
-        return {
-            **item,
-            "amount": 0.0,
-            "plan": [0.0] * week_count,
-            "actual": [0.0] * week_count,
-        }
-
-    weights = [
-        max(0.0, float(activity["amount"]))
-        for activity in children
-    ]
-    total_amount = sum(weights)
-    if total_amount <= 0:
-        weights = [1.0] * len(children)
-        divisor = float(len(children))
-    else:
-        divisor = total_amount
-
-    plan_values: list[float] = []
-    actual_values: list[float] = []
-
-    for week_index in range(week_count):
-        weighted_plan = 0.0
-        weighted_actual = 0.0
-
-        for activity, weight in zip(children, weights):
-            plan_value = activity["plan"][week_index]
-            actual_value = activity["actual"][week_index]
-
-            if plan_value is not None:
-                weighted_plan += weight * float(plan_value)
-            if actual_value is not None:
-                weighted_actual += weight * float(actual_value)
-
-        plan_values.append(weighted_plan / divisor)
-        actual_values.append(weighted_actual / divisor)
-
-    return {
-        **item,
-        "amount": total_amount,
-        "plan": plan_values,
-        "actual": actual_values,
-    }
+    return aggregate_table_item(item, children, week_count)
 
 
 def build_table_rows(
@@ -535,31 +545,28 @@ def build_table_rows(
     activities: list[dict[str, object]],
     week_count: int,
 ) -> list[dict[str, object]]:
-    """Keep source WBS and Activity rows in their original order.
+    """Build a deterministic activity-level snapshot in source order.
 
-    WBS totals already exist as formulas in the main worksheet. The OKD
-    worksheet must reference those source rows directly so future edits in
-    the main worksheet flow through automatically.
+    ``progress_table`` is intentionally a snapshot dataset. Project/WBS
+    roll-ups are calculated from current Activity values at export/rebuild
+    time instead of carrying thousands of live links back to ``main``.
     """
     rows: list[dict[str, object]] = []
     seen_wbs: set[str] = set()
 
     for item in table_items:
         if item["kind"] == "project":
-            rows.append(item)
+            rows.append(aggregate_table_item(item, activities, week_count))
         elif item["kind"] == "wbs":
             wbs_code = str(item["wbs"])
             if wbs_code in seen_wbs:
                 continue
             seen_wbs.add(wbs_code)
-            rows.append(
-                aggregate_wbs_item(item, activities, week_count)
-            )
+            rows.append(aggregate_wbs_item(item, activities, week_count))
         else:
             rows.append(item)
 
     return rows
-
 
 def project_dates(ws, headers, activities, epoch) -> tuple[date, date]:
     row_type_col = find_column(headers, ("Row Type",), required=True)
@@ -698,8 +705,16 @@ def build_progress_sheet(
     headers: dict[str, int],
     weeks,
     activities,
+    *,
+    snapshot: bool = False,
+    value_source=None,
 ) -> None:
-    """Build an interactive progress sheet using live Excel formulas."""
+    """Build the progress curve source sheet.
+
+    Standalone rebuild uses a hybrid contract when ``snapshot=True``:
+    project dates, week dates and Plan are frozen values; Actual remains a small
+    live formula link to the cumulative Actual S-Curve row in ``main``.
+    """
     remove_existing_sheet(wb, OKD_PROGRESS_SHEET)
     ws = wb.create_sheet(OKD_PROGRESS_SHEET)
 
@@ -720,26 +735,50 @@ def build_progress_sheet(
     plan_finish_col = find_column(headers, ("Plan Finish",), required=True)
     source_ref = excel_sheet_ref(source_ws.title)
 
-    for output_row, (source_col, _) in enumerate(weeks, start=2):
+    snapshot_plan = None
+    snapshot_start = snapshot_finish = None
+    if snapshot:
+        snapshot_start, snapshot_finish = project_dates(
+            source_ws, headers, activities, wb.epoch
+        )
+        snapshot_plan, _snapshot_actual = cumulative_project_series(
+            activities, len(weeks)
+        )
+
+    for output_row, (source_col, week_date) in enumerate(weeks, start=2):
         source_col_letter = get_column_letter(source_col)
         plan_start_addr = f"{get_column_letter(plan_start_col)}{project_plan_row}"
         plan_finish_addr = f"{get_column_letter(plan_finish_col)}{project_plan_row}"
 
-        ws.cell(output_row, 1, f"={source_ref}!{plan_start_addr}")
-        ws.cell(output_row, 2, f"={source_ref}!{plan_finish_addr}")
-        ws.cell(output_row, 3, f"={source_ref}!{source_col_letter}{HEADER_ROW}")
-        ws.cell(
-            output_row,
-            4,
-            f'=IF({source_ref}!{source_col_letter}{acc_plan_row}="","",'
-            f'ROUND({source_ref}!{source_col_letter}{acc_plan_row}*100,6))',
-        )
-        ws.cell(
-            output_row,
-            5,
-            f'=IF({source_ref}!{source_col_letter}{acc_actual_row}="","",'
-            f'ROUND({source_ref}!{source_col_letter}{acc_actual_row}*100,6))',
-        )
+        if snapshot:
+            ws.cell(output_row, 1, snapshot_start)
+            ws.cell(output_row, 2, snapshot_finish)
+            ws.cell(output_row, 3, week_date)
+            ws.cell(output_row, 4, snapshot_plan[output_row - 2])
+            # Hybrid contract: keep Actual live with only one lightweight formula
+            # per reporting week. The main cumulative Actual row is the authority.
+            ws.cell(
+                output_row,
+                5,
+                f'=IF({source_ref}!{source_col_letter}{acc_actual_row}="","",'
+                f'ROUND({source_ref}!{source_col_letter}{acc_actual_row}*100,6))',
+            )
+        else:
+            ws.cell(output_row, 1, f"={source_ref}!{plan_start_addr}")
+            ws.cell(output_row, 2, f"={source_ref}!{plan_finish_addr}")
+            ws.cell(output_row, 3, f"={source_ref}!{source_col_letter}{HEADER_ROW}")
+            ws.cell(
+                output_row,
+                4,
+                f'=IF({source_ref}!{source_col_letter}{acc_plan_row}="","",'
+                f'ROUND({source_ref}!{source_col_letter}{acc_plan_row}*100,6))',
+            )
+            ws.cell(
+                output_row,
+                5,
+                f'=IF({source_ref}!{source_col_letter}{acc_actual_row}="","",'
+                f'ROUND({source_ref}!{source_col_letter}{acc_actual_row}*100,6))',
+            )
 
     style_header(ws, "A1:E1")
     ws.freeze_panes = "A2"
@@ -757,12 +796,12 @@ def build_progress_sheet(
         ws.column_dimensions[letter].width = width
 
 
-def verify_progress_table_links(
+def verify_progress_table_snapshot(
     ws,
     weeks,
     table_rows,
 ) -> tuple[int, int]:
-    """Verify that every item has Plan and Actual rows and live formulas."""
+    """Verify that progress_table is a complete value-only snapshot."""
     expected_rows = len(table_rows) * 2
     if ws.max_row - 1 != expected_rows:
         raise OKDExportError(
@@ -776,17 +815,26 @@ def verify_progress_table_links(
             raise OKDExportError(
                 f"Invalid P/A value at {OKD_TABLE_SHEET}!D{row}"
             )
-
-        for col in range(3, 6 + len(weeks)):
+        for col in range(1, 7 + len(weeks)):
             value = ws.cell(row, col).value
-            if col != 4 and not (
-                isinstance(value, str) and value.startswith("=")
-            ):
+            if isinstance(value, str) and value.startswith("="):
                 raise OKDExportError(
-                    f"Live formula missing at "
+                    f"Snapshot formula found at "
                     f"{OKD_TABLE_SHEET}!{get_column_letter(col)}{row}"
                 )
-            checked += 1
+            # Preserve the historical checked_links metric contract: Amount,
+            # P/A, %Progress and weekly cells only. The verifier itself now
+            # checks the entire snapshot row for formulas.
+            if 3 <= col <= 5 + len(weeks):
+                checked += 1
+
+    # Date headers are values too; no dependency chain back to main.
+    for col in range(6, 6 + len(weeks)):
+        if isinstance(ws.cell(1, col).value, str) and ws.cell(1, col).value.startswith("="):
+            raise OKDExportError(
+                f"Snapshot header formula found at "
+                f"{OKD_TABLE_SHEET}!{get_column_letter(col)}1"
+            )
 
     return expected_rows, checked
 
@@ -798,19 +846,19 @@ def build_progress_table_sheet(
     weeks,
     table_rows,
 ) -> tuple[int, int]:
-    """Build an interactive progress_table with Plan and Actual for all rows."""
+    """Build a value-only progress_table snapshot for Plan and Actual rows.
+
+    The editable source after export is ``main``. This table is regenerated
+    by the export/rebuild pipeline and deliberately contains no live weekly
+    dependency matrix, keeping large workbooks responsive.
+    """
     remove_existing_sheet(wb, OKD_TABLE_SHEET)
     ws = wb.create_sheet(OKD_TABLE_SHEET)
 
     ws.append(["WBS", "Activities", "Amount", "P/A", "%Progress"] + [
-        f"={excel_sheet_ref(source_ws.title)}!"
-        f"{get_column_letter(source_col)}{HEADER_ROW}"
-        for source_col, _ in weeks
-    ])
+        cutoff for _, cutoff in weeks
+    ] + ["_Kind"])
 
-    # Header cells are live links to the date headers in the main worksheet.
-    # Without an explicit date number format, Excel displays their serial
-    # values (for example 46045) instead of readable dates.
     for output_col in range(6, 6 + len(weeks)):
         ws.cell(1, output_col).number_format = "dd/mm/yyyy"
 
@@ -820,55 +868,46 @@ def build_progress_table_sheet(
         ("Description", "Activity Name", "Activity Description"),
         required=True,
     )
-    source_ref = excel_sheet_ref(source_ws.title)
 
     output_row = 2
     for item in table_rows:
-        display_wbs = str(
-            item.get("display_wbs") or item.get("wbs") or ""
-        )
-        plan_row = int(item["plan_row"])
-        actual_row = item.get("actual_row")
-        actual_source_row = (
-            int(actual_row) if actual_row is not None else plan_row
-        )
+        display_wbs = str(item.get("display_wbs") or item.get("wbs") or "")
+        plan_row = int(item.get("plan_row") or 0)
+        actual_row = int(item.get("actual_row") or plan_row or 0)
+        activity_name = str(item.get("activity_name") or "")
+        if not activity_name and plan_row:
+            activity_name = str(source_ws.cell(plan_row, description_col).value or "")
+        amount_value = item.get("amount")
+        if amount_value is None and plan_row:
+            amount_value = as_number(source_ws.cell(plan_row, amount_col).value)
+        amount = float(amount_value or 0.0)
+        kind = str(item.get("kind") or "activity")
 
-        for pa_value, source_row in (
-            ("P", plan_row),
-            ("A", actual_source_row),
-        ):
+        plan_values = item.get("plan")
+        if plan_values is None and plan_row:
+            plan_values = [as_number(source_ws.cell(plan_row, source_col).value) for source_col, _ in weeks]
+        actual_values = item.get("actual")
+        if actual_values is None and actual_row:
+            actual_values = [as_number(source_ws.cell(actual_row, source_col).value) for source_col, _ in weeks]
+
+        for pa_value, values in (("P", plan_values or []), ("A", actual_values or [])):
             ws.cell(output_row, 1, display_wbs)
-            ws.cell(
-                output_row,
-                2,
-                f"={source_ref}!{get_column_letter(description_col)}{plan_row}",
-            )
-            ws.cell(
-                output_row,
-                3,
-                f"={source_ref}!{get_column_letter(amount_col)}{plan_row}",
-            )
+            ws.cell(output_row, 2, activity_name)
+            ws.cell(output_row, 3, amount)
             ws.cell(output_row, 4, pa_value)
+            ws.cell(output_row, 6 + len(weeks), kind)
 
-            first_week_letter = get_column_letter(6)
-            last_week_letter = get_column_letter(5 + len(weeks))
-            ws.cell(
-                output_row,
-                5,
-                f'=IF(COUNT({first_week_letter}{output_row}:'
-                f'{last_week_letter}{output_row})=0,"",'
-                f'ROUND(SUM({first_week_letter}{output_row}:'
-                f'{last_week_letter}{output_row}),6))',
-            )
-
-            for week_offset, (source_col, _) in enumerate(weeks, start=6):
-                source_col_letter = get_column_letter(source_col)
-                ws.cell(
-                    output_row,
-                    week_offset,
-                    f'=IF({source_ref}!{source_col_letter}{source_row}="","",'
-                    f'ROUND({source_ref}!{source_col_letter}{source_row}*100,6))',
+            snapshot_values: list[float | None] = []
+            for index in range(len(weeks)):
+                value = values[index] if index < len(values) else None
+                snapshot_values.append(
+                    round(float(value) * 100.0, 6) if value is not None else None
                 )
+
+            populated = [value for value in snapshot_values if value is not None]
+            ws.cell(output_row, 5, round(sum(populated), 6) if populated else "")
+            for week_offset, value in enumerate(snapshot_values, start=6):
+                ws.cell(output_row, week_offset, value if value is not None else "")
 
             ws.cell(output_row, 3).number_format = '#,##0.00'
             ws.cell(output_row, 5).number_format = "0.00"
@@ -931,9 +970,54 @@ def build_progress_table_sheet(
     ws.column_dimensions["E"].width = 14
     for output_col in range(6, 6 + len(weeks)):
         ws.column_dimensions[get_column_letter(output_col)].width = 12
+    kind_col_letter = get_column_letter(6 + len(weeks))
+    ws.column_dimensions[kind_col_letter].hidden = True
     ws.row_dimensions[1].height = 24
 
-    return verify_progress_table_links(ws, weeks, table_rows)
+    return verify_progress_table_snapshot(ws, weeks, table_rows)
+
+def build_progress_views_from_source(
+    wb,
+    source_ws,
+    *,
+    snapshot_progress: bool = False,
+    value_source=None,
+) -> tuple[int, int, int, int]:
+    """Build both ``progress`` and ``progress_table`` from the current main sheet.
+
+    This is the shared pre-mapping workbook contract.  The final OKD step may
+    call the same builders again as a deterministic refresh after distribution.
+    """
+    headers = get_headers(source_ws)
+    weeks = find_week_columns(source_ws, wb.epoch)
+    activities, table_items = read_schedule_items(
+        source_ws, headers, weeks, wb.epoch
+    )
+    table_rows = build_table_rows(table_items, activities, len(weeks))
+    build_progress_sheet(
+        wb,
+        source_ws,
+        headers,
+        weeks,
+        activities,
+        snapshot=snapshot_progress,
+        value_source=value_source,
+    )
+    table_rows_count, checked_links = build_progress_table_sheet(
+        wb, source_ws, headers, weeks, table_rows
+    )
+    return len(activities), len(weeks), table_rows_count, checked_links
+
+
+def build_progress_table_from_source(wb, source_ws) -> tuple[int, int]:
+    """Backward-compatible helper that rebuilds only ``progress_table``."""
+    headers = get_headers(source_ws)
+    weeks = find_week_columns(source_ws, wb.epoch)
+    activities, table_items = read_schedule_items(
+        source_ws, headers, weeks, wb.epoch
+    )
+    table_rows = build_table_rows(table_items, activities, len(weeks))
+    return build_progress_table_sheet(wb, source_ws, headers, weeks, table_rows)
 
 
 def update_info_sheet(wb, activities_count: int, weeks_count: int) -> None:
@@ -947,7 +1031,8 @@ def update_info_sheet(wb, activities_count: int, weeks_count: int) -> None:
         ("OKD Weeks", weeks_count),
         ("Value Scale", "Formula result 0-100 (not Excel %)"),
         ("OKD WBS Rollup", "Included"),
-        ("Calculation", "Live formulas linked to main"),
+        ("Calculation", "progress live; progress_table snapshot"),
+        ("Progress Table Refresh", "Export / Rebuild Workbook"),
         ("WBS Rows", "Plan and Actual created for every WBS/activity"),
         ("OKD Child Codes", "Generated under parent WBS"),
     ]
@@ -1004,9 +1089,7 @@ def build_okd_sheets(
     )
     update_info_sheet(wb, len(activities), len(weeks))
 
-    wb.calculation.calcMode = "auto"
-    wb.calculation.fullCalcOnLoad = True
-    wb.calculation.forceFullCalc = True
+    configure_incremental_excel_recalculation(wb)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_file)

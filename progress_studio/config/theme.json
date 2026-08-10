@@ -1,0 +1,29 @@
+{
+  "name": "forest",
+  "colors": {
+    "canvas": "#F4F7F6",
+    "surface": "#FFFFFF",
+    "surface_alt": "#F7FAF8",
+    "border": "#D9E3DE",
+    "text": "#17251F",
+    "muted": "#66756E",
+    "primary": "#2E7D4F",
+    "primary_hover": "#256640",
+    "primary_soft": "#E7F3EC",
+    "sidebar": "#14382D",
+    "sidebar_hover": "#205241",
+    "sidebar_text": "#EDF7F2",
+    "sidebar_muted": "#9FC1B2",
+    "success": "#278A55",
+    "warning": "#C68418",
+    "danger": "#C4473A",
+    "info": "#2F6FA3",
+    "selection": "#DDEFE5",
+    "console_bg": "#10251E",
+    "console_fg": "#D9ECE3"
+  },
+  "fonts": {
+    "ui": "Segoe UI",
+    "mono": "Consolas"
+  }
+}

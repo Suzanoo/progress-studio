@@ -11,6 +11,14 @@ class ActivityRow:
     child_wbs: str
     description: str
     wbs_path: tuple[tuple[str, str], ...] = ()
+    origin: str = "workbook"
+    supplemental_wbs_code: str = ""
+    supplemental_wbs_name: str = ""
+    node_id: str = ""
+
+    @property
+    def is_supplemental(self) -> bool:
+        return self.origin == "user_created"
 
     @property
     def search_text(self) -> str:
@@ -19,6 +27,19 @@ class ActivityRow:
             f"{self.activity_id} {self.parent_wbs} {self.child_wbs} "
             f"{hierarchy} {self.description}"
         ).lower()
+
+
+@dataclass(frozen=True, slots=True)
+class SupplementalWBS:
+    code: str
+    name: str
+    parent_path: tuple[tuple[str, str], ...] = ()
+    origin: str = "user_created"
+    node_id: str = ""
+
+    @property
+    def path(self) -> tuple[tuple[str, str], ...]:
+        return self.parent_path + ((self.code, self.name),)
 
 
 @dataclass(frozen=True, slots=True)

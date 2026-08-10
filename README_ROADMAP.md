@@ -152,15 +152,15 @@ Branch: `fix/ms6.2-main-amount-contract`
 
 ### MS-6.3 — Excel Recalculation Contract
 
-**Goal:** Ensure all formulas that depend on mapped Activity Amount are recalculated by Microsoft Excel.
+**Goal:** Ensure formulas that depend on mapped Activity Amount recalculate correctly without forcing an expensive full-workbook rebuild on every open.
 
-Completed:
+Current contract:
 
-- Set Automatic calculation, Full Calculation on Load, and Force Full Calculation.
-- Reset the Excel calculation engine ID so stale formula caches are not trusted.
-- Verify exported packages do not contain a stale calculation chain.
+- Use Automatic dependency calculation with Full Calculation on Load and Force Full Calculation disabled.
+- Keep a non-zero Excel calculation engine ID and request calculation on save.
 - Keep Activity weekly distribution percentages unchanged.
-- Recalculate amount-weighted WBS and Project Summary percentages when Excel opens the export.
+- Recalculate amount-weighted WBS and Project Summary percentages through normal Excel dependencies.
+- Reserve full-workbook recalculation for explicit repair/debug workflows.
 - Remove the embedded S-Curve preview from the current application scope.
 - Keep the mapping UI free from hover tooltips, animation, and continuous repaint behavior.
 
@@ -238,3 +238,16 @@ Tkinter presentation
 - Changed workbooks are never reconciled or merged automatically.
 - Export reads from domain records and allocation records, not Treeview rows.
 - Large tables must use pagination and update only affected rows.
+
+### Payment milestones
+- [x] MS-PAY1 - Payment workspace, workbook upload/validation, lightweight `main` -> `Payment` snapshot.
+- [x] MS-PAY2 - Payment Input workflow: period count, lightweight editable workbook, upload/validation.
+- [x] MS-PAY3 - Sparse XML Payment Input reader; blank cells are not materialized, explicit 0% is preserved.
+- [x] MS-PAY4 - Activity Progress Index from current `main` Plan rows and weekly distributions.
+- [x] MS-PAY5 - Cell-boundary Payment Position Engine; no line rendering yet.
+- [x] MS-PAY6 - Single P01 payment line renderer using cell boundaries; no Shapes/pixel anchors.
+- [x] MS-PAY6.1 - Vertical-backbone renderer for P01-P03 with per-payment colors and sparse Activity branches.
+- [ ] MS-PAY7 - Multi-payment lines with per-payment colors.
+- [ ] MS-PAY8 - Edge cases, validation and audit.
+- [ ] MS-PAY9 - Rebuild / edited-workbook compatibility.
+- [ ] MS-PAY10 - Performance hardening for large projects.

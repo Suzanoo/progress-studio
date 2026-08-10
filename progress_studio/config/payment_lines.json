@@ -1,0 +1,50 @@
+{
+  "line": {
+    "style": "medium",
+    "endpoint_style": "thick",
+    "fallback_color": "7F7F7F",
+    "collision_max_offset": 3
+  },
+  "label": {
+    "width_px": 145,
+    "height_px": 26,
+    "font_size": 12,
+    "corner_radius_px": 6,
+    "text_color": "FFFFFF",
+    "anchor_column_offset": -1,
+    "anchor_row": 1,
+    "collision_row_step": 1
+  },
+  "colors": {
+    "P01": "C00000",
+    "P02": "0070C0",
+    "P03": "548235",
+    "P04": "7030A0",
+    "P05": "ED7D31",
+    "P06": "00A6A6",
+    "P07": "7F6000",
+    "P08": "C0504D",
+    "P09": "9BBB59",
+    "P10": "4F81BD",
+    "P11": "8064A2",
+    "P12": "C4A000",
+    "P13": "F06292",
+    "P14": "008C95",
+    "P15": "8C6D46",
+    "P16": "A64D79",
+    "P17": "3D9970",
+    "P18": "5B9BD5",
+    "P19": "A5A5A5",
+    "P20": "FFC000",
+    "P21": "4472C4",
+    "P22": "70AD47",
+    "P23": "ED7D31",
+    "P24": "5B5EA6",
+    "P25": "9E480E",
+    "P26": "997300",
+    "P27": "255E91",
+    "P28": "43682B",
+    "P29": "A64D79",
+    "P30": "636363"
+  }
+}

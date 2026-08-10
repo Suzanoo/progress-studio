@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from progress_studio.domain.mapping_models import (
     ActivityRow,
@@ -8,6 +8,10 @@ from progress_studio.domain.mapping_models import (
     BOQRow,
     MappingChange,
     MappingStatus,
+    SupplementalWBS,
+)
+from progress_studio.domain.working_tree import (
+    WorkingScheduleTree, WorkingTreeNode, WorkingNodeKind, WorkingNodeOrigin,
 )
 
 
@@ -46,6 +50,14 @@ class MappingStore:
         self.boq_wbs3 = ""
         self._boq_ids_by_wbs2: dict[str, list[str]] = {}
         self._boq_ids_by_wbs23: dict[tuple[str, str], list[str]] = {}
+        self.boq_selection_anchor: str | None = None
+        self.collapsed_wbs_paths: set[tuple[str, ...]] = set()
+        self.supplemental_wbs_nodes: list[SupplementalWBS] = []
+        self.selected_wbs_path: tuple[tuple[str, str], ...] = ()
+        self.selected_node_id: str = ""
+        self.working_tree = WorkingScheduleTree()
+        self._tree_undo_stack: list[tuple[WorkingTreeNode, ...]] = []
+        self._tree_redo_stack: list[tuple[WorkingTreeNode, ...]] = []
 
     def load_activities(self, rows: list[ActivityRow]) -> None:
         self.activities_by_id = {row.activity_id: row for row in rows}
@@ -55,6 +67,390 @@ class MappingStore:
         self.selected_boq_ids.clear()
         self._undo_stack.clear()
         self.activity_page = 1
+        self.collapsed_wbs_paths.clear()
+        self.selected_wbs_path = ()
+        self.selected_node_id = ""
+        self.supplemental_wbs_nodes = []
+        self.working_tree = WorkingScheduleTree.build(list(self.activities_by_id.values()), [])
+        self._tree_undo_stack.clear()
+        self._tree_redo_stack.clear()
+
+    def _rebuild_working_tree(self) -> None:
+        self.working_tree = WorkingScheduleTree.build(
+            [self.activities_by_id[key] for key in self.activity_order],
+            self.supplemental_wbs_nodes,
+        )
+        if self.selected_wbs_path:
+            selected = self.working_tree.find_wbs_by_path(self.selected_wbs_path)
+            self.selected_node_id = selected.node_id if selected else ""
+        elif self.selected_activity_ids:
+            activity_id = next(iter(self.selected_activity_ids))
+            selected = self.working_tree.find_activity(activity_id)
+            self.selected_node_id = selected.node_id if selected else ""
+        else:
+            self.selected_node_id = ""
+
+
+    def _capture_tree_edit(self) -> None:
+        self._tree_undo_stack.append(self.working_tree.snapshot())
+        self._tree_redo_stack.clear()
+
+    def _path_for_wbs_node(self, node_id: str) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (node.code, node.name)
+            for node in self.working_tree.path_for(node_id)
+            if node.kind is WorkingNodeKind.WBS and not node.deleted
+        )
+
+    def _sync_from_working_tree(self) -> None:
+        old_rows = dict(self.activities_by_id)
+        by_node_id = {row.node_id: row for row in old_rows.values() if row.node_id}
+        by_source_id = {key.upper(): row for key, row in old_rows.items()}
+        new_rows: dict[str, ActivityRow] = {}
+        new_order: list[str] = []
+        supplemental_wbs: list[SupplementalWBS] = []
+
+        for _depth, node in self.working_tree.walk():
+            if node.kind is WorkingNodeKind.WBS:
+                if node.origin is WorkingNodeOrigin.USER_CREATED:
+                    path = self._path_for_wbs_node(node.node_id)
+                    supplemental_wbs.append(
+                        SupplementalWBS(
+                            code=node.code,
+                            name=node.name,
+                            parent_path=path[:-1],
+                            node_id=node.node_id,
+                        )
+                    )
+                continue
+
+            path = self._path_for_wbs_node(node.parent_id) if node.parent_id else ()
+            old = by_node_id.get(node.node_id) or by_source_id.get(node.source_activity_id.upper()) or by_source_id.get(node.code.upper())
+            if old is None:
+                old = ActivityRow(
+                    activity_id=node.code,
+                    parent_wbs=path[-1][0] if path else "",
+                    child_wbs=path[-1][0] if path else "",
+                    description=node.name,
+                    wbs_path=path,
+                    origin="user_created" if node.origin is WorkingNodeOrigin.USER_CREATED else "workbook",
+                    node_id=node.node_id,
+                )
+            row = replace(
+                old,
+                activity_id=node.code,
+                parent_wbs=path[-1][0] if path else "",
+                child_wbs=path[-1][0] if path else "",
+                description=node.name,
+                wbs_path=path,
+                origin="user_created" if node.origin is WorkingNodeOrigin.USER_CREATED else "workbook",
+                supplemental_wbs_code=path[-1][0] if node.origin is WorkingNodeOrigin.USER_CREATED and path else old.supplemental_wbs_code,
+                supplemental_wbs_name=path[-1][1] if node.origin is WorkingNodeOrigin.USER_CREATED and path else old.supplemental_wbs_name,
+                node_id=node.node_id,
+            )
+            new_rows[row.activity_id] = row
+            new_order.append(row.activity_id)
+
+        self.activities_by_id = new_rows
+        self.activity_order = new_order
+        self.supplemental_wbs_nodes = supplemental_wbs
+        self.selected_activity_ids.intersection_update(new_rows)
+        selected = self.working_tree.get(self.selected_node_id) if self.selected_node_id else None
+        if selected and not selected.deleted:
+            if selected.kind is WorkingNodeKind.WBS:
+                self.selected_wbs_path = self._path_for_wbs_node(selected.node_id)
+                self.selected_activity_ids.clear()
+            else:
+                self.selected_wbs_path = ()
+                self.selected_activity_ids = {selected.code}
+        else:
+            self.selected_node_id = ""
+            self.selected_wbs_path = ()
+            self.selected_activity_ids.clear()
+
+    def restore_working_tree(self, nodes: list[WorkingTreeNode] | tuple[WorkingTreeNode, ...]) -> None:
+        if not nodes:
+            return
+        self.working_tree = WorkingScheduleTree(list(nodes))
+        errors = self.working_tree.validate()
+        if errors:
+            raise ValueError("Invalid working tree: " + "; ".join(errors))
+        self._sync_from_working_tree()
+        self._tree_undo_stack.clear()
+        self._tree_redo_stack.clear()
+
+    def selected_working_node(self) -> WorkingTreeNode | None:
+        return self.working_tree.get(self.selected_node_id) if self.selected_node_id else None
+
+    def edit_selected_node(self, *, code: str, name: str) -> WorkingTreeNode:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        old_activity_id = node.code if node.kind is WorkingNodeKind.ACTIVITY else ""
+        self._capture_tree_edit()
+        try:
+            updated = self.working_tree.rename(node.node_id, code=code, name=name)
+            if old_activity_id and old_activity_id != updated.code:
+                self.allocations = {
+                    (boq_key, updated.code if activity_id == old_activity_id else activity_id): share
+                    for (boq_key, activity_id), share in self.allocations.items()
+                }
+            self.selected_node_id = updated.node_id
+            self._sync_from_working_tree()
+            return updated
+        except Exception:
+            snapshot = self._tree_undo_stack.pop()
+            self.working_tree = WorkingScheduleTree(list(snapshot))
+            raise
+
+    def delete_selected_node(self) -> tuple[WorkingTreeNode, ...]:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        affected = (node,) + self.working_tree.descendants(node.node_id)
+        activity_ids = {item.code for item in affected if item.kind is WorkingNodeKind.ACTIVITY}
+        if any(activity_id in activity_ids for _, activity_id in self.allocations):
+            raise ValueError("Unmap BOQ items from this node and its descendants before deleting it.")
+        self._capture_tree_edit()
+        deleted = self.working_tree.soft_delete(node.node_id)
+        self.selected_node_id = node.parent_id or ""
+        self._sync_from_working_tree()
+        return deleted
+
+    def move_selected_node(self, offset: int) -> bool:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        self._capture_tree_edit()
+        moved = self.working_tree.move_sibling(node.node_id, offset)
+        if not moved:
+            self._tree_undo_stack.pop()
+            return False
+        self._sync_from_working_tree()
+        return True
+
+    def indent_selected_node(self) -> WorkingTreeNode:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        self._capture_tree_edit()
+        try:
+            updated = self.working_tree.indent(node.node_id)
+            self.selected_node_id = updated.node_id
+            self._sync_from_working_tree()
+            return updated
+        except Exception:
+            snapshot = self._tree_undo_stack.pop()
+            self.working_tree = WorkingScheduleTree(list(snapshot))
+            raise
+
+    def outdent_selected_node(self) -> WorkingTreeNode:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        self._capture_tree_edit()
+        try:
+            updated = self.working_tree.outdent(node.node_id)
+            self.selected_node_id = updated.node_id
+            self._sync_from_working_tree()
+            return updated
+        except Exception:
+            snapshot = self._tree_undo_stack.pop()
+            self.working_tree = WorkingScheduleTree(list(snapshot))
+            raise
+
+    def reparent_selected_node(self, parent_node_id: str) -> WorkingTreeNode:
+        node = self.selected_working_node()
+        if node is None:
+            raise ValueError("Select a WBS or Activity first.")
+        self._capture_tree_edit()
+        try:
+            updated = self.working_tree.reparent(node.node_id, parent_node_id)
+            self._sync_from_working_tree()
+            return updated
+        except Exception:
+            snapshot = self._tree_undo_stack.pop()
+            self.working_tree = WorkingScheduleTree(list(snapshot))
+            raise
+
+    def _remap_allocations_for_tree_transition(
+        self,
+        before: tuple[WorkingTreeNode, ...],
+        after: tuple[WorkingTreeNode, ...],
+    ) -> None:
+        before_codes = {
+            node.node_id: node.code
+            for node in before
+            if node.kind is WorkingNodeKind.ACTIVITY and not node.deleted
+        }
+        after_codes = {
+            node.node_id: node.code
+            for node in after
+            if node.kind is WorkingNodeKind.ACTIVITY and not node.deleted
+        }
+        rename = {
+            old_code: after_codes[node_id]
+            for node_id, old_code in before_codes.items()
+            if node_id in after_codes and after_codes[node_id] != old_code
+        }
+        if rename:
+            self.allocations = {
+                (boq_key, rename.get(activity_id, activity_id)): share
+                for (boq_key, activity_id), share in self.allocations.items()
+            }
+
+    def undo_tree_edit(self) -> bool:
+        if not self._tree_undo_stack:
+            return False
+        current = self.working_tree.snapshot()
+        target = self._tree_undo_stack.pop()
+        self._tree_redo_stack.append(current)
+        self._remap_allocations_for_tree_transition(current, target)
+        self.working_tree = WorkingScheduleTree(list(target))
+        self._sync_from_working_tree()
+        return True
+
+    def redo_tree_edit(self) -> bool:
+        if not self._tree_redo_stack:
+            return False
+        current = self.working_tree.snapshot()
+        target = self._tree_redo_stack.pop()
+        self._tree_undo_stack.append(current)
+        self._remap_allocations_for_tree_transition(current, target)
+        self.working_tree = WorkingScheduleTree(list(target))
+        self._sync_from_working_tree()
+        return True
+
+    def working_tree_nodes(self) -> tuple[WorkingTreeNode, ...]:
+        return self.working_tree.nodes()
+
+    def all_wbs_paths(self) -> list[tuple[tuple[str, str], ...]]:
+        paths = {tuple(row.wbs_path[:level]) for row in self.activities_by_id.values() for level in range(1, len(row.wbs_path)+1)}
+        paths.update(node.path for node in self.supplemental_wbs_nodes)
+        return sorted(paths, key=lambda path: (len(path), tuple(code for code, _ in path)))
+
+    def select_wbs(self, path: tuple[tuple[str, str], ...]) -> None:
+        self.selected_wbs_path = tuple(path)
+        node = self.working_tree.find_wbs_by_path(self.selected_wbs_path)
+        self.selected_node_id = node.node_id if node else ""
+
+    def add_supplemental_wbs(self, *, parent_path: tuple[tuple[str, str], ...], code: str, name: str) -> SupplementalWBS:
+        code, name = code.strip(), name.strip()
+        if not code or not name:
+            raise ValueError("WBS code and WBS name are required.")
+        if any(code == item_code for path in self.all_wbs_paths() for item_code, _ in path):
+            raise ValueError(f"WBS code already exists: {code}")
+        if parent_path and tuple(parent_path) not in self.all_wbs_paths():
+            raise ValueError("The selected parent WBS no longer exists.")
+        node = SupplementalWBS(
+            code=code,
+            name=name,
+            parent_path=tuple(parent_path),
+            node_id=WorkingScheduleTree.created_node_id(),
+        )
+        self.supplemental_wbs_nodes.append(node)
+        self.selected_wbs_path = node.path
+        self._rebuild_working_tree()
+        return node
+
+    def edit_supplemental_wbs(self, path: tuple[tuple[str, str], ...], *, code: str, name: str) -> SupplementalWBS:
+        index = next((i for i, node in enumerate(self.supplemental_wbs_nodes) if node.path == tuple(path)), -1)
+        if index < 0:
+            raise ValueError("Only WBS nodes created in Progress Studio can be edited.")
+        old = self.supplemental_wbs_nodes[index]
+        code, name = code.strip(), name.strip()
+        if not code or not name:
+            raise ValueError("WBS code and WBS name are required.")
+        if code != old.code and any(code == item_code for candidate in self.all_wbs_paths() for item_code, _ in candidate):
+            raise ValueError(f"WBS code already exists: {code}")
+        replacement = SupplementalWBS(
+            code=code,
+            name=name,
+            parent_path=old.parent_path,
+            origin=old.origin,
+            node_id=old.node_id or WorkingScheduleTree.created_node_id(),
+        )
+        old_path, new_path = old.path, replacement.path
+        self.supplemental_wbs_nodes[index] = replacement
+        for i, node in enumerate(list(self.supplemental_wbs_nodes)):
+            if node.parent_path[:len(old_path)] == old_path:
+                self.supplemental_wbs_nodes[i] = SupplementalWBS(
+                    node.code, node.name, new_path + node.parent_path[len(old_path):],
+                    node.origin, node.node_id,
+                )
+        for activity_id, row in list(self.activities_by_id.items()):
+            if row.wbs_path[:len(old_path)] == old_path:
+                from dataclasses import replace
+                self.activities_by_id[activity_id] = replace(row, wbs_path=new_path + row.wbs_path[len(old_path):], parent_wbs=(new_path + row.wbs_path[len(old_path):])[-1][0])
+        self.selected_wbs_path = new_path
+        self._rebuild_working_tree()
+        return replacement
+
+    def remove_supplemental_wbs(self, path: tuple[tuple[str, str], ...]) -> None:
+        node = next((node for node in self.supplemental_wbs_nodes if node.path == tuple(path)), None)
+        if node is None:
+            raise ValueError("Only WBS nodes created in Progress Studio can be removed.")
+        if any(other.parent_path[:len(path)] == tuple(path) for other in self.supplemental_wbs_nodes if other is not node):
+            raise ValueError("Remove child WBS nodes first.")
+        if any(row.wbs_path[:len(path)] == tuple(path) for row in self.activities_by_id.values()):
+            raise ValueError("Remove or move Activities under this WBS first.")
+        self.supplemental_wbs_nodes.remove(node)
+        self.selected_wbs_path = node.parent_path
+        self._rebuild_working_tree()
+
+    def add_supplemental_activity(
+        self, *, parent_path: tuple[tuple[str, str], ...], wbs_code: str,
+        wbs_name: str, activity_id: str, description: str
+    ) -> ActivityRow:
+        activity_id = activity_id.strip().upper()
+        wbs_code = wbs_code.strip()
+        wbs_name = wbs_name.strip()
+        description = description.strip()
+        if not activity_id or not description or not wbs_code or not wbs_name:
+            raise ValueError("WBS code, WBS name, Activity ID, and Activity name are required.")
+        if activity_id in self.activities_by_id:
+            raise ValueError(f"Activity ID already exists: {activity_id}")
+        # Activities are created *under* an existing WBS, so the selected
+        # parent WBS code is expected to already exist.  Uniqueness belongs
+        # to Activity ID, not to the parent WBS code.
+        if parent_path and tuple(parent_path) not in self.all_wbs_paths():
+            raise ValueError("The selected parent WBS no longer exists.")
+        # Backward-compatible behavior: callers may either pass the selected
+        # WBS itself (create Activity directly under it), or pass a new WBS
+        # code/name to create the Activity under that supplemental leaf.
+        direct_parent = bool(parent_path) and wbs_code == parent_path[-1][0]
+        activity_path = tuple(parent_path) if direct_parent else tuple(parent_path) + ((wbs_code, wbs_name),)
+        row = ActivityRow(
+            activity_id=activity_id,
+            parent_wbs=activity_path[-1][0] if activity_path else "",
+            child_wbs=activity_path[-1][0] if activity_path else wbs_code,
+            description=description,
+            wbs_path=activity_path,
+            origin="user_created",
+            supplemental_wbs_code=activity_path[-1][0] if activity_path else wbs_code,
+            supplemental_wbs_name=activity_path[-1][1] if activity_path else wbs_name,
+            node_id=WorkingScheduleTree.created_node_id(),
+        )
+        self.activities_by_id[activity_id] = row
+        self.activity_order.append(activity_id)
+        self.selected_activity_ids = {activity_id}
+        self.activity_page = 1
+        self._rebuild_working_tree()
+        return row
+
+    def supplemental_activities(self) -> list[ActivityRow]:
+        return [self.activities_by_id[key] for key in self.activity_order if self.activities_by_id[key].is_supplemental]
+
+    def remove_supplemental_activity(self, activity_id: str) -> None:
+        row = self.activities_by_id.get(activity_id)
+        if row is None or not row.is_supplemental:
+            raise ValueError("Only activities created in Progress Studio can be removed.")
+        if any(assigned == activity_id for _, assigned in self.allocations):
+            raise ValueError("Unmap all BOQ items from this Activity before removing it.")
+        self.activities_by_id.pop(activity_id)
+        self.activity_order.remove(activity_id)
+        self.selected_activity_ids.discard(activity_id)
+        self._rebuild_working_tree()
 
     def load_boq(self, rows: list[BOQRow]) -> None:
         self.boq_by_id = {row.key: row for row in rows}
@@ -68,14 +464,67 @@ class MappingStore:
         self.boq_wbs3 = ""
         self.allocations.clear()
         self.selected_boq_ids.clear()
+        self.boq_selection_anchor = None
         self._undo_stack.clear()
         self.boq_page = 1
 
+    @staticmethod
+    def wbs_path_key(path: tuple[tuple[str, str], ...], level: int | None = None) -> tuple[str, ...]:
+        items = path if level is None else path[:level]
+        return tuple(code for code, _name in items)
+
+    def toggle_wbs(self, path_key: tuple[str, ...]) -> None:
+        if path_key in self.collapsed_wbs_paths:
+            self.collapsed_wbs_paths.remove(path_key)
+        else:
+            self.collapsed_wbs_paths.add(path_key)
+        self.activity_page = 1
+
+    def collapse_all_wbs(self) -> None:
+        self.collapsed_wbs_paths = {
+            self.wbs_path_key(row.wbs_path, level)
+            for row in self.activities_by_id.values()
+            for level in range(1, len(row.wbs_path) + 1)
+        }
+        self.activity_page = 1
+
+    def expand_all_wbs(self) -> None:
+        self.collapsed_wbs_paths.clear()
+        self.activity_page = 1
+
+    def is_activity_visible(self, activity_id: str) -> bool:
+        row = self.activities_by_id[activity_id]
+        return not any(
+            self.wbs_path_key(row.wbs_path, level) in self.collapsed_wbs_paths
+            for level in range(1, len(row.wbs_path) + 1)
+        )
+
     def _filtered_activity_ids(self) -> list[str]:
         query = self.activity_query.strip().lower()
-        if not query:
-            return self.activity_order
-        return [key for key in self.activity_order if query in self.activities_by_id[key].search_text]
+        candidates = self.activity_order if not query else [
+            key for key in self.activity_order
+            if query in self.activities_by_id[key].search_text
+        ]
+        # Search results always expand their parent context. In normal browsing,
+        # retain one representative Activity per collapsed subtree so the UI
+        # can still render the WBS header while hiding its descendants.
+        if query or not self.collapsed_wbs_paths:
+            return list(candidates)
+        result: list[str] = []
+        represented: set[tuple[str, ...]] = set()
+        for key in candidates:
+            row = self.activities_by_id[key]
+            collapsed_prefix = next((
+                self.wbs_path_key(row.wbs_path, level)
+                for level in range(1, len(row.wbs_path) + 1)
+                if self.wbs_path_key(row.wbs_path, level) in self.collapsed_wbs_paths
+            ), None)
+            if collapsed_prefix is None:
+                result.append(key)
+            elif collapsed_prefix not in represented:
+                represented.add(collapsed_prefix)
+                result.append(key)
+        return result
 
     def boq_wbs2_values(self) -> tuple[str, ...]:
         return tuple(sorted(value for value in self._boq_ids_by_wbs2 if value))
@@ -126,14 +575,56 @@ class MappingStore:
     def toggle_activity(self, activity_id: str) -> None:
         if activity_id in self.selected_activity_ids:
             self.selected_activity_ids.clear()
+            self.selected_node_id = ""
         else:
             self.selected_activity_ids = {activity_id}
+            self.selected_wbs_path = ()
+            node = self.working_tree.find_activity(activity_id)
+            self.selected_node_id = node.node_id if node else ""
 
-    def toggle_boq(self, key: str) -> None:
+    def toggle_boq(self, key: str, *, additive: bool = True) -> None:
+        if not additive:
+            self.selected_boq_ids.clear()
         if key in self.selected_boq_ids:
             self.selected_boq_ids.remove(key)
         else:
             self.selected_boq_ids.add(key)
+        self.boq_selection_anchor = key
+
+    def select_boq_range(self, key: str) -> tuple[str, ...]:
+        filtered = self._filtered_boq_ids()
+        if key not in filtered:
+            return ()
+        if self.boq_selection_anchor not in filtered:
+            self.toggle_boq(key)
+            return (key,)
+        start = filtered.index(self.boq_selection_anchor)
+        end = filtered.index(key)
+        selected = tuple(filtered[min(start, end): max(start, end) + 1])
+        self.selected_boq_ids.update(selected)
+        return selected
+
+    def select_boq_page(self) -> tuple[str, ...]:
+        ids = self.boq_page_data().ids
+        self.selected_boq_ids.update(ids)
+        if ids:
+            self.boq_selection_anchor = ids[-1]
+        return ids
+
+    def select_all_filtered_boq(self) -> tuple[str, ...]:
+        ids = tuple(self._filtered_boq_ids())
+        self.selected_boq_ids.update(ids)
+        if ids:
+            self.boq_selection_anchor = ids[-1]
+        return ids
+
+    def clear_boq_selection(self) -> None:
+        self.selected_boq_ids.clear()
+        self.boq_selection_anchor = None
+
+    @property
+    def selected_boq_amount(self) -> float:
+        return sum(self.boq_by_id[key].amount for key in self.selected_boq_ids if key in self.boq_by_id)
 
     @staticmethod
     def _validate_share(share_percent: float) -> float:
@@ -166,6 +657,16 @@ class MappingStore:
             for activity_id in self.mapped_activities(key)
         ]
         return ", ".join(parts)
+
+    def mapped_to_compact_text(self, key: str) -> str:
+        """Return a table-friendly mapping summary while retaining full detail elsewhere."""
+        activities = self.mapped_activities(key)
+        if not activities:
+            return "—"
+        first = activities[0]
+        first_share = self.allocations[(key, first)]
+        suffix = f" +{len(activities) - 1}" if len(activities) > 1 else ""
+        return f"{first} ({first_share:g}%){suffix}"
 
     def map_selected(self, share_percent: float = 100.0) -> MappingChange:
         if len(self.selected_activity_ids) != 1:

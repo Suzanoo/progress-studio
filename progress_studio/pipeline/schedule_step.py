@@ -16,7 +16,7 @@ class ScheduleStep:
         output_folder = context.working_folder / "02_schedule"
         output_file = output_folder / f"{context.source_xml.stem}_schedule.xlsx"
         print("\n" + "=" * 72)
-        print("[2/8] Prepare Plan / Actual Schedule")
+        print("Prepare Plan / Actual Schedule")
         print("=" * 72)
         print(f"INPUT  : {context.imported_workbook}")
         print(f"OUTPUT : {output_file}")

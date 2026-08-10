@@ -19,5 +19,6 @@ class PipelineContext:
     progress_workbook: Path | None = None
     distribution_workbook: Path | None = None
     okd_workbook: Path | None = None
+    monthly_workbook: Path | None = None
     output_workbook: Path | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

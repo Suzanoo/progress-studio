@@ -22,15 +22,34 @@ MappingStore / MappingSession
         ↓
 Session repository or WorkbookExportService
         ↓
-JSON session or mapped Excel workbook
+Self-contained `.progressstudio` project or rebuilt Excel workbook
 ```
 
 ## Sources of truth
 
 - The generated `main` worksheet is the workbook source of truth for Activity Amount.
+- `main` is also the editable weekly timescale source; `main_monthly` is a formula-derived monthly presentation view and never owns progress inputs.
 - `MappingStore` is the runtime source of truth for Activities, BOQ items, selections, and allocations.
 - Treeview rows are presentation only. Business logic must never read values back from the GUI.
-- Session JSON stores references and allocation records, not duplicated workbook data.
+- `.progressstudio` v8 stores mapping/tree state plus verified embedded copies of the Progress and BOQ source workbooks. This makes a saved project self-contained for future workbook rebuilds.
+- Workbook snapshots are source preservation only; runtime business logic still reads normalized domain records and never reads GUI widgets.
+
+## Rebuild contract
+
+```text
+.progressstudio v8
+    ├── mapping + working tree
+    ├── embedded Progress source
+    └── embedded BOQ source
+            ↓
+    restore verified local copies
+            ↓
+    WorkbookExportService / latest generation engine
+            ↓
+    latest-format rebuilt workbook
+```
+
+Projects created before v8 remain readable. They must be opened with their original/relinked source workbooks once and saved again before they become self-contained. Legacy Actual Progress migration from an edited workbook is intentionally outside MS-R1.
 
 ## Workbook contract
 
@@ -77,3 +96,6 @@ Activity ID and WBS are optional. Missing Activity IDs are generated determinist
 as `ACT-000001`, `ACT-000002`, and so on. Missing hierarchy is represented as a flat
 activity structure. Existing Microsoft Project / P6-exported XML remains supported
 through the same normalized reader.
+
+### Edited-workbook rebuild boundary (MS-R2)
+`.progressstudio` remains the structure/mapping source of truth. An edited exported workbook may be supplied as a secondary, read-only source of user-owned `main` inputs (Activity Amount, weekly Plan, weekly Actual). The migration is applied to the freshly rebuilt `main`, after which all derived workbook views are regenerated. No legacy formulas, formatting, WBS structure, or project-session state are imported.
