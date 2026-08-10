@@ -27,6 +27,10 @@ FROZEN_FILES = {
     "test_ms112_core_tree_editing.py",
     "test_ms113_recursive_working_tree.py",
     "test_ms114_main_rebuild_foundation.py",
+    # Frozen before LW refactor: preserves pre-LW shell/export workspace contracts.
+    "test_ms91_production_ui.py",
+    "test_ms93_professional_desktop_ui.py",
+    "test_ms_rb6_rebuild_workspace_ui.py",
     "test_ms3_mapping_engine.py",
     "test_ms4_share_allocation.py",
     "test_ms5_persistent_session.py",
@@ -43,6 +47,8 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    # Live Workbook refactor ownership begins here.
+    "test_lw0_rebuild_export_ux.py",
     "test_ms_p120_activity_status_focus.py",
     "test_ms_rb721_dashboard_interactive_protection.py",
     "test_ms_rb72_lightweight_protection.py",
@@ -52,8 +58,6 @@ ACTIVE_FILES = {
     "test_ms115_workbook_generation_engine.py",
     "test_ms116_generation_progress_dialog.py",
     "test_ms6_workbook_export.py",
-    "test_ms91_production_ui.py",
-    "test_ms93_professional_desktop_ui.py",
     "test_ms_p110_dashboard_embedded_icons.py",
     "test_ms_p111_dashboard_control_table.py",
     "test_ms_p113_filter_ui.py",
@@ -76,10 +80,10 @@ ACTIVE_FILES = {
     "test_ms_rb3_snapshot_performance.py",
     "test_ms_rb4_payment_only_rebuild.py",
     "test_ms_rb5_payment_collision_lanes.py",
-    "test_ms_rb6_rebuild_workspace_ui.py",
 }
 
 SMOKE_NODEIDS = {
+    "test_lw0_rebuild_export_ux.py",
     "test_entrypoints.py",
     "test_ms115_workbook_generation_engine.py",
     "test_ms_p119_snapshot_progress_table.py",
@@ -90,7 +94,6 @@ SMOKE_NODEIDS = {
     "test_ms_rb3_snapshot_performance.py",
     "test_ms_rb4_payment_only_rebuild.py::test_rb4_rebuild_payment_replaces_payment_only",
     "test_ms_rb5_payment_collision_lanes.py",
-    "test_ms_rb6_rebuild_workspace_ui.py",
 }
 
 

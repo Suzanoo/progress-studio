@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from openpyxl import load_workbook
 
 from progress_studio.services.payment_service import PaymentService
 from tests.test_ms_pay6_payment_line_renderer import _progress_workbook
 
 
+@pytest.mark.skip(reason="Frozen RB6 shell contract: LW-0 removes the standalone Export workspace.")
 def test_rb6_sidebar_has_standalone_rebuild_after_export() -> None:
     source = (
         Path(__file__).parents[1]
@@ -25,6 +28,7 @@ def test_rb6_sidebar_has_standalone_rebuild_after_export() -> None:
     assert "self._build_rebuild_workspace()" in source
 
 
+@pytest.mark.skip(reason="Frozen RB6 Export workspace contract: LW-0 removes that workspace entirely.")
 def test_rb6_export_workspace_has_no_rebuild_controls() -> None:
     source = (
         Path(__file__).parents[1]
@@ -45,6 +49,7 @@ def test_rb6_export_workspace_has_no_rebuild_controls() -> None:
     assert "rebuild_from_edited_workbook" not in export_block
 
 
+@pytest.mark.skip(reason="Frozen RB6 rebuild-mode layout: LW-0 separates Output Mode from Rebuild Scope.")
 def test_rb6_rebuild_ui_has_only_workbook_and_mode_inputs() -> None:
     source = (
         Path(__file__).parents[1]

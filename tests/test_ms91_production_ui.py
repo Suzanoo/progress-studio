@@ -1,4 +1,5 @@
 import json
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ def test_settings_uses_release_version():
     assert SETTINGS.version == __version__
 
 
+@pytest.mark.skip(reason="Frozen pre-LW sidebar contract: standalone Export workspace was intentionally removed in LW-0.")
 def test_style_b_shell_contract_is_present():
     source = (ROOT / "progress_studio/presentation/gui/app.py").read_text(encoding="utf-8")
     for required in (

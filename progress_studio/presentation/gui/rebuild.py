@@ -31,6 +31,7 @@ class RebuildFrame(ttk.Frame):
         self.engine = engine or WorkbookRebuildEngine()
 
         self.workbook_var = tk.StringVar()
+        self.output_mode_var = tk.StringVar(value="snapshot")
         self.mode_var = tk.StringVar(value=RebuildMode.PROGRESS.value)
         self.analysis_var = tk.StringVar(value="Select a workbook to analyze.")
         self.detail_var = tk.StringVar(
@@ -62,8 +63,9 @@ class RebuildFrame(ttk.Frame):
         ).grid(row=1, column=0, sticky="w", pady=(6, 16))
 
         self._build_file_card(panel, 2)
-        self._build_mode_card(panel, 3)
-        self._build_action_card(panel, 4)
+        self._build_output_mode_card(panel, 3)
+        self._build_scope_card(panel, 4)
+        self._build_action_card(panel, 5)
 
     def _build_file_card(self, parent: ttk.Frame, row: int) -> None:
         card = ttk.Frame(parent, style="Card.TFrame", padding=16)
@@ -96,7 +98,7 @@ class RebuildFrame(ttk.Frame):
             wraplength=780,
         ).grid(row=3, column=1, columnspan=2, sticky="w", pady=(8, 0))
 
-    def _build_mode_card(self, parent: ttk.Frame, row: int) -> None:
+    def _build_output_mode_card(self, parent: ttk.Frame, row: int) -> None:
         card = ttk.Frame(parent, style="Card.TFrame", padding=16)
         card.grid(row=row, column=0, sticky="ew", pady=(0, 10))
         card.columnconfigure(1, weight=1)
@@ -104,13 +106,51 @@ class RebuildFrame(ttk.Frame):
         ttk.Label(card, text="2", style="Section.TLabel").grid(
             row=0, column=0, sticky="nw", padx=(0, 10)
         )
-        ttk.Label(card, text="What do you want to rebuild?", style="Section.TLabel").grid(
+        ttk.Label(card, text="Output Mode", style="Section.TLabel").grid(
+            row=0, column=1, sticky="w"
+        )
+
+        ttk.Radiobutton(
+            card,
+            text="Snapshot Workbook",
+            variable=self.output_mode_var,
+            value="snapshot",
+            command=self._output_mode_changed,
+        ).grid(row=1, column=1, sticky="w", pady=(10, 0))
+        ttk.Label(
+            card,
+            text="Current production engine • fast, lightweight generated views.",
+            style="Muted.TLabel",
+        ).grid(row=2, column=1, sticky="w", padx=(24, 0), pady=(2, 8))
+
+        ttk.Radiobutton(
+            card,
+            text="Live Workbook",
+            variable=self.output_mode_var,
+            value="live",
+            command=self._output_mode_changed,
+        ).grid(row=3, column=1, sticky="w")
+        ttk.Label(
+            card,
+            text="UX contract only in LW-0 • engine activation comes in a later LW milestone.",
+            style="Muted.TLabel",
+        ).grid(row=4, column=1, sticky="w", padx=(24, 0), pady=(2, 0))
+
+    def _build_scope_card(self, parent: ttk.Frame, row: int) -> None:
+        card = ttk.Frame(parent, style="Card.TFrame", padding=16)
+        card.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="3", style="Section.TLabel").grid(
+            row=0, column=0, sticky="nw", padx=(0, 10)
+        )
+        ttk.Label(card, text="Rebuild Scope", style="Section.TLabel").grid(
             row=0, column=1, sticky="w"
         )
 
         progress = ttk.Radiobutton(
             card,
-            text="Progress Workbook",
+            text="Progress",
             variable=self.mode_var,
             value=RebuildMode.PROGRESS.value,
             command=self._mode_changed,
@@ -148,7 +188,7 @@ class RebuildFrame(ttk.Frame):
         card.grid(row=row, column=0, sticky="ew")
         card.columnconfigure(1, weight=1)
 
-        ttk.Label(card, text="3", style="Section.TLabel").grid(
+        ttk.Label(card, text="4", style="Section.TLabel").grid(
             row=0, column=0, sticky="nw", padx=(0, 10)
         )
         ttk.Label(card, text="Build", style="Section.TLabel").grid(
@@ -193,10 +233,28 @@ class RebuildFrame(ttk.Frame):
         self.workbook_var.set(selected)
         self._analyze(Path(selected))
 
+    def _output_mode_changed(self) -> None:
+        current = self.workbook_var.get().strip()
+        if current:
+            self._analyze(Path(current))
+        else:
+            self._apply_output_mode_state()
+
     def _mode_changed(self) -> None:
         current = self.workbook_var.get().strip()
         if current:
             self._analyze(Path(current))
+
+    def _apply_output_mode_state(self) -> None:
+        if self.output_mode_var.get() == "live":
+            self.rebuild_button.configure(state="disabled")
+            self.result_var.set(
+                "Live Workbook is defined in LW-0 but not generated yet. "
+                "Select Snapshot Workbook to rebuild with the current engine."
+            )
+            return
+        if self._validated_path is not None:
+            self.rebuild_button.configure(state="normal")
 
     def _analyze(self, path: Path) -> None:
         self._validated_path = None
@@ -233,7 +291,7 @@ class RebuildFrame(ttk.Frame):
                 "Payment rebuild replaces Payment only. "
                 "Progress, monthly and dashboard sheets are preserved."
             )
-        self.rebuild_button.configure(state="normal")
+        self._apply_output_mode_state()
 
     @staticmethod
     def _mode_description(mode: RebuildMode) -> str:
@@ -242,6 +300,13 @@ class RebuildFrame(ttk.Frame):
         return "Progress requires a valid main sheet."
 
     def _rebuild(self) -> None:
+        if self.output_mode_var.get() != "snapshot":
+            messagebox.showinfo(
+                "Live Workbook",
+                "LW-0 defines the Live Workbook UX only. "
+                "The Live engine will be activated in a later LW milestone.",
+            )
+            return
         source = self._validated_path
         if source is None:
             messagebox.showwarning("Rebuild", "Select a valid workbook first.")

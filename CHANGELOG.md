@@ -328,3 +328,12 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Added lightweight package-level `main` -> `Payment` snapshot generation.
 - Payment output uses Save As and replaces only an existing `Payment` sheet when present.
 - No payment lines, matrix, KPI, or payment tables are rendered in this milestone.
+
+## LW-0 — Rebuild / Export UX Contract
+
+- Removed the standalone Export workspace from desktop navigation.
+- Moved initial mapped-workbook export into the Create Progress / Mapping flow.
+- Split Rebuild UI into Output Mode (Snapshot / Live) and Rebuild Scope (Progress / Payment).
+- Kept Snapshot rebuild behavior unchanged.
+- Added an explicit guard so Live mode cannot call the Snapshot engine before the Live engine exists.
+- Added LW-0 regression tests and froze obsolete pre-LW UI contracts without deleting them.

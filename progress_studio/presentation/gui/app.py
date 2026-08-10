@@ -57,7 +57,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         ("mapping", "▦", "Mapping"),
         ("payment", "$", "Payment"),
         ("ai", "✦", "AI Helper"),
-        ("export", "⇧", "Export"),
         ("rebuild", "↻", "Rebuild"),
         ("settings", "⚙", "Settings"),
     )
@@ -132,7 +131,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._build_mapping_workspace()
         self._build_ai_workspace()
         self._build_payment_workspace()
-        self._build_export_workspace()
         self._build_rebuild_workspace()
         self._build_settings_workspace()
 
@@ -169,7 +167,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         tools_menu = tk.Menu(menu, tearoff=False)
         tools_menu.add_command(label="Import Workspace", command=lambda: self._show_workspace("import"))
         tools_menu.add_command(label="Payment Workspace", command=lambda: self._show_workspace("payment"))
-        tools_menu.add_command(label="Export Workspace", command=lambda: self._show_workspace("export"))
         tools_menu.add_command(label="Rebuild Workspace", command=lambda: self._show_workspace("rebuild"))
         menu.add_cascade(label="Tools", menu=tools_menu)
 
@@ -209,7 +206,11 @@ class ProgressStudioDesktopApp(tk.Tk):
                 ttk.Separator(self.command_bar, orient="vertical").pack(side="left", fill="y", padx=8)
             style = "Accent.TButton" if label == "Map" else "TButton"
             ttk.Button(self.command_bar, text=label, style=style, command=self._defer_mapping(method)).pack(side="left", padx=(0, 4))
-        ttk.Button(self.command_bar, text="Export", command=lambda: self._show_workspace("export")).pack(side="right")
+        ttk.Button(
+            self.command_bar,
+            text="Export Mapped Workbook",
+            command=self._defer_mapping("export_workbook"),
+        ).pack(side="right")
 
     def _new_workspace(self, key: str) -> ttk.Frame:
         frame = ttk.Frame(self.workspace_host, style="Card.TFrame", padding=10)
@@ -236,7 +237,13 @@ class ProgressStudioDesktopApp(tk.Tk):
         heading = ttk.Frame(frame, style="Surface.TFrame")
         heading.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         ttk.Label(heading, text="Create Progress Workbook", style="WorkspaceTitle.TLabel").pack(side="left")
-        ttk.Button(heading, text="Go to Mapping", command=lambda: self._show_workspace("mapping")).pack(side="right")
+        ttk.Button(
+            heading,
+            text="Export Mapped Workbook",
+            style="Accent.TButton",
+            command=self._defer_mapping("export_workbook"),
+        ).pack(side="right")
+        ttk.Button(heading, text="Go to Mapping", command=lambda: self._show_workspace("mapping")).pack(side="right", padx=(0, 8))
 
         body = ttk.Panedwindow(frame, orient="horizontal")
         body.grid(row=1, column=0, sticky="nsew")
@@ -266,36 +273,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         frame = self._new_workspace("payment")
         self.payment_workspace = PaymentFrame(frame)
         self.payment_workspace.pack(fill="both", expand=True)
-
-    def _build_export_workspace(self) -> None:
-        frame = self._new_workspace("export")
-        panel = ttk.Frame(frame, style="Surface.TFrame", padding=28)
-        panel.pack(fill="x")
-        ttk.Label(panel, text="Export", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(
-            panel,
-            text=(
-                "Create the first mapped workbook from the current Progress Studio "
-                "project and mapping state."
-            ),
-            style="Muted.TLabel",
-            wraplength=760,
-        ).pack(anchor="w", pady=(8, 18))
-        ttk.Button(
-            panel,
-            text="Export Mapped Workbook",
-            style="Accent.TButton",
-            command=self._defer_mapping("export_workbook"),
-        ).pack(anchor="w")
-        ttk.Label(
-            panel,
-            text=(
-                "After the workbook is exported and edited in Excel, use the "
-                "Rebuild workspace. Rebuild does not use the saved mapping tree."
-            ),
-            style="Muted.TLabel",
-            wraplength=760,
-        ).pack(anchor="w", pady=(10, 0))
 
     def _build_rebuild_workspace(self) -> None:
         frame = self._new_workspace("rebuild")
@@ -327,7 +304,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         for name, button in self.sidebar_buttons.items():
             button.configure(style="SidebarActive.TButton" if name == key else "Sidebar.TButton")
         self.command_bar.grid_remove() if key in {
-            "home", "payment", "ai", "export", "rebuild", "settings"
+            "home", "payment", "ai", "rebuild", "settings"
         } else self.command_bar.grid()
 
     def _defer_mapping(self, method_name: str):
