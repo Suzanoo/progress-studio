@@ -23,6 +23,8 @@ class RebuildWorkbookProbe:
     main_rows: int
     main_columns: int
     activity_count: int
+    package_bytes: int
+    main_xml_bytes: int
 
 
 class RebuildWorkbookReader:
@@ -44,7 +46,8 @@ class RebuildWorkbookReader:
                         "Rebuild requires worksheet 'main'."
                     )
                 shared = self._shared_strings(package)
-                main_root = ET.fromstring(package.read(sheet_map[self.MAIN_SHEET]))
+                main_xml = package.read(sheet_map[self.MAIN_SHEET])
+                main_root = ET.fromstring(main_xml)
                 rows, cols, activities = self._main_metrics(main_root, shared)
                 return RebuildWorkbookProbe(
                     workbook=path,
@@ -52,6 +55,8 @@ class RebuildWorkbookReader:
                     main_rows=rows,
                     main_columns=cols,
                     activity_count=activities,
+                    package_bytes=path.stat().st_size,
+                    main_xml_bytes=len(main_xml),
                 )
         except RebuildWorkbookReadError:
             raise
