@@ -51,6 +51,7 @@ ACTIVE_FILES = {
     "test_lw0_rebuild_export_ux.py",
     "test_lw1_rebuild_reader_contract.py",
     "test_lw2_main_dataset_parser.py",
+    "test_lw3_direct_activity_deriver.py",
     "test_ms_p120_activity_status_focus.py",
     "test_ms_rb721_dashboard_interactive_protection.py",
     "test_ms_rb72_lightweight_protection.py",
