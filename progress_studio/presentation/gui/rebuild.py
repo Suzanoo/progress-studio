@@ -132,7 +132,7 @@ class RebuildFrame(ttk.Frame):
         ).grid(row=3, column=1, sticky="w")
         ttk.Label(
             card,
-            text="UX contract only in LW-0 • engine activation comes in a later LW milestone.",
+            text="LW-7 active for Progress • one-pass writer • Payment Live follows later.",
             style="Muted.TLabel",
         ).grid(row=4, column=1, sticky="w", padx=(24, 0), pady=(2, 0))
 
@@ -246,11 +246,12 @@ class RebuildFrame(ttk.Frame):
             self._analyze(Path(current))
 
     def _apply_output_mode_state(self) -> None:
-        if self.output_mode_var.get() == "live":
+        mode = RebuildMode(self.mode_var.get())
+        if self.output_mode_var.get() == "live" and mode is RebuildMode.PAYMENT:
             self.rebuild_button.configure(state="disabled")
             self.result_var.set(
-                "Live Workbook is defined in LW-0 but not generated yet. "
-                "Select Snapshot Workbook to rebuild with the current engine."
+                "Live Payment is not active yet. Use Snapshot for Payment; "
+                "Live Progress is available in LW-7."
             )
             return
         if self._validated_path is not None:
@@ -300,13 +301,6 @@ class RebuildFrame(ttk.Frame):
         return "Progress requires a valid main sheet."
 
     def _rebuild(self) -> None:
-        if self.output_mode_var.get() != "snapshot":
-            messagebox.showinfo(
-                "Live Workbook",
-                "LW-0 defines the Live Workbook UX only. "
-                "The Live engine will be activated in a later LW milestone.",
-            )
-            return
         source = self._validated_path
         if source is None:
             messagebox.showwarning("Rebuild", "Select a valid workbook first.")
@@ -314,7 +308,11 @@ class RebuildFrame(ttk.Frame):
 
         suffix = source.suffix.lower()
         mode = RebuildMode(self.mode_var.get())
-        mode_suffix = "progress_rebuilt" if mode is RebuildMode.PROGRESS else "payment_rebuilt"
+        live = self.output_mode_var.get() == "live"
+        if live and mode is RebuildMode.PAYMENT:
+            messagebox.showinfo("Live Workbook", "Live Payment is not active yet. Choose Snapshot for Payment.")
+            return
+        mode_suffix = ("progress_live" if live else "progress_rebuilt") if mode is RebuildMode.PROGRESS else "payment_rebuilt"
         output = filedialog.asksaveasfilename(
             title="Save rebuilt workbook",
             defaultextension=suffix,
@@ -334,7 +332,7 @@ class RebuildFrame(ttk.Frame):
         )
         self._worker = threading.Thread(
             target=self._worker_rebuild,
-            args=(source, Path(output), mode),
+            args=(source, Path(output), mode, self.output_mode_var.get()),
             daemon=True,
         )
         self._worker.start()
@@ -344,14 +342,22 @@ class RebuildFrame(ttk.Frame):
         source: Path,
         output: Path,
         mode: RebuildMode,
+        output_mode: str,
     ) -> None:
         try:
             if mode is RebuildMode.PROGRESS:
-                result = self.engine.rebuild_progress(
-                    source,
-                    output,
-                    project_name=source.stem,
-                )
+                if output_mode == "live":
+                    result = self.engine.rebuild_live_progress(
+                        source,
+                        output,
+                        project_name=source.stem,
+                    )
+                else:
+                    result = self.engine.rebuild_progress(
+                        source,
+                        output,
+                        project_name=source.stem,
+                    )
                 summary = (
                     f"Created {output.name} • {result.activity_count:,} activities • "
                     f"{result.week_count} weeks • {result.monthly_periods} months"

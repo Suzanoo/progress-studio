@@ -45,11 +45,13 @@ def test_lw0_rebuild_ui_separates_output_mode_from_scope() -> None:
     assert "mode_var" in source
 
 
-def test_lw0_live_mode_cannot_route_into_snapshot_engine() -> None:
+def test_lw0_output_modes_keep_explicit_routing_contract() -> None:
     source = (ROOT / "progress_studio/presentation/gui/rebuild.py").read_text(encoding="utf-8")
 
-    assert 'self.output_mode_var.get() != "snapshot"' in source
-    assert "LW-0 defines the Live Workbook UX only" in source
-    assert 'self.rebuild_button.configure(state="disabled")' in source
+    # LW-7 activates Live Progress through a dedicated engine path. The original
+    # LW-0 safety intent remains: Live must never silently fall through Snapshot.
+    assert "rebuild_live_progress" in source
+    assert 'output_mode == "live"' in source
     assert "rebuild_progress" in source
     assert "rebuild_payment" in source
+    assert "Live Payment is not active yet" in source

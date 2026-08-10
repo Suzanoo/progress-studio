@@ -19,6 +19,8 @@ from progress_studio.infrastructure.excel.monthly_main_workbook import (
     build_monthly_main_view,
 )
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.live_dashboard_workbook import build_live_dashboard
+from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
 from progress_studio.infrastructure.excel.calculation_policy import (
     configure_incremental_excel_recalculation,
 )
@@ -26,6 +28,7 @@ from progress_studio.infrastructure.excel.xlsx_package_validator import validate
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 from progress_studio.services.payment_service import PaymentService
+from progress_studio.services.monthly_cache_deriver import MonthlyCacheDeriver
 
 from progress_studio.domain.rebuild_models import (
     RebuildMode,
@@ -33,6 +36,7 @@ from progress_studio.domain.rebuild_models import (
     RebuildWorkbookAnalysis,
     ProgressRebuildResult,
     PaymentRebuildResult,
+    LiveProgressRebuildResult,
 )
 
 
@@ -266,6 +270,100 @@ class WorkbookRebuildEngine:
             temp_path.unlink(missing_ok=True)
             raise
 
+
+    def rebuild_live_progress(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+        *,
+        project_name: str | None = None,
+    ) -> LiveProgressRebuildResult:
+        """LW-7 one-pass Live Progress writer.
+
+        Read path: sparse OOXML -> MainDataset.
+        Write path: one mutable openpyxl workbook -> one save.
+        No second data_only workbook is opened.
+        """
+        source = Path(source_workbook).expanduser().resolve()
+        output = Path(output_workbook).expanduser().resolve()
+        analysis = self.analyze(source, RebuildMode.PROGRESS)
+        if output.suffix.lower() not in {".xlsx", ".xlsm"}:
+            raise RebuildContractError("Rebuild output must use .xlsx or .xlsm.")
+
+        dataset = self.reader.read_main_dataset(source)
+        monthly_cache = MonthlyCacheDeriver().derive(dataset)
+
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{output.stem}.lw7.",
+            suffix=output.suffix,
+            dir=output.parent,
+        )
+        os.close(fd)
+        temp_path = Path(temp_name)
+        keep_vba = source.suffix.lower() == ".xlsm"
+
+        try:
+            shutil.copy2(source, temp_path)
+            wb = load_workbook(
+                temp_path,
+                read_only=False,
+                data_only=False,
+                keep_vba=keep_vba,
+            )
+            try:
+                preserved_payment_sheet = "Payment" in wb.sheetnames
+                preserved_payment_input_sheet = "Payment Input" in wb.sheetnames
+
+                # Live owns only these generated Progress views.
+                for sheet_name in (
+                    "main_monthly",
+                    "progress",
+                    "progress_table",
+                    "Dashboard_Data",
+                    "Dashboard",
+                ):
+                    if sheet_name in wb.sheetnames:
+                        del wb[sheet_name]
+
+                monthly_periods = build_live_monthly_view(
+                    wb,
+                    dataset,
+                    monthly_cache,
+                    source_sheet=self.MAIN_SHEET,
+                    target_sheet="main_monthly",
+                )
+                build_live_dashboard(
+                    wb,
+                    dataset,
+                    project_name=project_name or output.stem,
+                )
+
+                if "Dashboard_Data" in wb.sheetnames:
+                    wb["Dashboard_Data"].sheet_state = "hidden"
+
+                apply_final_sheet_visibility(wb)
+                apply_final_sheet_protection(wb)
+                wb.save(temp_path)
+            finally:
+                wb.close()
+
+            validate_xlsx_tables(temp_path)
+            os.replace(temp_path, output)
+            return LiveProgressRebuildResult(
+                source_workbook=source,
+                output_workbook=output,
+                activity_count=len(dataset.activities),
+                week_count=len(dataset.periods),
+                monthly_periods=monthly_periods,
+                dashboard_rows=(len(dataset.rows) * 2),
+                rebuilt_sheets=("main_monthly", "Dashboard_Data", "Dashboard"),
+                preserved_payment_sheet=preserved_payment_sheet,
+                preserved_payment_input_sheet=preserved_payment_input_sheet,
+            )
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
 
     def rebuild_payment(
         self,

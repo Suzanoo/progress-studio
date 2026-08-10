@@ -55,6 +55,7 @@ ACTIVE_FILES = {
     "test_lw4_tiny_progress_cache.py",
     "test_lw5_live_dashboard_contract.py",
     "test_lw6_monthly_engine.py",
+    "test_lw7_live_workbook_writer.py",
     "test_ms_p120_activity_status_focus.py",
     "test_ms_rb721_dashboard_interactive_protection.py",
     "test_ms_rb72_lightweight_protection.py",

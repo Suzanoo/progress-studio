@@ -90,3 +90,16 @@ class PaymentRebuildResult:
     rebuilt_sheets: tuple[str, ...]
     progress_generated_preserved: tuple[str, ...]
 
+
+
+@dataclass(frozen=True, slots=True)
+class LiveProgressRebuildResult:
+    source_workbook: Path
+    output_workbook: Path
+    activity_count: int
+    week_count: int
+    monthly_periods: int
+    dashboard_rows: int
+    rebuilt_sheets: tuple[str, ...]
+    preserved_payment_sheet: bool
+    preserved_payment_input_sheet: bool
