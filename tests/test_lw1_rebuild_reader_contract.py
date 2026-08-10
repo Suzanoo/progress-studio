@@ -55,9 +55,11 @@ def test_lw1_reader_contract_reads_only_workbook_metadata_shared_strings_and_mai
 
 
 def test_lw1_probe_is_metadata_only_contract() -> None:
-    """LW-1 must not grow into the MainDataset parser planned for LW-2."""
+    """Probe remains cheap even after LW-2 adds the separate full MainDataset path."""
     source = READER.read_text(encoding="utf-8")
     assert "class RebuildWorkbookProbe" in source
     assert "activity_count: int" in source
-    assert "MainDataset" not in source
-    assert "ProjectData" not in source
+    probe_block = source[source.index("    def probe("):source.index("    def read_main_dataset(")]
+    assert "read_main_dataset" not in probe_block
+    assert "_parse_main_dataset" not in probe_block
+    assert "load_workbook" not in probe_block

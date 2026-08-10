@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
+
+from progress_studio.domain.main_dataset import MainDataset, MainPeriod, MainRow
 
 
 MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -64,6 +67,136 @@ class RebuildWorkbookReader:
             raise RebuildWorkbookReadError(
                 f"Workbook structure could not be read: {exc}"
             ) from exc
+
+
+    def read_main_dataset(self, workbook_path: Path) -> MainDataset:
+        """Parse `main` once into an immutable domain dataset without openpyxl."""
+        path = Path(workbook_path)
+        try:
+            with ZipFile(path, "r") as package:
+                sheet_map = self._sheet_map(package)
+                if self.MAIN_SHEET not in sheet_map:
+                    raise RebuildWorkbookReadError("Rebuild requires worksheet 'main'.")
+                shared = self._shared_strings(package)
+                root = ET.fromstring(package.read(sheet_map[self.MAIN_SHEET]))
+                return self._parse_main_dataset(path, root, shared)
+        except RebuildWorkbookReadError:
+            raise
+        except Exception as exc:
+            raise RebuildWorkbookReadError(f"Workbook structure could not be read: {exc}") from exc
+
+    @classmethod
+    def _parse_main_dataset(cls, path: Path, root: ET.Element, shared_strings: list[str]) -> MainDataset:
+        sheet_data = root.find(f"{{{MAIN_NS}}}sheetData")
+        if sheet_data is None:
+            raise RebuildWorkbookReadError("Worksheet 'main' has no data.")
+        rows = sheet_data.findall(f"{{{MAIN_NS}}}row")
+        header_row, headers = cls._find_main_header(rows, shared_strings)
+
+        # Weekly grammar is intentionally structural: Wn sits one row above the
+        # reporting date header. This avoids loading workbook style metadata merely to infer dates.
+        by_number = {int(r.attrib.get("r", "0")): r for r in rows}
+        week_row = by_number.get(header_row - 1)
+        header_xml_row = by_number.get(header_row)
+        periods: list[MainPeriod] = []
+        if week_row is not None and header_xml_row is not None:
+            week_cells = cls._row_cells(week_row)
+            header_cells = cls._row_cells(header_xml_row)
+            for col, cell in sorted(week_cells.items()):
+                key = cls._cell_text(cell, shared_strings).strip()
+                if re.fullmatch(r"W\d+", key, flags=re.IGNORECASE):
+                    raw = cls._cell_value(header_cells.get(col), shared_strings)
+                    periods.append(MainPeriod(col, key, cls._coerce_date(raw)))
+
+        parsed_rows: list[MainRow] = []
+        for row in rows:
+            row_num = int(row.attrib.get("r", "0"))
+            if row_num <= header_row:
+                continue
+            cells = cls._row_cells(row)
+            def val(name: str):
+                col = headers.get(name)
+                return cls._cell_value(cells.get(col), shared_strings) if col else None
+            row_type = str(val("row type") or "").strip()
+            pa = str(val("p/a") or "").strip()
+            wbs = str(val("wbs") or "").strip()
+            description = str(val("description") or "").strip()
+            activity_id = str(val("activity id") or "").strip()
+            period_values = tuple(
+                (p.column, cls._coerce_float(cls._cell_value(cells.get(p.column), shared_strings)))
+                for p in periods
+            )
+            parsed_rows.append(MainRow(
+                row_number=row_num,
+                row_type=row_type,
+                pa=pa,
+                wbs=wbs,
+                description=description,
+                activity_id=activity_id,
+                outline_level=cls._coerce_int(val("outline level")),
+                plan_start=cls._coerce_date(val("plan start")),
+                plan_finish=cls._coerce_date(val("plan finish")),
+                amount=cls._coerce_float(val("amount")),
+                percent_complete=cls._coerce_float(val("% complete")),
+                period_values=period_values,
+            ))
+        return MainDataset(
+            workbook_name=path.name,
+            header_row=header_row,
+            headers=tuple(sorted(headers.items(), key=lambda item: item[1])),
+            periods=tuple(periods),
+            rows=tuple(parsed_rows),
+        )
+
+    @classmethod
+    def _find_main_header(cls, rows: list[ET.Element], shared_strings: list[str]) -> tuple[int, dict[str, int]]:
+        required = {"row type", "p/a", "activity id"}
+        for row in rows:
+            row_num = int(row.attrib.get("r", "0"))
+            if row_num > 30:
+                break
+            found: dict[str, int] = {}
+            for col, cell in cls._row_cells(row).items():
+                text = cls._cell_text(cell, shared_strings).strip().lower()
+                if text:
+                    found[text] = col
+            if required.issubset(found):
+                return row_num, found
+        raise RebuildWorkbookReadError(
+            "Worksheet 'main' is missing required headers: Row Type, P/A, Activity ID."
+        )
+
+    @staticmethod
+    def _coerce_float(value: object) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _coerce_int(value: object) -> int | None:
+        number = RebuildWorkbookReader._coerce_float(value)
+        return int(number) if number is not None else None
+
+    @staticmethod
+    def _coerce_date(value: object) -> datetime | None:
+        if value in (None, ""):
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, (int, float)):
+            return datetime(1899, 12, 30) + timedelta(days=float(value))
+        text = str(value).strip()
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError:
+            try:
+                return datetime(1899, 12, 30) + timedelta(days=float(text))
+            except ValueError:
+                return None
+
 
     @classmethod
     def _sheet_map(cls, package: ZipFile) -> dict[str, str]:
@@ -188,6 +321,22 @@ class RebuildWorkbookReader:
         for ch in letters:
             value = value * 26 + ord(ch) - 64
         return value
+
+    @staticmethod
+    def _cell_value(cell: ET.Element | None, shared_strings: list[str]):
+        if cell is None:
+            return None
+        text = RebuildWorkbookReader._cell_text(cell, shared_strings)
+        if text == "":
+            return None
+        cell_type = cell.attrib.get("t")
+        if cell_type in {"s", "inlineStr", "str"}:
+            return text
+        try:
+            number = float(text)
+            return int(number) if number.is_integer() else number
+        except ValueError:
+            return text
 
     @staticmethod
     def _cell_text(cell: ET.Element | None, shared_strings: list[str]) -> str:
