@@ -141,6 +141,82 @@ class PaymentLineRenderer:
             colors=tuple(colors),
         )
 
+
+    def render_periods_into_workbook(
+        self,
+        workbook,
+        periods: tuple[PaymentResolvedPeriod, ...],
+        *,
+        source_workbook: Path,
+        output_workbook: Path,
+        save_path: Path | None = None,
+    ) -> PaymentMultiLineRenderResult:
+        """LW-9 render into an already-open workbook; never loads another workbook.
+
+        When save_path is supplied, the single workbook save occurs while temporary
+        label assets are still alive.
+        """
+        active = tuple(period for period in periods if period.points)
+        if not active:
+            raise PaymentWorkbookError("No resolved Payment points were available to render.")
+        if self.MAIN_SHEET not in workbook.sheetnames:
+            raise PaymentWorkbookError("Worksheet 'main' was not found.")
+        if self.PAYMENT_SHEET in workbook.sheetnames:
+            workbook.remove(workbook[self.PAYMENT_SHEET])
+
+        main = workbook[self.MAIN_SHEET]
+        payment = workbook.copy_worksheet(main)
+        payment.title = self.PAYMENT_SHEET
+        if "Payment Input" in workbook.sheetnames:
+            workbook._sheets.remove(payment)
+            input_index = workbook.sheetnames.index("Payment Input")
+            workbook._sheets.insert(input_index + 1, payment)
+        payment.freeze_panes = main.freeze_panes
+        payment.sheet_view.showGridLines = main.sheet_view.showGridLines
+        payment.auto_filter.ref = main.auto_filter.ref
+
+        timeline = self._timescale_boundaries(payment)
+        if not timeline:
+            raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
+
+        colors: list[tuple[str, str]] = []
+        rendered_points = 0
+        lane_plan = self._allocate_visual_lanes(active, timeline)
+        with tempfile.TemporaryDirectory(prefix="payment_labels_") as label_dir:
+            for period in active:
+                color = self.theme.colors.get(period.period_id, self.theme.fallback_color)
+                line = Side(style=self.theme.line_style, color=color)
+                endpoint = Side(style=self.theme.endpoint_style, color=color)
+                true_boundary, visual_boundary, collision_index = lane_plan[period.period_id]
+                self._paint_header_marker(
+                    payment, period, visual_boundary, line, true_boundary=true_boundary
+                )
+                self._paint_vertical_backbone(
+                    payment, period, visual_boundary, line, endpoint
+                )
+                self._add_payment_label(
+                    payment,
+                    period,
+                    visual_boundary,
+                    color,
+                    Path(label_dir),
+                    collision_index=collision_index,
+                )
+                colors.append((period.period_id, color))
+                rendered_points += len(period.points)
+
+            if save_path is not None:
+                workbook.save(Path(save_path))
+
+        return PaymentMultiLineRenderResult(
+            source_workbook=Path(source_workbook),
+            output_workbook=Path(output_workbook),
+            payment_sheet=self.PAYMENT_SHEET,
+            period_ids=tuple(period.period_id for period in active),
+            rendered_points=rendered_points,
+            rendered_periods=len(active),
+            colors=tuple(colors),
+        )
     def render_single_period(
         self,
         source_workbook: Path,

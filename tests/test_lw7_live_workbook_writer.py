@@ -90,15 +90,16 @@ def test_lw7_monthly_timescale_is_cached_values_not_formulas(tmp_path: Path) -> 
 def test_lw7_live_service_does_not_open_data_only_workbook() -> None:
     source = Path("progress_studio/services/rebuild_service.py").read_text(encoding="utf-8")
     start = source.index("    def rebuild_live_progress(")
-    end = source.index("    def rebuild_payment(", start)
+    end = source.index("    def rebuild_live_payment(", start)
     block = source[start:end]
     assert "data_only=True" not in block
     assert block.count("load_workbook(") == 1
     assert block.count(".save(") == 1
 
 
-def test_lw7_ui_activates_live_progress_but_guards_live_payment() -> None:
+def test_lw7_ui_keeps_explicit_live_progress_routing() -> None:
     source = Path("progress_studio/presentation/gui/rebuild.py").read_text(encoding="utf-8")
     assert "rebuild_live_progress" in source
-    assert "Live Payment is not active yet" in source
     assert 'output_mode == "live"' in source
+    # LW-9 later activates Payment through its own explicit route.
+    assert "rebuild_live_payment" in source

@@ -132,7 +132,7 @@ class RebuildFrame(ttk.Frame):
         ).grid(row=3, column=1, sticky="w")
         ttk.Label(
             card,
-            text="LW-8 active • Weekly/Monthly dashboard • lightweight calculate-on-save formulas.",
+            text="LW-9 active • Live Progress + Live Payment • one-pass workbook writers.",
             style="Muted.TLabel",
         ).grid(row=4, column=1, sticky="w", padx=(24, 0), pady=(2, 0))
 
@@ -248,12 +248,9 @@ class RebuildFrame(ttk.Frame):
     def _apply_output_mode_state(self) -> None:
         mode = RebuildMode(self.mode_var.get())
         if self.output_mode_var.get() == "live" and mode is RebuildMode.PAYMENT:
-            self.rebuild_button.configure(state="disabled")
             self.result_var.set(
-                "Live Payment is not active yet. Use Snapshot for Payment; "
-                "Live Progress is available in LW-8."
+                "Live Payment active in LW-9 • sparse Payment Input + MainDataset • one-pass writer."
             )
-            return
         if self._validated_path is not None:
             self.rebuild_button.configure(state="normal")
 
@@ -309,9 +306,6 @@ class RebuildFrame(ttk.Frame):
         suffix = source.suffix.lower()
         mode = RebuildMode(self.mode_var.get())
         live = self.output_mode_var.get() == "live"
-        if live and mode is RebuildMode.PAYMENT:
-            messagebox.showinfo("Live Workbook", "Live Payment is not active yet. Choose Snapshot for Payment.")
-            return
         mode_suffix = ("progress_live" if live else "progress_rebuilt") if mode is RebuildMode.PROGRESS else "payment_rebuilt"
         output = filedialog.asksaveasfilename(
             title="Save rebuilt workbook",
@@ -363,7 +357,10 @@ class RebuildFrame(ttk.Frame):
                     f"{result.week_count} weeks • {result.monthly_periods} months"
                 )
             else:
-                result = self.engine.rebuild_payment(source, output)
+                if output_mode == "live":
+                    result = self.engine.rebuild_live_payment(source, output)
+                else:
+                    result = self.engine.rebuild_payment(source, output)
                 summary = (
                     f"Created {output.name} • {result.rendered_periods} payments • "
                     f"{result.rendered_points:,} requirement points"

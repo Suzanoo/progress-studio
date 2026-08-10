@@ -54,4 +54,4 @@ def test_lw0_output_modes_keep_explicit_routing_contract() -> None:
     assert 'output_mode == "live"' in source
     assert "rebuild_progress" in source
     assert "rebuild_payment" in source
-    assert "Live Payment is not active yet" in source
+    assert "rebuild_live_payment" in source

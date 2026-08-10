@@ -30,6 +30,7 @@ from progress_studio.infrastructure.excel.workbook_visibility import apply_final
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 from progress_studio.services.payment_service import PaymentService
 from progress_studio.services.monthly_cache_deriver import MonthlyCacheDeriver
+from progress_studio.services.payment_progress_adapter import MainDatasetPaymentProgressAdapter
 
 from progress_studio.domain.rebuild_models import (
     RebuildMode,
@@ -367,6 +368,76 @@ class WorkbookRebuildEngine:
             temp_path.unlink(missing_ok=True)
             raise
 
+
+    def rebuild_live_payment(
+        self,
+        source_workbook: Path,
+        output_workbook: Path,
+    ) -> PaymentRebuildResult:
+        """LW-9 Live Payment: sparse reads + one mutable workbook pass + one save."""
+        source = Path(source_workbook).expanduser().resolve()
+        output = Path(output_workbook).expanduser().resolve()
+        analysis = self.analyze(source, RebuildMode.PAYMENT)
+        if output.suffix.lower() not in {".xlsx", ".xlsm"}:
+            raise RebuildContractError("Rebuild output must use .xlsx or .xlsm.")
+
+        dataset = self.reader.read_main_dataset(source)
+        payment = self.payment_service.payment_reader.read(source)
+        progress = MainDatasetPaymentProgressAdapter().build(dataset, source)
+        positions = self.payment_service.position_engine.resolve(payment, progress)
+        selected = tuple(period for period in positions.periods if period.points)
+        if not selected:
+            raise RebuildContractError("Payment Input has no resolved requirements to render.")
+
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{output.stem}.lw9.",
+            suffix=output.suffix,
+            dir=output.parent,
+        )
+        os.close(fd)
+        temp_path = Path(temp_name)
+        keep_vba = source.suffix.lower() == ".xlsm"
+
+        try:
+            shutil.copy2(source, temp_path)
+            wb = load_workbook(
+                temp_path,
+                read_only=False,
+                data_only=False,
+                keep_vba=keep_vba,
+            )
+            try:
+                apply_final_sheet_visibility(wb)
+                apply_final_sheet_protection(wb)
+                configure_live_save_recalculation(wb)
+                rendered = self.payment_service.line_renderer.render_periods_into_workbook(
+                    wb,
+                    selected,
+                    source_workbook=source,
+                    output_workbook=output,
+                    save_path=temp_path,
+                )
+            finally:
+                wb.close()
+
+            validate_xlsx_tables(temp_path)
+            os.replace(temp_path, output)
+            return PaymentRebuildResult(
+                source_workbook=source,
+                output_workbook=output,
+                rendered_periods=rendered.rendered_periods,
+                rendered_points=rendered.rendered_points,
+                period_ids=rendered.period_ids,
+                rebuilt_sheets=self.contract.generated_payment,
+                progress_generated_preserved=tuple(
+                    name for name in self.contract.generated_progress
+                    if name in analysis.existing_generated_sheets
+                ),
+            )
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
     def rebuild_payment(
         self,
         source_workbook: Path,
