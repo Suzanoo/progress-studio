@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
@@ -11,29 +12,10 @@ from progress_studio.domain.activity_table import ActivityTableModel
 from progress_studio.domain.main_dataset import MainDataset
 from progress_studio.domain.progress_cache import ProgressCache
 from progress_studio.infrastructure.excel.dashboard_workbook import (
-    AMBER,
-    BLUE,
-    BORDER,
-    DATA_SHEET,
-    DASHBOARD_SHEET,
-    GREEN,
-    LIGHT_AMBER,
-    LIGHT_BLUE,
-    LIGHT_GRAY,
-    LIGHT_GREEN,
-    LIGHT_RED,
-    MUTED,
-    NAVY,
-    RED,
-    TEXT,
-    WHITE,
-    _FONT,
-    _LAYOUT,
-    _merge_title,
-    _remove,
-    _solid,
-    _style_box,
-    _thin_border,
+    AMBER, BLUE, DATA_SHEET, DASHBOARD_SHEET, GREEN,
+    LIGHT_AMBER, LIGHT_BLUE, LIGHT_GRAY, LIGHT_GREEN, LIGHT_RED,
+    MUTED, NAVY, RED, WHITE, _FONT, _LAYOUT,
+    _merge_title, _remove, _solid, _style_box, _thin_border,
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
@@ -63,41 +45,70 @@ def _project_dates(dataset: MainDataset) -> tuple[date | None, date | None]:
     return (min(starts) if starts else None, max(finishes) if finishes else None)
 
 
-def _value_at_cutoff(cache: ProgressCache, cutoff: date | None, attr: str) -> float:
-    value = 0.0
+def _monthly_points(cache: ProgressCache):
+    grouped: OrderedDict[tuple[int, int], object] = OrderedDict()
     for point in cache.points:
-        point_date = _as_date(point.reporting_date)
-        if cutoff is not None and point_date is not None and point_date > cutoff:
+        if point.reporting_date is None:
             continue
-        candidate = getattr(point, attr)
-        if candidate is not None:
-            value = float(candidate)
-    return value
+        key = (point.reporting_date.year, point.reporting_date.month)
+        grouped[key] = point
+    return list(grouped.values())
 
 
-def _build_live_data_sheet(workbook, cache: ProgressCache, cutoff: date | None) -> None:
+def _build_live_data_sheet(workbook, cache: ProgressCache) -> None:
+    """Tiny weekly/monthly selector cache used only by Dashboard formulas."""
     _remove(workbook, DATA_SHEET)
     ws = workbook.create_sheet(DATA_SHEET)
-    ws.append(["Date", "Plan", "Actual"])
-    for point in cache.points:
-        point_date = _as_date(point.reporting_date)
-        actual = point.actual_cumulative
-        if cutoff is not None and point_date is not None and point_date > cutoff:
-            actual = None
-        ws.append([point.reporting_date, point.plan_cumulative, actual])
+    headers = [
+        "Weekly Date", "Weekly Plan", "Weekly Actual",
+        "Monthly Date", "Monthly Plan", "Monthly Actual",
+        "Selected Date", "Selected Plan", "Selected Actual",
+        "Weekly Cutoff", "Monthly Cutoff",
+    ]
+    ws.append(headers)
+
+    monthly = _monthly_points(cache)
+    max_rows = max(len(cache.points), len(monthly))
+    for idx in range(max_rows):
+        row = idx + 2
+        if idx < len(cache.points):
+            point = cache.points[idx]
+            ws.cell(row, 1, point.reporting_date)
+            ws.cell(row, 2, point.plan_cumulative)
+            ws.cell(row, 3, point.actual_cumulative)
+            ws.cell(row, 10, point.reporting_date)
+        if idx < len(monthly):
+            point = monthly[idx]
+            ws.cell(row, 4, point.reporting_date)
+            ws.cell(row, 5, point.plan_cumulative)
+            ws.cell(row, 6, point.actual_cumulative)
+            ws.cell(row, 11, point.reporting_date)
+
+        # Selected view stays tiny: only 3 formulas per reporting row.
+        ws.cell(row, 7, f'=IF(Dashboard!$G$5="Weekly",A{row},D{row})')
+        ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
+        ws.cell(
+            row, 9,
+            f'=IF(OR(G{row}="",G{row}>Dashboard!$K$5),"",'
+            f'IF(Dashboard!$G$5="Weekly",C{row},F{row}))'
+        )
 
     for row in range(2, ws.max_row + 1):
-        ws.cell(row, 1).number_format = "dd/mm/yyyy"
-        ws.cell(row, 2).number_format = "0.00%"
-        ws.cell(row, 3).number_format = "0.00%"
+        for col in (1,4,7,10,11):
+            ws.cell(row, col).number_format = "dd/mm/yyyy"
+        for col in (2,3,5,6,8,9):
+            ws.cell(row, col).number_format = "0.00%"
+    ws.column_dimensions["J"].hidden = True
+    ws.column_dimensions["K"].hidden = True
     ws.sheet_state = "hidden"
 
 
 def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: str, color: str, number_format: str = "0.00%") -> None:
     ws.merge_cells(title_range)
-    ws[title_range.split(":")[0]] = title
-    ws[title_range.split(":")[0]].font = Font(name=_FONT, bold=True, color=color, size=9)
-    ws[title_range.split(":")[0]].alignment = Alignment(horizontal="center", vertical="center")
+    title_cell = ws[title_range.split(":")[0]]
+    title_cell.value = title
+    title_cell.font = Font(name=_FONT, bold=True, color=color, size=9)
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells(value_range)
     cell = ws[value_range.split(":")[0]]
@@ -106,36 +117,33 @@ def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: st
     cell.fill = _solid(fill)
     cell.font = Font(name=_FONT, bold=True, color=color, size=15)
     cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    for row in ws[title_range]:
-        for c in row:
-            c.fill = _solid(fill)
-            c.border = _thin_border()
-    for row in ws[value_range]:
-        for c in row:
-            c.fill = _solid(fill)
-            c.border = _thin_border()
+    for rg in (title_range, value_range):
+        for row in ws[rg]:
+            for c in row:
+                c.fill = _solid(fill)
+                c.border = _thin_border()
 
 
-def _write_activity_section(ws, model: ActivityTableModel) -> None:
+def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset) -> None:
+    """Direct-to-main activity table: O(rows) formulas, no activity×time cache."""
     _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
     ws.merge_cells("N37:O37")
     ws["N37"] = "Status"
     ws["N37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
     ws["N37"].alignment = Alignment(horizontal="right", vertical="center")
-
     ws.merge_cells("P37:Q37")
     ws["P37"] = "All"
     ws["P37"].fill = _solid(LIGHT_BLUE)
     ws["P37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
     ws["P37"].alignment = Alignment(horizontal="center", vertical="center")
-    validation = DataValidation(
+
+    status_validation = DataValidation(
         type="list",
         formula1='"All,Behind,On Track,Complete,Not Started"',
         allow_blank=False,
     )
-    ws.add_data_validation(validation)
-    validation.add(ws["P37"])
+    ws.add_data_validation(status_validation)
+    status_validation.add(ws["P37"])
 
     headers = ["WBS", "Activity", "Type", "Total", "Amount", "Progress", "Variance", "Status"]
     starts = ["B", "C", "F", "H", "J", "L", "N", "P"]
@@ -150,6 +158,15 @@ def _write_activity_section(ws, model: ActivityTableModel) -> None:
         for row in ws[f"{start}38:{end}38"]:
             for c in row:
                 c.border = _thin_border()
+
+    if not dataset.periods:
+        return
+    first_col = dataset.periods[0].column
+    last_col = dataset.periods[-1].column
+    from openpyxl.utils import get_column_letter
+    first_letter = get_column_letter(first_col)
+    last_letter = get_column_letter(last_col)
+    header_row = dataset.header_row
 
     output_row = 39
     pair_index = 0
@@ -166,20 +183,41 @@ def _write_activity_section(ws, model: ActivityTableModel) -> None:
         ws.merge_cells(f"F{row}:G{row}")
         ws[f"F{row}"] = item.type_label
         ws.merge_cells(f"H{row}:I{row}")
-        ws[f"H{row}"] = item.total
+        ws[f"H{row}"] = item.total if is_plan else None
         ws.merge_cells(f"J{row}:K{row}")
-        ws[f"J{row}"] = item.amount
         ws.merge_cells(f"L{row}:M{row}")
-        ws[f"L{row}"] = item.progress
         ws.merge_cells(f"N{row}:O{row}")
-        ws[f"N{row}"] = item.variance
         ws.merge_cells(f"P{row}:Q{row}")
-        ws[f"P{row}"] = item.status
+
+        source_row = item.source_plan_row if is_plan else item.source_actual_row
+        if source_row is not None:
+            ws[f"L{row}"] = (
+                f'=IFERROR(SUMIFS(main!${first_letter}${source_row}:'
+                f'${last_letter}${source_row},'
+                f'main!${first_letter}${header_row}:${last_letter}${header_row},'
+                f'"<="&$K$5),0)'
+            )
+        else:
+            ws[f"L{row}"] = 0
+
+        # Amount follows Plan total x selected progress. This avoids reading a
+        # second generated worksheet and uses only one formula per visual row.
+        plan_row = row if is_plan else row - 1
+        ws[f"J{row}"] = f'=IFERROR($H${plan_row}*L{row},0)' if not is_plan else f'=IFERROR(H{row}*L{row},0)'
+        if is_plan:
+            ws[f"N{row}"] = ""
+            ws[f"P{row}"] = ""
+        else:
+            ws[f"N{row}"] = f'=IFERROR(L{row}-L{row-1},0)'
+            ws[f"P{row}"] = (
+                f'=IF(L{row}<=0,"Not Started",'
+                f'IF(L{row}>=1,"Complete",'
+                f'IF(L{row}<L{row-1},"Behind","On Track")))'
+            )
 
         base_fill = WHITE if pair_index % 2 == 0 else LIGHT_GRAY
         if item.row_type in {"project summary", "wbs"}:
             base_fill = LIGHT_BLUE if item.outline_level <= 1 else "F5F8FC"
-
         for row_cells in ws[f"B{row}:Q{row}"]:
             for cell in row_cells:
                 cell.border = _thin_border()
@@ -188,27 +226,18 @@ def _write_activity_section(ws, model: ActivityTableModel) -> None:
                 if item.row_type in {"project summary", "wbs"}:
                     cell.font = Font(name=_FONT, bold=True, color=NAVY, size=9)
 
-        if is_plan:
-            ws[f"C{row}"].alignment = Alignment(
-                vertical="center",
-                wrap_text=True,
-                indent=min(max(item.outline_level, 0), 4),
-            )
-
         pa_fill = LIGHT_BLUE if is_plan else LIGHT_GREEN
         pa_color = BLUE if is_plan else GREEN
         ws[f"F{row}"].fill = _solid(pa_fill)
         ws[f"F{row}"].font = Font(name=_FONT, bold=True, color=pa_color, size=9)
         ws[f"L{row}"].fill = _solid(pa_fill)
         ws[f"L{row}"].font = Font(name=_FONT, bold=True, color=pa_color, size=9)
-
         ws.row_dimensions[row].outlineLevel = min(max(item.outline_level, 0), 7)
         ws.row_dimensions[row].height = 22
         ws[f"H{row}"].number_format = "#,##0.00"
         ws[f"J{row}"].number_format = "#,##0.00"
         ws[f"L{row}"].number_format = "0.00%"
         ws[f"N{row}"].number_format = "0.00%;[Red]-0.00%;0.00%"
-
         output_row += 1
         if not is_plan:
             pair_index += 1
@@ -224,11 +253,11 @@ def build_live_dashboard(
     project_name: str | None = None,
     cutoff: date | datetime | None = None,
 ) -> None:
-    """Render the LW-5 Dashboard without `progress` or `progress_table` sheets."""
+    """LW-8 interactive Live dashboard with tiny formulas only."""
     cache = ProgressCacheDeriver().derive(dataset)
     cutoff_date = _as_date(cutoff) or _default_cutoff(cache)
     activity_model = ActivityTableDeriver().derive(dataset, cutoff=cutoff_date)
-    _build_live_data_sheet(workbook, cache, cutoff_date)
+    _build_live_data_sheet(workbook, cache)
 
     _remove(workbook, DASHBOARD_SHEET)
     ws = workbook.create_sheet(DASHBOARD_SHEET, 0)
@@ -260,32 +289,58 @@ def build_live_dashboard(
     ws["K5"] = cutoff_date
     ws["K5"].number_format = "dd/mm/yyyy"
 
+    view_validation = DataValidation(type="list", formula1='"Weekly,Monthly"', allow_blank=False)
+    ws.add_data_validation(view_validation)
+    view_validation.add(ws["G5"])
+
+    data_ws = workbook[DATA_SHEET]
+    weekly_count = len(cache.points)
+    monthly_count = len(_monthly_points(cache))
+    cutoff_validation = DataValidation(
+        type="list",
+        formula1=(
+            f'=INDIRECT(IF($G$5="Weekly","{DATA_SHEET}!$J$2:$J${max(2,weekly_count+1)}",'
+            f'"{DATA_SHEET}!$K$2:$K${max(2,monthly_count+1)}"))'
+        ),
+        allow_blank=False,
+    )
+    ws.add_data_validation(cutoff_validation)
+    cutoff_validation.add(ws["K5"])
+
     ws["B6"] = "Data source"
     ws.merge_cells("C6:H6")
-    ws["C6"] = "Live: MainDataset → Progress Cache / Activity Deriver"
+    ws["C6"] = "Live: MainDataset → tiny cache + direct-to-main formulas"
     ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
-    ws["J6"] = "LW-5"
+    ws["J6"] = "Recalc"
     ws.merge_cells("K6:M6")
-    ws["K6"] = "Weekly dashboard contract • Monthly follows in LW-6"
+    ws["K6"] = "Manual during edit • calculate on Save/F9"
     ws["K6"].font = Font(name=_FONT, size=9, color=MUTED)
 
-    plan_value = _value_at_cutoff(cache, cutoff_date, "plan_cumulative")
-    actual_value = _value_at_cutoff(cache, cutoff_date, "actual_cumulative")
-    variance = actual_value - plan_value
-    status = "ON SCHEDULE" if abs(variance) < 1e-12 else ("DELAY" if variance < 0 else "AHEAD")
+    # KPI formulas read only the tiny selected-view cache.
+    last_data_row = max(2, data_ws.max_row)
+    plan_formula = (
+        f'=IFERROR(LOOKUP(2,1/((Dashboard_Data!$G$2:$G${last_data_row}<=$K$5)*'
+        f'(Dashboard_Data!$H$2:$H${last_data_row}<>"")),'
+        f'Dashboard_Data!$H$2:$H${last_data_row}),0)'
+    )
+    actual_formula = (
+        f'=IFERROR(LOOKUP(2,1/((Dashboard_Data!$G$2:$G${last_data_row}<=$K$5)*'
+        f'(Dashboard_Data!$I$2:$I${last_data_row}<>"")),'
+        f'Dashboard_Data!$I$2:$I${last_data_row}),0)'
+    )
     start_date, finish_date = _project_dates(dataset)
     duration_days = max(0, (finish_date - start_date).days) if start_date and finish_date else 0
-    impact_days = round(abs(variance) * duration_days)
+    schedule_formula = '=IF(E10=B10,"ON SCHEDULE",IF(E10<B10,"DELAY","AHEAD"))'
+    impact_formula = f'=ROUND(ABS(E10-B10)*{duration_days},0)&" Days"'
 
     _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
-    _kpi_box(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_value, LIGHT_BLUE, BLUE)
-    _kpi_box(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_value, LIGHT_GREEN, GREEN)
-    _kpi_box(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", status, LIGHT_AMBER if variance >= 0 else LIGHT_RED, AMBER if variance >= 0 else RED, "General")
-    _kpi_box(ws, "K9:M9", "K10:M12", "TIME IMPACT", f"{impact_days} Days", LIGHT_GREEN if variance >= 0 else LIGHT_RED, GREEN if variance >= 0 else RED, "General")
+    _kpi_box(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_formula, LIGHT_BLUE, BLUE)
+    _kpi_box(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_formula, LIGHT_GREEN, GREEN)
+    _kpi_box(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", schedule_formula, LIGHT_AMBER, AMBER, "General")
+    _kpi_box(ws, "K9:M9", "K10:M12", "TIME IMPACT", impact_formula, LIGHT_RED, RED, "General")
 
     _merge_title(ws, "B15:M15", "S-CURVE — PLAN VS ACTUAL", 11)
     _style_box(ws, "B16:M34", WHITE)
-    data_ws = workbook[DATA_SHEET]
     chart = LineChart()
     chart.height = float(_LAYOUT["chart_height"])
     chart.width = float(_LAYOUT["chart_width"])
@@ -293,8 +348,8 @@ def build_live_dashboard(
     chart.y_axis.scaling.max = 1
     chart.y_axis.numFmt = "0%"
     chart.legend.position = "t"
-    data = Reference(data_ws, min_col=2, max_col=3, min_row=1, max_row=data_ws.max_row)
-    cats = Reference(data_ws, min_col=1, min_row=2, max_row=data_ws.max_row)
+    data = Reference(data_ws, min_col=8, max_col=9, min_row=1, max_row=last_data_row)
+    cats = Reference(data_ws, min_col=7, min_row=2, max_row=last_data_row)
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(cats)
     if len(chart.series) >= 2:
@@ -303,7 +358,7 @@ def build_live_dashboard(
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")
-    ws["B35"] = "Plan curve = full baseline duration    •    Actual curve = selected cutoff snapshot"
+    ws["B35"] = "Plan = full baseline • Actual/KPI/Activity = selected cutoff"
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
 
-    _write_activity_section(ws, activity_model)
+    _write_activity_section(ws, activity_model, dataset)

@@ -23,6 +23,7 @@ from progress_studio.infrastructure.excel.live_dashboard_workbook import build_l
 from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
 from progress_studio.infrastructure.excel.calculation_policy import (
     configure_incremental_excel_recalculation,
+    configure_live_save_recalculation,
 )
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
@@ -344,6 +345,7 @@ class WorkbookRebuildEngine:
 
                 apply_final_sheet_visibility(wb)
                 apply_final_sheet_protection(wb)
+                configure_live_save_recalculation(wb)
                 wb.save(temp_path)
             finally:
                 wb.close()

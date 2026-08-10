@@ -81,8 +81,14 @@ class ActivityTableDeriver:
             actual = None
             if index + 1 < len(source_rows):
                 candidate = source_rows[index + 1]
-                if candidate.pa.strip().upper() == "A" and _row_identity(candidate) == _row_identity(plan):
-                    actual = candidate
+                if candidate.pa.strip().upper() == "A":
+                    # Main grammar is Plan/Actual adjacency. Actual rows in legacy
+                    # workbooks may intentionally have blank Row Type/Description.
+                    # For activities, Activity ID is the identity guard.
+                    if plan.row_type.strip().lower() != "activity" or (
+                        candidate.activity_id.strip() == plan.activity_id.strip()
+                    ):
+                        actual = candidate
 
             plan_progress = _progress(dataset, plan, cutoff)
             actual_progress = _progress(dataset, actual, cutoff)

@@ -132,7 +132,7 @@ class RebuildFrame(ttk.Frame):
         ).grid(row=3, column=1, sticky="w")
         ttk.Label(
             card,
-            text="LW-7 active for Progress • one-pass writer • Payment Live follows later.",
+            text="LW-8 active • Weekly/Monthly dashboard • lightweight calculate-on-save formulas.",
             style="Muted.TLabel",
         ).grid(row=4, column=1, sticky="w", padx=(24, 0), pady=(2, 0))
 
@@ -158,7 +158,7 @@ class RebuildFrame(ttk.Frame):
         progress.grid(row=1, column=1, sticky="w", pady=(10, 0))
         ttk.Label(
             card,
-            text="main_monthly • progress • progress_table • Dashboard_Data • Dashboard",
+            text="Snapshot: monthly/progress/table/dashboard • Live: monthly cache + dashboard (no progress_table)",
             style="Muted.TLabel",
         ).grid(row=2, column=1, sticky="w", padx=(24, 0), pady=(2, 8))
 
@@ -251,7 +251,7 @@ class RebuildFrame(ttk.Frame):
             self.rebuild_button.configure(state="disabled")
             self.result_var.set(
                 "Live Payment is not active yet. Use Snapshot for Payment; "
-                "Live Progress is available in LW-7."
+                "Live Progress is available in LW-8."
             )
             return
         if self._validated_path is not None:

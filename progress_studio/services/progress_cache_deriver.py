@@ -5,8 +5,10 @@ from progress_studio.domain.main_dataset import MainDataset, MainRow
 from progress_studio.domain.progress_cache import ProgressCache, ProgressCachePoint
 
 
-def _identity(row: MainRow) -> tuple[str, str]:
-    return row.activity_id.strip(), row.description.strip()
+def _identity(row: MainRow) -> str:
+    # Activity ID is the stable Plan/Actual key. Legacy Actual rows may keep
+    # Description and Row Type blank by design.
+    return row.activity_id.strip()
 
 
 class ProgressCacheDeriver:
@@ -21,11 +23,10 @@ class ProgressCacheDeriver:
         plan_rows = tuple(dataset.activities)
         total_amount = sum(float(row.amount or 0.0) for row in plan_rows)
 
-        actual_by_identity: dict[tuple[str, str], MainRow] = {}
+        actual_by_identity: dict[str, MainRow] = {}
         for row in dataset.rows:
             if (
-                row.row_type.strip().lower() == "activity"
-                and row.pa.strip().upper() == "A"
+                row.pa.strip().upper() == "A"
                 and row.activity_id.strip()
             ):
                 actual_by_identity[_identity(row)] = row
