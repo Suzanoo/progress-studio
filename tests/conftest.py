@@ -59,6 +59,7 @@ ACTIVE_FILES = {
     "test_lw8_save_recalc_contract.py",
     "test_lw9_live_payment_integration.py",
     "test_lw10_full_live_monthly.py",
+    "test_lw10_workbook_ux_polish.py",
     "test_ms_p120_activity_status_focus.py",
     "test_ms_rb721_dashboard_interactive_protection.py",
     "test_ms_rb72_lightweight_protection.py",

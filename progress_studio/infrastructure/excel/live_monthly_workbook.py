@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import copy
 from datetime import date
 
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from progress_studio.domain.main_dataset import MainDataset
@@ -114,6 +114,11 @@ def build_live_monthly_view(
             if source_row in template_styles:
                 cell._style = copy(template_styles[source_row])
                 cell.number_format = template_formats[source_row]
+
+            # Soft month bands make the monthly timescale easier to scan while
+            # retaining the Plan/Actual typography and borders copied from main.
+            month_fill = "F7FBFF" if index % 2 == 0 else "EEF5FA"
+            cell.fill = PatternFill("solid", fgColor=month_fill)
 
             first_week = get_column_letter(period.source_columns[0])
             last_week = get_column_letter(period.source_columns[-1])

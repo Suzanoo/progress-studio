@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 VISIBLE_SHEETS = (
+    "README",
     "main",
     "main_monthly",
     "Payment Input",

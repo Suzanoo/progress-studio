@@ -28,6 +28,7 @@ from progress_studio.infrastructure.excel.calculation_policy import (
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
+from progress_studio.infrastructure.excel.workbook_guide import build_workbook_guide
 from progress_studio.services.payment_service import PaymentService
 from progress_studio.services.monthly_cache_deriver import MonthlyCacheDeriver
 from progress_studio.services.payment_progress_adapter import MainDatasetPaymentProgressAdapter
@@ -344,6 +345,7 @@ class WorkbookRebuildEngine:
                 if "Dashboard_Data" in wb.sheetnames:
                     wb["Dashboard_Data"].sheet_state = "hidden"
 
+                build_workbook_guide(wb)
                 apply_final_sheet_visibility(wb)
                 apply_final_sheet_protection(wb)
                 configure_live_save_recalculation(wb)
@@ -408,6 +410,7 @@ class WorkbookRebuildEngine:
                 keep_vba=keep_vba,
             )
             try:
+                build_workbook_guide(wb)
                 apply_final_sheet_visibility(wb)
                 apply_final_sheet_protection(wb)
                 configure_live_save_recalculation(wb)
