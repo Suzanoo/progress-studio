@@ -203,8 +203,8 @@ def test_ms_pay64_adds_only_one_label_drawing_per_payment(tmp_path: Path) -> Non
         sheet = wb["Payment"]
         assert len(sheet._images) == 1
         image = sheet._images[0]
-        assert image.width == 145
-        assert image.height == 26
+        assert image.width == 290
+        assert image.height == 52
         assert not sheet._charts
     finally:
         wb.close()

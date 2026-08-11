@@ -6,10 +6,10 @@
     "collision_max_offset": 3
   },
   "label": {
-    "width_px": 145,
-    "height_px": 26,
-    "font_size": 12,
-    "corner_radius_px": 6,
+    "width_px": 290,
+    "height_px": 52,
+    "font_size": 24,
+    "corner_radius_px": 12,
     "text_color": "FFFFFF",
     "anchor_column_offset": -1,
     "anchor_row": 1,

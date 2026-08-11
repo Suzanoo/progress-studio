@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import copy
 from datetime import date
 
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
 from progress_studio.domain.main_dataset import MainDataset
@@ -15,6 +15,11 @@ from progress_studio.infrastructure.excel.timescale_workbook import (
     MONTH_FILL,
     WEEK_FILL,
     YEAR_FILL,
+)
+from progress_studio.infrastructure.excel.progress_workbook import (
+    add_progress_conditional_formatting,
+    clear_progress_conditional_formatting,
+    clear_timescale_direct_fills,
 )
 
 
@@ -115,11 +120,6 @@ def build_live_monthly_view(
                 cell._style = copy(template_styles[source_row])
                 cell.number_format = template_formats[source_row]
 
-            # Soft month bands make the monthly timescale easier to scan while
-            # retaining the Plan/Actual typography and borders copied from main.
-            month_fill = "F7FBFF" if index % 2 == 0 else "EEF5FA"
-            cell.fill = PatternFill("solid", fgColor=month_fill)
-
             first_week = get_column_letter(period.source_columns[0])
             last_week = get_column_letter(period.source_columns[-1])
             source_range = (
@@ -136,6 +136,30 @@ def build_live_monthly_view(
                 # Full-live baseline intentionally uses the same straightforward
                 # formula for Project/WBS/Activity Plan and Actual rows.
                 cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
+
+    # Match main exactly: blank timescale cells have no fill; populated cells
+    # are colored by the same Project/WBS/Activity Plan/Actual CF rules.
+    monthly_timescale_cols = list(
+        range(first_timescale_col, first_timescale_col + len(cache.periods))
+    )
+    header_columns = {name: col for name, col in dataset.headers}
+    required = ("row type", "activity id", "p/a", "outline level")
+    if monthly_timescale_cols and all(name in header_columns for name in required):
+        clear_timescale_direct_fills(
+            monthly,
+            monthly_timescale_cols,
+            monthly.max_row,
+        )
+        clear_progress_conditional_formatting(monthly, monthly_timescale_cols)
+        add_progress_conditional_formatting(
+            monthly,
+            monthly_timescale_cols,
+            header_columns["row type"],
+            header_columns["activity id"],
+            header_columns["p/a"],
+            header_columns["outline level"],
+            monthly.max_row,
+        )
 
     try:
         monthly.data_validations.dataValidation = []

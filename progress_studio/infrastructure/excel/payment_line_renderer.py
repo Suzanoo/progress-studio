@@ -82,6 +82,7 @@ class PaymentLineRenderer:
                     payment.freeze_panes = main.freeze_panes
                     payment.sheet_view.showGridLines = main.sheet_view.showGridLines
                     payment.auto_filter.ref = main.auto_filter.ref
+                    self._paint_timescale_like_activity_data(payment)
 
                     timeline = self._timescale_boundaries(payment)
                     if not timeline:
@@ -174,6 +175,7 @@ class PaymentLineRenderer:
         payment.freeze_panes = main.freeze_panes
         payment.sheet_view.showGridLines = main.sheet_view.showGridLines
         payment.auto_filter.ref = main.auto_filter.ref
+        self._paint_timescale_like_activity_data(payment)
 
         timeline = self._timescale_boundaries(payment)
         if not timeline:
@@ -406,6 +408,31 @@ class PaymentLineRenderer:
                     collision_index,
                 )
         return result
+
+    def _paint_timescale_like_activity_data(self, ws) -> None:
+        """Extend each Activity Data row fill across the Payment timescale.
+
+        Payment remains a presentation sheet: its body uses the same row color as
+        the left Activity Data area, then payment backbones/borders are overlaid.
+        """
+        timeline = self._timescale_boundaries(ws)
+        if not timeline:
+            return
+        first_timescale = timeline[0][0]
+        last_timescale = timeline[-1][0]
+
+        # Description is the most reliable visual source; fall back to the cell
+        # immediately before the timescale for custom workbook layouts.
+        headers = {
+            str(ws.cell(self.HEADER_ROW, col).value or "").strip().lower(): col
+            for col in range(1, first_timescale)
+        }
+        style_col = headers.get("description") or max(first_timescale - 1, 1)
+
+        for row in range(self.HEADER_ROW + 1, ws.max_row + 1):
+            source = ws.cell(row, style_col)
+            for col in range(first_timescale, last_timescale + 1):
+                ws.cell(row, col).fill = copy(source.fill)
 
     def _timescale_boundaries(self, ws) -> tuple[tuple[int, date], ...]:
         result: list[tuple[int, date]] = []

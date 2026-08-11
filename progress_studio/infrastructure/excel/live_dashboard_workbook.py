@@ -127,24 +127,6 @@ def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: st
 def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset) -> None:
     """Direct-to-main activity table: O(rows) formulas, no activity×time cache."""
     _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
-    ws.merge_cells("N37:O37")
-    ws["N37"] = "Status"
-    ws["N37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
-    ws["N37"].alignment = Alignment(horizontal="right", vertical="center")
-    ws.merge_cells("P37:Q37")
-    ws["P37"] = "All"
-    ws["P37"].fill = _solid(LIGHT_BLUE)
-    ws["P37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
-    ws["P37"].alignment = Alignment(horizontal="center", vertical="center")
-
-    status_validation = DataValidation(
-        type="list",
-        formula1='"All,Behind,On Track,Complete,Not Started"',
-        allow_blank=False,
-    )
-    ws.add_data_validation(status_validation)
-    status_validation.add(ws["P37"])
-
     headers = ["WBS", "Activity", "Type", "Total", "Amount", "Progress", "Variance", "Status"]
     starts = ["B", "C", "F", "H", "J", "L", "N", "P"]
     ends = ["B", "E", "G", "I", "K", "M", "O", "Q"]
@@ -238,12 +220,21 @@ def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset)
         ws[f"J{row}"].number_format = "#,##0.00"
         ws[f"L{row}"].number_format = "0.00%"
         ws[f"N{row}"].number_format = "0.00%;[Red]-0.00%;0.00%"
+        if is_plan:
+            ws[f"C{row}"].alignment = Alignment(
+                vertical="center",
+                wrap_text=True,
+                indent=min(max(item.outline_level, 0), 7),
+            )
         output_row += 1
         if not is_plan:
             pair_index += 1
 
     ws.sheet_properties.outlinePr.summaryBelow = False
-    ws.print_area = f"B2:Q{max(56, output_row - 1)}"
+    last_activity_row = max(38, output_row - 1)
+    # Keep the Activity Table visually clean: only Status gets an Excel filter.
+    ws.auto_filter.ref = f"P38:P{last_activity_row}"
+    ws.print_area = f"B2:Q{max(56, last_activity_row)}"
 
 
 def build_live_dashboard(

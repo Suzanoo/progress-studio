@@ -73,10 +73,10 @@ def test_rb5_collision_render_has_distinct_backbones_and_staggered_labels(tmp_pa
             for img in ws._images
         ]
         assert anchors[0] != anchors[1]
-        assert ws._images[0].width == 145
-        assert ws._images[0].height == 26
-        assert ws._images[1].width == 145
-        assert ws._images[1].height == 26
+        assert ws._images[0].width == 290
+        assert ws._images[0].height == 52
+        assert ws._images[1].width == 290
+        assert ws._images[1].height == 52
 
         # P08 keeps the true boundary, P09 takes a nearby visual lane.
         p08_left = ws.cell(11, 18).border.left

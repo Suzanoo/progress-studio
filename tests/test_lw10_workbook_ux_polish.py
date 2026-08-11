@@ -23,8 +23,9 @@ def test_readme_is_first_visible_sheet() -> None:
     assert wb["README"]["B3"].value.startswith("Normal progress update:")
 
 
-def test_monthly_writer_has_soft_timescale_bands() -> None:
+def test_monthly_writer_uses_main_timescale_color_contract() -> None:
     source = Path("progress_studio/infrastructure/excel/live_monthly_workbook.py").read_text(encoding="utf-8")
-    assert '"F7FBFF"' in source
-    assert '"EEF5FA"' in source
-    assert "PatternFill" in source
+    assert "add_progress_conditional_formatting" in source
+    assert "clear_timescale_direct_fills" in source
+    assert '"F7FBFF"' not in source
+    assert '"EEF5FA"' not in source
