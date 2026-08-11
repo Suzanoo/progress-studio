@@ -45,7 +45,7 @@ def test_lw5_live_dashboard_renders_without_progress_or_progress_table(tmp_path:
     assert "Dashboard_Data" in wb.sheetnames
     assert "progress" not in wb.sheetnames
     assert "progress_table" not in wb.sheetnames
-    assert wb["Dashboard"]["C6"].value.startswith("Live: MainDataset")
+    assert wb["Dashboard"]["C6"].value.startswith("Live: main / main_monthly Acc. rows")
     assert wb["Dashboard"]["C39"].value == "Concrete"
     assert wb["Dashboard"]["F39"].value == "Plan"
     assert wb["Dashboard"]["F40"].value == "Actual"

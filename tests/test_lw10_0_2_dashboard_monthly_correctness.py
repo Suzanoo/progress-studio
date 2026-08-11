@@ -19,7 +19,8 @@ def test_activity_pair_filter_keeps_plan_status_value_but_hides_it() -> None:
         "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
     ).read_text(encoding="utf-8")
     block = source[source.index("def _write_activity_section"):source.index("def build_live_dashboard")]
-    assert 'f\'=IF(L{row+1}<=0,"Not Started"' in block
+    assert '"Not Due"' in block
+    assert '"No Progress"' in block
     assert 'ws.auto_filter.ref = f"P38:P{last_activity_row}"' in block
     assert 'ws[f"P{row}"].font = Font(name=_FONT, color=base_fill, size=9)' in block
 

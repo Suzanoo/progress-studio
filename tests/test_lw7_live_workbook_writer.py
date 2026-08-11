@@ -65,7 +65,7 @@ def test_lw7_live_progress_rebuild_is_one_pass_output_contract(tmp_path: Path) -
         assert "progress_table" not in wb.sheetnames
         assert wb["Payment Input"]["A1"].value == "KEEP"
         assert wb["Payment"]["A1"].value == "KEEP_PAYMENT"
-        assert wb["Dashboard"]["C6"].value.startswith("Live: MainDataset")
+        assert wb["Dashboard"]["C6"].value.startswith("Live: main / main_monthly Acc. rows")
     finally:
         wb.close()
 

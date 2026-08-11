@@ -19,6 +19,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
+from progress_studio.infrastructure.excel.live_scurve_workbook import apply_weekly_scurve_cutoff_contract
 
 
 def _as_date(value: date | datetime | None) -> date | None:
@@ -265,16 +266,18 @@ def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset)
             # Pair-filter contract: Plan gets the same Actual-derived status value
             # so Excel filtering keeps both rows together. It is hidden visually.
             ws[f"P{row}"] = (
-                f'=IF(L{row+1}<=0,"Not Started",'
+                f'=IF(AND(L{row}<=0,L{row+1}<=0),"Not Due",'
+                f'IF(AND(L{row}>0,L{row+1}<=0),"No Progress",'
                 f'IF(L{row+1}>=1,"Complete",'
-                f'IF(L{row+1}<L{row},"Behind","On Track")))'
+                f'IF(L{row+1}<L{row},"Behind","On Track"))))'
             )
         else:
             ws[f"N{row}"] = f'=IFERROR(L{row}-L{row-1},0)'
             ws[f"P{row}"] = (
-                f'=IF(L{row}<=0,"Not Started",'
+                f'=IF(AND(L{row-1}<=0,L{row}<=0),"Not Due",'
+                f'IF(AND(L{row-1}>0,L{row}<=0),"No Progress",'
                 f'IF(L{row}>=1,"Complete",'
-                f'IF(L{row}<L{row-1},"Behind","On Track")))'
+                f'IF(L{row}<L{row-1},"Behind","On Track"))))'
             )
 
         base_fill = WHITE if pair_index % 2 == 0 else LIGHT_GRAY
@@ -382,7 +385,7 @@ def build_live_dashboard(
 
     ws["B6"] = "Data source"
     ws.merge_cells("C6:H6")
-    ws["C6"] = "Live: MainDataset → tiny cache + direct-to-main formulas"
+    ws["C6"] = "Live: main / main_monthly Acc. rows + direct-to-main formulas"
     ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
     ws["J6"] = "Recalc"
     ws.merge_cells("K6:M6")
@@ -435,3 +438,7 @@ def build_live_dashboard(
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
 
     _write_activity_section(ws, activity_model, dataset)
+
+    # Source-layer contract: main Acc.Actual itself stops at Dashboard cutoff.
+    # Dashboard_Data/Chart only render the authoritative source rows.
+    apply_weekly_scurve_cutoff_contract(workbook, dataset)

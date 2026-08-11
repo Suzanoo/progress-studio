@@ -40,8 +40,10 @@ def _outline_level(row: MainRow) -> int:
 
 
 def _status(plan_progress: float, actual_progress: float) -> str:
-    if actual_progress <= 0:
-        return "Not Started"
+    if plan_progress <= 0 and actual_progress <= 0:
+        return "Not Due"
+    if plan_progress > 0 and actual_progress <= 0:
+        return "No Progress"
     if actual_progress >= 1:
         return "Complete"
     if actual_progress < plan_progress:

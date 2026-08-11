@@ -130,12 +130,27 @@ def build_live_monthly_view(
                 f"{source_ref}!{first_week}{source_row}:{last_week}{source_row}"
             )
 
-            # Preserve cumulative S-curve semantics: use the final weekly
-            # cumulative value in the month rather than summing cumulative data.
             row_type = cached.row_type.strip().lower()
             pa = cached.pa.strip().upper()
-            if row_type == "s-curve" and pa in {"AP", "AA"}:
-                cell.value = f"={source_ref}!{last_week}{source_row}"
+            monthly_date_ref = f"{get_column_letter(col)}$4"
+
+            if row_type == "s-curve":
+                # Monthly S-Curve is a true live view of main.
+                # P/AP remain full baseline. A/AA stop at the Dashboard cutoff.
+                if pa == "AP":
+                    cell.value = f"={source_ref}!{last_week}{source_row}"
+                elif pa == "AA":
+                    cell.value = (
+                        f'=IF({monthly_date_ref}>Dashboard!$K$5,"",'
+                        f'{source_ref}!{last_week}{source_row})'
+                    )
+                elif pa == "A":
+                    cell.value = (
+                        f'=IF({monthly_date_ref}>Dashboard!$K$5,"",'
+                        f'IF(COUNT({source_range})=0,"",SUM({source_range})))'
+                    )
+                else:  # S-Curve Plan
+                    cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
             else:
                 # Full-live baseline intentionally uses the same straightforward
                 # formula for Project/WBS/Activity Plan and Actual rows.
