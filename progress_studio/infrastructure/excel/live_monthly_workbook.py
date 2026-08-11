@@ -20,6 +20,10 @@ from progress_studio.infrastructure.excel.progress_workbook import (
     add_progress_conditional_formatting,
     clear_progress_conditional_formatting,
     clear_timescale_direct_fills,
+    SCURVE_PLAN_FILL,
+    SCURVE_ACTUAL_FILL,
+    WBS_PLAN_FILL,
+    WBS_ACTUAL_FILL,
 )
 
 
@@ -160,6 +164,27 @@ def build_live_monthly_view(
             header_columns["outline level"],
             monthly.max_row,
         )
+
+        # S-Curve summary rows sit outside the Project/WBS/Activity CF grammar.
+        # Paint their timescale explicitly with the same palette used by main.
+        pa_col = header_columns["p/a"]
+        row_type_col = header_columns["row type"]
+        scurve_fills = {
+            "P": SCURVE_PLAN_FILL,
+            "AP": WBS_PLAN_FILL,
+            "A": SCURVE_ACTUAL_FILL,
+            "AA": WBS_ACTUAL_FILL,
+        }
+        for row in range(dataset.header_row + 1, monthly.max_row + 1):
+            row_type = str(monthly.cell(row, row_type_col).value or "").strip().lower()
+            if row_type != "s-curve":
+                continue
+            pa = str(monthly.cell(row, pa_col).value or "").strip().upper()
+            fill = scurve_fills.get(pa)
+            if fill is None:
+                continue
+            for col in monthly_timescale_cols:
+                monthly.cell(row, col).fill = copy(fill)
 
     try:
         monthly.data_validations.dataValidation = []

@@ -55,8 +55,36 @@ def _monthly_points(cache: ProgressCache):
     return list(grouped.values())
 
 
-def _build_live_data_sheet(workbook, cache: ProgressCache) -> None:
-    """Tiny weekly/monthly selector cache used only by Dashboard formulas."""
+
+def _find_scurve_rows(ws, dataset: MainDataset) -> tuple[int | None, int | None]:
+    """Return Acc.Plan (AP) and Acc.Actual (AA) row numbers."""
+    header_columns = {name: col for name, col in dataset.headers}
+    row_type_col = header_columns.get("row type")
+    pa_col = header_columns.get("p/a")
+    if row_type_col is None or pa_col is None:
+        return None, None
+
+    acc_plan = None
+    acc_actual = None
+    for row in range(dataset.header_row + 1, ws.max_row + 1):
+        row_type = str(ws.cell(row, row_type_col).value or "").strip().lower()
+        pa = str(ws.cell(row, pa_col).value or "").strip().upper()
+        if row_type != "s-curve":
+            continue
+        if pa == "AP":
+            acc_plan = row
+        elif pa == "AA":
+            acc_actual = row
+    return acc_plan, acc_actual
+
+
+def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache) -> None:
+    """Tiny selector cache sourced from the workbook's live Acc. rows.
+
+    Weekly view reads main!Acc.Plan/Acc.Actual.
+    Monthly view reads main_monthly!Acc.Plan/Acc.Actual.
+    Plan remains full baseline; Actual is blanked after Dashboard cutoff.
+    """
     _remove(workbook, DATA_SHEET)
     ws = workbook.create_sheet(DATA_SHEET)
     headers = [
@@ -67,26 +95,72 @@ def _build_live_data_sheet(workbook, cache: ProgressCache) -> None:
     ]
     ws.append(headers)
 
-    monthly = _monthly_points(cache)
-    max_rows = max(len(cache.points), len(monthly))
+    main = workbook["main"]
+    monthly_ws = workbook["main_monthly"] if "main_monthly" in workbook.sheetnames else None
+    weekly_ap, weekly_aa = _find_scurve_rows(main, dataset)
+    monthly_ap, monthly_aa = (
+        _find_scurve_rows(monthly_ws, dataset) if monthly_ws is not None else (None, None)
+    )
+
+    from openpyxl.utils import get_column_letter
+
+    weekly_points = list(dataset.periods)
+    fallback_monthly = _monthly_points(cache)
+    monthly_columns: list[tuple[int, object]] = []
+    if dataset.periods and monthly_ws is not None:
+        first_monthly_col = dataset.periods[0].column
+        month_count = max(0, monthly_ws.max_column - first_monthly_col + 1)
+        for offset in range(month_count):
+            col = first_monthly_col + offset
+            reporting_date = monthly_ws.cell(dataset.header_row, col).value
+            if reporting_date not in (None, ""):
+                monthly_columns.append((col, reporting_date))
+    elif fallback_monthly:
+        # Standalone renderer compatibility used by earlier LW tests.
+        first_monthly_col = dataset.periods[0].column if dataset.periods else 1
+        monthly_columns = [
+            (first_monthly_col + idx, point.reporting_date)
+            for idx, point in enumerate(fallback_monthly)
+            if point.reporting_date is not None
+        ]
+
+    max_rows = max(len(weekly_points), len(monthly_columns), 1)
     for idx in range(max_rows):
         row = idx + 2
-        if idx < len(cache.points):
-            point = cache.points[idx]
-            ws.cell(row, 1, point.reporting_date)
-            ws.cell(row, 2, point.plan_cumulative)
-            ws.cell(row, 3, point.actual_cumulative)
-            ws.cell(row, 10, point.reporting_date)
-        if idx < len(monthly):
-            point = monthly[idx]
-            ws.cell(row, 4, point.reporting_date)
-            ws.cell(row, 5, point.plan_cumulative)
-            ws.cell(row, 6, point.actual_cumulative)
-            ws.cell(row, 11, point.reporting_date)
 
-        # Selected view stays tiny: only 3 formulas per reporting row.
+        if idx < len(weekly_points):
+            period = weekly_points[idx]
+            col_letter = get_column_letter(period.column)
+            ws.cell(row, 1, period.reporting_date)
+            if weekly_ap is not None:
+                ws.cell(row, 2, f"='main'!{col_letter}{weekly_ap}")
+            else:
+                ws.cell(row, 2, cache.points[idx].plan_cumulative)
+            if weekly_aa is not None:
+                ws.cell(row, 3, f"='main'!{col_letter}{weekly_aa}")
+            else:
+                ws.cell(row, 3, cache.points[idx].actual_cumulative)
+            ws.cell(row, 10, period.reporting_date)
+
+        if idx < len(monthly_columns):
+            col, reporting_date = monthly_columns[idx]
+            col_letter = get_column_letter(col)
+            ws.cell(row, 4, reporting_date)
+            if monthly_ws is not None and monthly_ap is not None:
+                ws.cell(row, 5, f"='main_monthly'!{col_letter}{monthly_ap}")
+            elif idx < len(fallback_monthly):
+                ws.cell(row, 5, fallback_monthly[idx].plan_cumulative)
+            if monthly_ws is not None and monthly_aa is not None:
+                ws.cell(row, 6, f"='main_monthly'!{col_letter}{monthly_aa}")
+            elif idx < len(fallback_monthly):
+                ws.cell(row, 6, fallback_monthly[idx].actual_cumulative
+                )
+            ws.cell(row, 11, reporting_date)
+
+        # Selected Plan always renders the full baseline.
         ws.cell(row, 7, f'=IF(Dashboard!$G$5="Weekly",A{row},D{row})')
         ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
+        # Selected Actual stops at the chosen cutoff in both views.
         ws.cell(
             row, 9,
             f'=IF(OR(G{row}="",G{row}>Dashboard!$K$5),"",'
@@ -94,9 +168,9 @@ def _build_live_data_sheet(workbook, cache: ProgressCache) -> None:
         )
 
     for row in range(2, ws.max_row + 1):
-        for col in (1,4,7,10,11):
+        for col in (1, 4, 7, 10, 11):
             ws.cell(row, col).number_format = "dd/mm/yyyy"
-        for col in (2,3,5,6,8,9):
+        for col in (2, 3, 5, 6, 8, 9):
             ws.cell(row, col).number_format = "0.00%"
     ws.column_dimensions["J"].hidden = True
     ws.column_dimensions["K"].hidden = True
@@ -188,7 +262,13 @@ def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset)
         ws[f"J{row}"] = f'=IFERROR($H${plan_row}*L{row},0)' if not is_plan else f'=IFERROR(H{row}*L{row},0)'
         if is_plan:
             ws[f"N{row}"] = ""
-            ws[f"P{row}"] = ""
+            # Pair-filter contract: Plan gets the same Actual-derived status value
+            # so Excel filtering keeps both rows together. It is hidden visually.
+            ws[f"P{row}"] = (
+                f'=IF(L{row+1}<=0,"Not Started",'
+                f'IF(L{row+1}>=1,"Complete",'
+                f'IF(L{row+1}<L{row},"Behind","On Track")))'
+            )
         else:
             ws[f"N{row}"] = f'=IFERROR(L{row}-L{row-1},0)'
             ws[f"P{row}"] = (
@@ -221,6 +301,8 @@ def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset)
         ws[f"L{row}"].number_format = "0.00%"
         ws[f"N{row}"].number_format = "0.00%;[Red]-0.00%;0.00%"
         if is_plan:
+            # Keep filter value but make Status invisible on Plan row.
+            ws[f"P{row}"].font = Font(name=_FONT, color=base_fill, size=9)
             ws[f"C{row}"].alignment = Alignment(
                 vertical="center",
                 wrap_text=True,
@@ -248,7 +330,7 @@ def build_live_dashboard(
     cache = ProgressCacheDeriver().derive(dataset)
     cutoff_date = _as_date(cutoff) or _default_cutoff(cache)
     activity_model = ActivityTableDeriver().derive(dataset, cutoff=cutoff_date)
-    _build_live_data_sheet(workbook, cache)
+    _build_live_data_sheet(workbook, dataset, cache)
 
     _remove(workbook, DASHBOARD_SHEET)
     ws = workbook.create_sheet(DASHBOARD_SHEET, 0)
@@ -286,7 +368,7 @@ def build_live_dashboard(
 
     data_ws = workbook[DATA_SHEET]
     weekly_count = len(cache.points)
-    monthly_count = len(_monthly_points(cache))
+    monthly_count = sum(1 for row in range(2, data_ws.max_row + 1) if data_ws.cell(row, 11).value not in (None, ""))
     cutoff_validation = DataValidation(
         type="list",
         formula1=(

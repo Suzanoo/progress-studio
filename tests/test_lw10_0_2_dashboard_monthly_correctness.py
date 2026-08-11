@@ -1,0 +1,43 @@
+
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def test_dashboard_monthly_curve_prefers_main_monthly_acc_rows() -> None:
+    source = Path(
+        "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
+    ).read_text(encoding="utf-8")
+    block = source[source.index("def _build_live_data_sheet"):source.index("def _kpi_box")]
+    assert "_find_scurve_rows(main, dataset)" in block
+    assert "_find_scurve_rows(monthly_ws, dataset)" in block
+    assert 'G{row}>Dashboard!$K$5' in block
+
+
+def test_activity_pair_filter_keeps_plan_status_value_but_hides_it() -> None:
+    source = Path(
+        "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
+    ).read_text(encoding="utf-8")
+    block = source[source.index("def _write_activity_section"):source.index("def build_live_dashboard")]
+    assert 'f\'=IF(L{row+1}<=0,"Not Started"' in block
+    assert 'ws.auto_filter.ref = f"P38:P{last_activity_row}"' in block
+    assert 'ws[f"P{row}"].font = Font(name=_FONT, color=base_fill, size=9)' in block
+
+
+def test_monthly_scurve_four_rows_receive_main_palette() -> None:
+    source = Path(
+        "progress_studio/infrastructure/excel/live_monthly_workbook.py"
+    ).read_text(encoding="utf-8")
+    assert '"P": SCURVE_PLAN_FILL' in source
+    assert '"AP": WBS_PLAN_FILL' in source
+    assert '"A": SCURVE_ACTUAL_FILL' in source
+    assert '"AA": WBS_ACTUAL_FILL' in source
+    assert 'row_type != "s-curve"' in source
+
+
+def test_plan_curve_full_actual_curve_cutoff_contract_is_explicit() -> None:
+    source = Path(
+        "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
+    ).read_text(encoding="utf-8")
+    assert "Selected Plan always renders the full baseline." in source
+    assert "Selected Actual stops at the chosen cutoff in both views." in source
