@@ -70,7 +70,7 @@ def test_lw7_live_progress_rebuild_is_one_pass_output_contract(tmp_path: Path) -
         wb.close()
 
 
-def test_lw7_monthly_timescale_is_cached_values_not_formulas(tmp_path: Path) -> None:
+def test_lw7_monthly_view_remains_present_in_live_writer(tmp_path: Path) -> None:
     source = _fixture(tmp_path / "source.xlsx")
     output = tmp_path / "live.xlsx"
     WorkbookRebuildEngine().rebuild_live_progress(source, output)
@@ -78,11 +78,10 @@ def test_lw7_monthly_timescale_is_cached_values_not_formulas(tmp_path: Path) -> 
     wb = load_workbook(output, data_only=False)
     try:
         ws = wb["main_monthly"]
-        # First monthly column begins where weekly timescale began (K).
-        assert ws["K5"].value == 0.8
-        assert ws["L5"].value == 0.2
-        assert not isinstance(ws["K5"].value, str)
-        assert not isinstance(ws["L5"].value, str)
+        # LW-10.0 later evolves the monthly timescale from cache values to
+        # full-live direct formulas while preserving the same worksheet position.
+        assert isinstance(ws["K5"].value, str) and ws["K5"].value.startswith("=")
+        assert isinstance(ws["L5"].value, str) and ws["L5"].value.startswith("=")
     finally:
         wb.close()
 

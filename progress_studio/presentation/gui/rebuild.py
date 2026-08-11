@@ -132,7 +132,7 @@ class RebuildFrame(ttk.Frame):
         ).grid(row=3, column=1, sticky="w")
         ttk.Label(
             card,
-            text="LW-9 active • Live Progress + Live Payment • one-pass workbook writers.",
+            text="LW-10.0 • Full Live Monthly baseline + Live Progress/Payment.",
             style="Muted.TLabel",
         ).grid(row=4, column=1, sticky="w", padx=(24, 0), pady=(2, 0))
 

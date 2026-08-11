@@ -111,10 +111,11 @@ def test_lw8_live_workbook_uses_manual_calculation_with_calc_on_save(tmp_path: P
         assert calc.calcOnSave is True
         assert calc.fullCalcOnLoad is False
         assert calc.forceFullCalc is False
-        # Monthly remains a cache: no weekly formulas in its timescale.
+        # LW-10.0 later promotes Monthly to full-live formulas while retaining
+        # the LW-8 manual/calculate-on-save policy.
         monthly = wb["main_monthly"]
-        assert not isinstance(monthly["K5"].value, str)
-        assert not isinstance(monthly["L5"].value, str)
+        assert isinstance(monthly["K5"].value, str) and monthly["K5"].value.startswith("=")
+        assert isinstance(monthly["L5"].value, str) and monthly["L5"].value.startswith("=")
     finally:
         wb.close()
 

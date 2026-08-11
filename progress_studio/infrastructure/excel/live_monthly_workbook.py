@@ -26,10 +26,11 @@ def build_live_monthly_view(
     source_sheet: str = "main",
     target_sheet: str = "main_monthly",
 ) -> int:
-    """Render cached monthly values with one mutable workbook pass.
+    """LW-10.0 Full Live Monthly baseline.
 
-    The monthly timescale contains values only. No monthly cell references weekly
-    cells in `main`, so the Live output avoids a monthly formula dependency graph.
+    Every monthly timescale cell links directly to the corresponding weekly range
+    in `main`. This intentionally maximizes live behavior before later LW-10.x
+    milestones cut formula complexity/volume based on measured pain points.
     """
     if source_sheet not in workbook.sheetnames:
         raise ValueError(f"Monthly source worksheet was not found: {source_sheet}")
@@ -102,17 +103,34 @@ def build_live_monthly_view(
         monthly.cell(1, col).alignment = Alignment(horizontal="center", vertical="center")
         monthly.cell(1, col).border = HEADER_BORDER
 
+    source_ref = "'" + source_sheet.replace("'", "''") + "'"
     by_source_row = {row.source_row: row for row in cache.rows}
     for source_row, cached in by_source_row.items():
         if source_row > monthly.max_row:
             continue
-        for index, value in enumerate(cached.values, start=0):
+        for index, period in enumerate(cache.periods, start=0):
             col = first_timescale_col + index
             cell = monthly.cell(source_row, col)
             if source_row in template_styles:
                 cell._style = copy(template_styles[source_row])
                 cell.number_format = template_formats[source_row]
-            cell.value = value if value is not None else ""
+
+            first_week = get_column_letter(period.source_columns[0])
+            last_week = get_column_letter(period.source_columns[-1])
+            source_range = (
+                f"{source_ref}!{first_week}{source_row}:{last_week}{source_row}"
+            )
+
+            # Preserve cumulative S-curve semantics: use the final weekly
+            # cumulative value in the month rather than summing cumulative data.
+            row_type = cached.row_type.strip().lower()
+            pa = cached.pa.strip().upper()
+            if row_type == "s-curve" and pa in {"AP", "AA"}:
+                cell.value = f"={source_ref}!{last_week}{source_row}"
+            else:
+                # Full-live baseline intentionally uses the same straightforward
+                # formula for Project/WBS/Activity Plan and Actual rows.
+                cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
 
     try:
         monthly.data_validations.dataValidation = []
