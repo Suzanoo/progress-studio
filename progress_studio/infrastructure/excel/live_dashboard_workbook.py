@@ -5,6 +5,7 @@ from collections import OrderedDict
 from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -95,6 +96,7 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
         "Monthly Date", "Monthly Plan", "Monthly Actual",
         "Selected Date", "Selected Plan", "Selected Actual",
         "Weekly Cutoff", "Monthly Cutoff",
+        "Selected Actual Raw", "Cutoff Plan Marker", "Cutoff Actual Marker",
     ])
 
     if "progress" not in workbook.sheetnames:
@@ -140,17 +142,25 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             f'IF(D{row}="","",D{row}))',
         )
         ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
+        # Raw selected Actual is deliberately separate from the chart mask.
+        # KPI formulas read this error-free helper; only column I contains #N/A.
+        ws.cell(
+            row, 12,
+            f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",C{row},F{row}))',
+        )
         ws.cell(
             row, 9,
             f'=IF(G{row}="",NA(),IF(G{row}>Dashboard!$K$5,NA(),'
-            f'IF(Dashboard!$G$5="Weekly",IF(C{row}="",NA(),C{row}),'
-            f'IF(F{row}="",NA(),F{row}))))',
+            f'IF(L{row}="",NA(),L{row})))',
         )
+        # Marker helpers contain exactly one visible point at the selected cutoff.
+        ws.cell(row, 13, f'=IF(G{row}=Dashboard!$K$5,H{row},NA())')
+        ws.cell(row, 14, f'=IF(AND(G{row}=Dashboard!$K$5,L{row}<>""),L{row},NA())')
 
     for row in range(2, ws.max_row + 1):
         for col in (1, 4, 7, 10, 11):
             ws.cell(row, col).number_format = "dd/mm/yyyy"
-        for col in (2, 3, 5, 6, 8, 9):
+        for col in (2, 3, 5, 6, 8, 9, 12, 13, 14):
             ws.cell(row, col).number_format = "0.00%"
     ws.column_dimensions["J"].hidden = True
     ws.column_dimensions["K"].hidden = True
@@ -374,15 +384,16 @@ def build_live_dashboard(
 
     # KPI formulas read only the tiny selected-view cache.
     last_data_row = max(2, data_ws.max_row)
+    # The cutoff dropdown contains exact reporting dates, so KPI values can use
+    # simple SUMIFS against the selected-view helpers. This avoids LOOKUP over
+    # the chart's #N/A mask and keeps KPI cards fully numeric/recalc-friendly.
     plan_formula = (
-        f'=IFERROR(LOOKUP(2,1/((Dashboard_Data!$G$2:$G${last_data_row}<=$K$5)*'
-        f'(Dashboard_Data!$H$2:$H${last_data_row}<>"")),'
-        f'Dashboard_Data!$H$2:$H${last_data_row}),0)'
+        f'=IFERROR(SUMIFS(Dashboard_Data!$H$2:$H${last_data_row},'
+        f'Dashboard_Data!$G$2:$G${last_data_row},$K$5),0)'
     )
     actual_formula = (
-        f'=IFERROR(LOOKUP(2,1/((Dashboard_Data!$G$2:$G${last_data_row}<=$K$5)*'
-        f'(IFERROR(Dashboard_Data!$I$2:$I${last_data_row},"")<>"")),'
-        f'IFERROR(Dashboard_Data!$I$2:$I${last_data_row},"")),0)'
+        f'=IFERROR(SUMIFS(Dashboard_Data!$L$2:$L${last_data_row},'
+        f'Dashboard_Data!$G$2:$G${last_data_row},$K$5),0)'
     )
     start_date, finish_date = _project_dates(dataset)
     duration_days = max(0, (finish_date - start_date).days) if start_date and finish_date else 0
@@ -412,6 +423,35 @@ def build_live_dashboard(
     if len(chart.series) >= 2:
         chart.series[0].graphicalProperties.line.solidFill = BLUE
         chart.series[1].graphicalProperties.line.solidFill = GREEN
+        # Keep the two main curves clean: no point markers along the full line.
+        chart.series[0].marker.symbol = "none"
+        chart.series[1].marker.symbol = "none"
+
+    # Two marker-only series expose the current cutoff values without cluttering
+    # every weekly/monthly point. Their helpers are #N/A everywhere except K5.
+    marker_data = Reference(data_ws, min_col=13, max_col=14, min_row=1, max_row=last_data_row)
+    chart.add_data(marker_data, titles_from_data=True)
+    for idx, color in ((2, BLUE), (3, GREEN)):
+        if len(chart.series) <= idx:
+            continue
+        series = chart.series[idx]
+        series.graphicalProperties.line.noFill = True
+        series.marker.symbol = "circle"
+        series.marker.size = 7
+        series.marker.graphicalProperties.solidFill = color
+        series.marker.graphicalProperties.line.solidFill = color
+        series.dLbls = DataLabelList()
+        series.dLbls.showVal = True
+        series.dLbls.numFmt = "0.0%"
+        series.dLbls.position = "t"
+
+    # Minimal axes: percent scale is self-explanatory; dates remain the only
+    # horizontal context. Excel will thin date labels automatically as needed.
+    chart.y_axis.majorUnit = 0.25
+    chart.y_axis.title = None
+    chart.x_axis.title = None
+    chart.x_axis.number_format = "mmm-yy"
+    chart.x_axis.majorTimeUnit = "days"
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")

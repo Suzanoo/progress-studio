@@ -59,8 +59,8 @@ def test_lw5_dashboard_data_is_tiny_period_level_cache(tmp_path: Path) -> None:
 
     data = wb["Dashboard_Data"]
     assert data.max_row == 3
-    # LW-8 evolves the tiny cache to include Weekly/Monthly selector columns.
-    assert data.max_column == 11
+    # LW-11.3.3 keeps the cache period-level and adds raw Actual + two marker helpers.
+    assert data.max_column == 14
     assert [data.cell(1, c).value for c in range(1, 4)] == [
         "Weekly Date", "Weekly Plan", "Weekly Actual"
     ]

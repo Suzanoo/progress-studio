@@ -74,3 +74,36 @@ def test_lw11_dashboard_data_is_progress_renderer(tmp_path: Path) -> None:
     assert 'IF(D6="","",D6)' in data["G6"].value
     assert data.sheet_state == "hidden"
     wb.close()
+
+
+def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path) -> None:
+    path = _fixture(tmp_path / "p.xlsx")
+    dataset = RebuildWorkbookReader().read_main_dataset(path)
+    wb = load_workbook(path)
+    build_live_dashboard(wb, dataset, cutoff=datetime(2026, 7, 24))
+
+    data = wb["Dashboard_Data"]
+    dashboard = wb["Dashboard"]
+    assert data["L1"].value == "Selected Actual Raw"
+    assert "NA()" not in data["L2"].value
+    assert data["M1"].value == "Cutoff Plan Marker"
+    assert data["N1"].value == "Cutoff Actual Marker"
+    assert "Dashboard!$K$5" in data["M2"].value
+    assert "Dashboard!$K$5" in data["N2"].value
+
+    assert "SUMIFS" in dashboard["B10"].value
+    assert "Dashboard_Data!$H$2" in dashboard["B10"].value
+    assert "SUMIFS" in dashboard["E10"].value
+    assert "Dashboard_Data!$L$2" in dashboard["E10"].value
+    assert "#N/A" not in dashboard["E10"].value
+
+    chart = dashboard._charts[0]
+    assert len(chart.series) == 4
+    assert chart.y_axis.majorUnit == 0.25
+    assert chart.y_axis.title is None
+    assert chart.x_axis.title is None
+    assert chart.series[2].marker.symbol == "circle"
+    assert chart.series[3].marker.symbol == "circle"
+    assert chart.series[2].dLbls.showVal is True
+    assert chart.series[3].dLbls.showVal is True
+    wb.close()

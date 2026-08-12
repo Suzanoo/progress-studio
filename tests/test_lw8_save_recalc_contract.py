@@ -134,7 +134,7 @@ def test_lw8_formula_payload_is_linear_not_activity_times_period_matrix(tmp_path
                 for cell in row:
                     if isinstance(cell.value, str) and cell.value.startswith("="):
                         formula_cells += 1
-        # One activity + tiny selector cache should stay well below an Nxperiod matrix.
-        assert formula_cells < 50
+        # One activity + selector/marker cache stays linear in periods and far below an activity×period matrix.
+        assert formula_cells < 80
     finally:
         wb.close()
