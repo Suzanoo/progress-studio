@@ -133,7 +133,14 @@ def _protect_main(ws) -> None:
                 if not (isinstance(cell.value, str) and cell.value.startswith("=")):
                     _set_unlocked(cell)
 
+    _unlock_local_cutoff_control(ws)
 
+
+def _unlock_local_cutoff_control(ws) -> None:
+    """Unlock only the local traditional-overlay cutoff cell in column M."""
+    for row in range(1, ws.max_row + 1):
+        if str(ws.cell(row, 12).value or "").strip() == "Cutoff Date":
+            _set_unlocked(ws.cell(row, 13))
 
 
 def _protect_dashboard(ws) -> None:
@@ -171,6 +178,9 @@ def apply_final_sheet_protection(workbook) -> tuple[str, ...]:
     for ws in workbook.worksheets:
         if ws.title == "main":
             _protect_main(ws)
+        elif ws.title == "main_monthly":
+            _protect_sheet(ws)
+            _unlock_local_cutoff_control(ws)
         elif ws.title == "Payment Input":
             _protect_payment_input(ws)
         elif ws.title == "Dashboard":

@@ -109,6 +109,10 @@ def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     assert 'monthly_cutoff_ref=monthly_cutoff_ref' in text
     assert 'list_col="J"' in text
     assert 'list_col="K"' in text
+    assert 'label_col = 12  # L' in text
+    assert 'value_col = 13  # M' in text
+    assert 'display_format="dd/mm/yyyy"' in text
+    assert 'display_format="mmm yyyy"' in text
 
 
 
@@ -123,6 +127,9 @@ def test_lw124_cutoff_red_line_has_date_label_contract():
     assert 'showSerName=True' in text
     assert 'separator=" "' in text
     assert 'SeriesLabel(v="Cutoff")' in text
+    assert 'CUTOFF_LABEL_BG = "FCE4D6"' in text
+    assert 'spPr=_label_graphical_properties(CUTOFF_LABEL_BG, CUTOFF_LABEL_BORDER)' in text
+    assert 'chart.legend = None' in text
 
 
 def test_lw124_cutoff_line_serializes_error_bar_and_label(tmp_path):
@@ -156,6 +163,7 @@ def test_lw124_cutoff_line_serializes_error_bar_and_label(tmp_path):
     assert '<showCatName val="1"/>' in chart_xml
     assert '<showSerName val="1"/>' in chart_xml
     assert '<separator val=" "/>' in chart_xml
+    assert 'val="FCE4D6"' in chart_xml
 
 
 
@@ -207,20 +215,49 @@ def test_lw124_three_cutoffs_are_independent_and_overlay_helpers_are_local():
     build_traditional_overlays(wb, dataset)
 
     # Control row is immediately above the S-Curve Plan row; Amount is col I.
-    assert main['I19'].value == datetime(2026, 7, 17)
+    assert main['M19'].value == datetime(2026, 7, 17)
     # Monthly owns a different value/list and does not bind to Dashboard.
-    assert monthly['I19'].value == datetime(2026, 8, 31)
+    assert monthly['M19'].value == datetime(2026, 8, 31)
+    assert main['M19'].number_format == 'dd/mm/yyyy'
+    assert monthly['M19'].number_format == 'mmm yyyy'
     assert dash['K5'].value == datetime(2026, 7, 17)
 
-    assert "'main'!$I$19" in data['P2'].value
-    assert "'main_monthly'!$I$19" in data['Q2'].value
+    assert "'main'!$M$19" in data['P2'].value
+    assert "'main_monthly'!$M$19" in data['Q2'].value
     assert 'Dashboard!$K$5' not in data['P2'].value
     assert 'Dashboard!$K$5' not in data['Q2'].value
-    assert "'main'!$I$19" in data['R2'].value
-    assert "'main_monthly'!$I$19" in data['S2'].value
+    assert "'main'!$M$19" in data['R2'].value
+    assert "'main_monthly'!$M$19" in data['S2'].value
+    assert 'AND(A2<=' in data['R2'].value
+    assert 'OR(A3="",A3>' in data['R2'].value
 
     # Simulate independent user edits: no formula links exist between controls.
-    main['I19'] = datetime(2026, 7, 10)
-    monthly['I19'] = datetime(2026, 7, 31)
+    main['M19'] = datetime(2026, 7, 10)
+    monthly['M19'] = datetime(2026, 7, 31)
     assert dash['K5'].value == datetime(2026, 7, 17)
-    assert main['I19'].value != monthly['I19'].value
+    assert main['M19'].value != monthly['M19'].value
+
+
+def test_lw124_local_cutoff_cells_are_unlocked_without_unprotecting_sheet():
+    from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
+
+    wb = Workbook()
+    main = wb.active
+    main.title = 'main'
+    monthly = wb.create_sheet('main_monthly')
+
+    for ws in (main, monthly):
+        ws['A4'] = 'Row Type'
+        ws['D4'] = 'P/A'
+        ws['L19'] = 'Cutoff Date'
+        ws['M19'] = '2026-07-17'
+        ws['N19'] = 'protected neighbor'
+
+    apply_final_sheet_protection(wb)
+
+    assert main.protection.sheet is True
+    assert monthly.protection.sheet is True
+    assert main['M19'].protection.locked is False
+    assert monthly['M19'].protection.locked is False
+    assert main['N19'].protection.locked is True
+    assert monthly['N19'].protection.locked is True

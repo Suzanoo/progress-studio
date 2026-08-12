@@ -401,3 +401,10 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Added chart axis titles: Date and Progress (%).
 - Activity Table parent WBS/Project rows now roll up Total from descendant Plan activities and calculate Plan/Actual Amount from that total.
 - Total is shown on both Plan and Actual rows for clearer two-row comparison.
+
+### LW-12.4.1 — Traditional overlay cutoff polish
+- Fixed Weekly cutoff red line to use the last reporting point at or before the local cutoff.
+- Moved local cutoff inputs for `main` and `main_monthly` to column M.
+- Kept sheets protected while unlocking only the local cutoff input cells.
+- Monthly cutoff displays Month + Year (`mmm yyyy`).
+- Added a pale background/border to red cutoff labels and removed overlay legends.

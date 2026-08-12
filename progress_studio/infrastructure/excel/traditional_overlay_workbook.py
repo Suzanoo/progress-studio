@@ -34,6 +34,8 @@ ACTUAL_LABEL_TEXT = "385723"
 ACTUAL_LABEL_FILL = "E2F0D9"
 ACTUAL_LABEL_BORDER = "A9D18E"
 CUTOFF_RED = "C00000"
+CUTOFF_LABEL_BG = "FCE4D6"
+CUTOFF_LABEL_BORDER = "C00000"
 
 
 def ensure_overlay_visible_actual_columns(
@@ -62,7 +64,7 @@ def ensure_overlay_visible_actual_columns(
         ws.cell(row, 17, f'=IF(D{row}="",NA(),IF(D{row}>{monthly_cutoff_ref},NA(),IF(F{row}="",NA(),F{row})))')
         # A single 1.0 point plus a full-height negative Y error bar produces
         # a vertical cutoff line without VBA or movable worksheet shapes.
-        ws.cell(row, 18, f'=IF(A{row}={weekly_cutoff_ref},1,NA())')
+        ws.cell(row, 18, f'=IF(A{row}="",NA(),IF(AND(A{row}<={weekly_cutoff_ref},OR(A{next_row}="",A{next_row}>{weekly_cutoff_ref})),1,NA()))')
         ws.cell(
             row, 19,
             f'=IF(D{row}="",NA(),IF(AND(D{row}<={monthly_cutoff_ref},OR(D{next_row}="",D{next_row}>{monthly_cutoff_ref})),1,NA()))'
@@ -162,10 +164,16 @@ def _add_cutoff_control(
     list_col: str,
     list_last_row: int,
     initial_value,
+    display_format: str,
 ) -> str:
-    """Add a compact independent cutoff selector outside the overlay footprint."""
-    label_col = dataset.header_column("description") or 3
-    value_col = dataset.header_column("amount") or max(4, label_col + 1)
+    """Add a compact independent cutoff selector in columns L:M.
+
+    Column M is intentionally the editable value cell on both traditional
+    views.  Keeping the control out of the timescale footprint makes it easy
+    to reach even when the transparent overlay is visible.
+    """
+    label_col = 12  # L
+    value_col = 13  # M
     label = ws.cell(row, label_col)
     value = ws.cell(row, value_col)
     label.value = "Cutoff Date"
@@ -173,7 +181,7 @@ def _add_cutoff_control(
     label.font = Font(color="FFFFFF", bold=True)
     label.alignment = Alignment(horizontal="right", vertical="center")
     value.value = initial_value
-    value.number_format = "dd/mm/yyyy"
+    value.number_format = display_format
     value.fill = PatternFill("solid", fgColor=CUTOFF_VALUE_FILL)
     value.font = Font(color="1F1F1F", bold=True)
     value.alignment = Alignment(horizontal="center", vertical="center")
@@ -222,7 +230,7 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cu
     chart.y_axis.title = None
     chart.x_axis.title = None
     chart.x_axis.tickLblPos = "none"
-    chart.legend.position = "t"
+    chart.legend = None
     chart.display_blanks = "gap"
     chart.y_axis.majorGridlines = None
 
@@ -299,6 +307,7 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cu
             showLegendKey=False,
             dLblPos="t",
             separator=" ",
+            spPr=_label_graphical_properties(CUTOFF_LABEL_BG, CUTOFF_LABEL_BORDER),
             txPr=_label_text_properties(CUTOFF_RED),
         )
     return chart
@@ -353,12 +362,12 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
     if "main" in workbook.sheetnames:
         weekly_cutoff_ref = _add_cutoff_control(
             workbook["main"], dataset, row=control_row, list_col="J", list_last_row=weekly_list_last,
-            initial_value=weekly_initial,
+            initial_value=weekly_initial, display_format="dd/mm/yyyy",
         )
     if "main_monthly" in workbook.sheetnames:
         monthly_cutoff_ref = _add_cutoff_control(
             workbook["main_monthly"], dataset, row=control_row, list_col="K", list_last_row=monthly_list_last,
-            initial_value=monthly_initial,
+            initial_value=monthly_initial, display_format="mmm yyyy",
         )
 
     if weekly_cutoff_ref is None:
