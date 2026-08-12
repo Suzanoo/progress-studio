@@ -5,7 +5,6 @@ from collections import OrderedDict
 from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
-from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.legend import LegendEntry
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -446,8 +445,8 @@ def build_live_dashboard(
         chart.series[0].marker.symbol = "none"
         chart.series[1].marker.symbol = "none"
 
-    # Two marker-only series expose the current cutoff values without cluttering
-    # every weekly/monthly point. Their helpers are #N/A everywhere except K5.
+    # Two marker-only series expose the current cutoff positions without labels.
+    # KPI cards carry the numeric values, so the chart stays visually clean.
     marker_data = Reference(data_ws, min_col=14, max_col=15, min_row=1, max_row=2)
     marker_cats = Reference(data_ws, min_col=13, min_row=2, max_row=2)
     chart.add_data(marker_data, titles_from_data=True)
@@ -461,7 +460,7 @@ def build_live_dashboard(
     marker_cat_ref = f"'{DATA_SHEET}'!$M$2:$M$2"
     for marker_series in chart.series[2:4]:
         marker_series.cat = AxDataSource(numRef=NumRef(f=marker_cat_ref))
-    for idx, color, label_position in ((2, BLUE, "t"), (3, GREEN, "b")):
+    for idx, color in ((2, BLUE), (3, GREEN)):
         if len(chart.series) <= idx:
             continue
         series = chart.series[idx]
@@ -470,10 +469,6 @@ def build_live_dashboard(
         series.marker.size = 7
         series.marker.graphicalProperties.solidFill = color
         series.marker.graphicalProperties.line.solidFill = color
-        series.dLbls = DataLabelList()
-        series.dLbls.showVal = True
-        series.dLbls.numFmt = "0.0%"
-        series.dLbls.position = label_position
 
     # Marker-only helper series are useful on the plot but add noise to the
     # legend; keep the legend focused on the two actual curves.

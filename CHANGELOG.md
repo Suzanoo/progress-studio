@@ -1,3 +1,10 @@
+## LW-11.3.6 — Marker-Only Cutoff
+
+- Removed all data labels from the Plan/Actual cutoff marker series.
+- Kept one marker point per series at the selected cutoff date.
+- Kept marker helper series hidden from the legend; KPI cards remain the sole numeric summary.
+- Preserved the LW-11.3.5 calculation, KPI, icon, and F9/Save contracts unchanged.
+
 ## LW-11.3.4 — KPI Gap and Marker Label Polish
 
 - Restored signed schedule variance in KPI Card 3 as a second line beneath status (`+x.xx%`, `-x.xx%`, or `0.00%`).

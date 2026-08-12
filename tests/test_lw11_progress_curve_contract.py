@@ -114,10 +114,8 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     assert chart.series[3].cat.numRef.f.endswith("$M$2:$M$2")
     assert chart.series[2].val.numRef.f.endswith("$N$2")
     assert chart.series[3].val.numRef.f.endswith("$O$2")
-    assert chart.series[2].dLbls.showVal is True
-    assert chart.series[3].dLbls.showVal is True
-    assert chart.series[2].dLbls.position == "t"
-    assert chart.series[3].dLbls.position == "b"
+    assert chart.series[2].dLbls is None
+    assert chart.series[3].dLbls is None
     assert [(entry.idx, entry.delete) for entry in chart.legend.legendEntry] == [(2, True), (3, True)]
 
     # LW-11.3.4: schedule card keeps both status and signed progress gap.
