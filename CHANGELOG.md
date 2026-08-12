@@ -1,3 +1,11 @@
+## LW-12.3.2 — Overlay Label Readability
+
+- Kept value labels on every Weekly and Monthly Plan/Actual marker.
+- Styled Plan labels as compact pale-blue tags above the curve with dark-blue text.
+- Styled Actual labels as compact pale-green tags below the curve with dark-green text.
+- Reduced overlay label text to 7 pt and added thin series-tinted borders so values remain readable over schedule bars.
+- Preserved responsive two-cell geometry, all-marker size 7, transparent Chart/Plot areas, cutoff behavior, and 0–100% Y scale unchanged.
+
 ## LW-11.3.6 — Marker-Only Cutoff
 
 ## LW-12.1 / LW-12.2 — Traditional Curve Overlay Prototype

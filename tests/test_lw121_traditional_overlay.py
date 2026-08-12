@@ -22,6 +22,11 @@ def test_overlay_uses_all_markers_and_cutoff_helpers():
     assert 'DataLabelList(' in text
     assert 'showVal=True' in text
     assert 'numFmt=OVERLAY_LABEL_FORMAT' in text
+    assert 'PLAN_LABEL_FILL = "DDEBF7"' in text
+    assert 'ACTUAL_LABEL_FILL = "E2F0D9"' in text
+    assert 'dLblPos=position' in text
+    assert 'spPr=_label_graphical_properties' in text
+    assert 'txPr=_label_text_properties' in text
     assert 'chart.x_axis.tickLblPos = "none"' in text
     assert 'Dashboard!$K$5' in text
     assert 'date_col=1' in text and 'plan_col=2' in text and 'actual_col=16' in text
@@ -71,3 +76,12 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
     assert '<dLbls>' in chart_xml
     assert '<showVal val="1"/>' in chart_xml
     assert '<numFmt formatCode="0.0%"' in chart_xml
+    # LW-12.3.2 label tags: Plan is above with pale-blue fill; Actual is below
+    # with pale-green fill. Text is compact 7 pt and tinted by series.
+    assert '<dLblPos val="t"/>' in chart_xml
+    assert '<dLblPos val="b"/>' in chart_xml
+    assert 'val="DDEBF7"' in chart_xml
+    assert 'val="E2F0D9"' in chart_xml
+    assert 'val="1F4E79"' in chart_xml
+    assert 'val="385723"' in chart_xml
+    assert 'sz="700"' in chart_xml

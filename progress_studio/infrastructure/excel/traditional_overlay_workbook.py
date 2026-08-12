@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.text import RichText
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
+from openpyxl.drawing.text import CharacterProperties, Paragraph, ParagraphProperties, RichTextProperties
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
 
 from progress_studio.domain.main_dataset import MainDataset
@@ -14,6 +16,13 @@ MONTHLY_OVERLAY_NAME = "PS_CURVE_OVERLAY_MONTHLY"
 OVERLAY_TOP_ROW = 5
 OVERLAY_MARKER_SIZE = 7
 OVERLAY_LABEL_FORMAT = "0.0%"
+OVERLAY_LABEL_FONT_SIZE = 700  # DrawingML uses 1/100 pt -> 7 pt.
+PLAN_LABEL_TEXT = "1F4E79"
+PLAN_LABEL_FILL = "DDEBF7"
+PLAN_LABEL_BORDER = "9CC2E5"
+ACTUAL_LABEL_TEXT = "385723"
+ACTUAL_LABEL_FILL = "E2F0D9"
+ACTUAL_LABEL_BORDER = "A9D18E"
 
 
 def ensure_overlay_visible_actual_columns(workbook) -> None:
@@ -28,6 +37,21 @@ def ensure_overlay_visible_actual_columns(workbook) -> None:
         ws.cell(row, 17, f'=IF(D{row}="",NA(),IF(D{row}>Dashboard!$K$5,NA(),IF(F{row}="",NA(),F{row})))')
         ws.cell(row, 16).number_format = "0.00%"
         ws.cell(row, 17).number_format = "0.00%"
+
+
+def _label_text_properties(text_color: str) -> RichText:
+    """Compact 7 pt series-tinted label text for a dense traditional overlay."""
+    run = CharacterProperties(sz=OVERLAY_LABEL_FONT_SIZE, solidFill=text_color)
+    paragraph = Paragraph(pPr=ParagraphProperties(defRPr=run))
+    return RichText(bodyPr=RichTextProperties(), p=[paragraph])
+
+
+def _label_graphical_properties(fill_color: str, border_color: str) -> GraphicalProperties:
+    """Pale opaque tag background so values remain readable over schedule bars."""
+    props = GraphicalProperties(solidFill=fill_color)
+    props.line.solidFill = border_color
+    props.line.width = 6350  # ~0.5 pt; enough separation without a heavy box.
+    return props
 
 
 def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, last_row: int) -> LineChart:
@@ -59,22 +83,32 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, la
     chart.add_data(actual, titles_from_data=True)
     chart.set_categories(cats)
 
-    for series, color in zip(chart.series[:2], (BLUE, GREEN)):
+    label_styles = (
+        (BLUE, "t", PLAN_LABEL_TEXT, PLAN_LABEL_FILL, PLAN_LABEL_BORDER),
+        (GREEN, "b", ACTUAL_LABEL_TEXT, ACTUAL_LABEL_FILL, ACTUAL_LABEL_BORDER),
+    )
+    for series, (color, position, text_color, fill_color, border_color) in zip(
+        chart.series[:2], label_styles
+    ):
         series.graphicalProperties.line.solidFill = color
         series.graphicalProperties.line.width = 19050
         series.marker.symbol = "circle"
         series.marker.size = OVERLAY_MARKER_SIZE
         series.marker.graphicalProperties.solidFill = color
         series.marker.graphicalProperties.line.solidFill = color
-        # LW-12.3.1 experiment: show compact values at every marker.  We keep
-        # category/series names off so labels stay as short percentages only.
+        # LW-12.3.2: keep every value, but turn labels into compact tinted tags.
+        # Plan sits above its curve; Actual sits below so nearby series do not
+        # compete for the same vertical space.  Pale backgrounds preserve
+        # readability while keeping the schedule bars visible around the tags.
         series.dLbls = DataLabelList(
             showVal=True,
             showCatName=False,
             showSerName=False,
             showLegendKey=False,
             numFmt=OVERLAY_LABEL_FORMAT,
-            dLblPos="t",
+            dLblPos=position,
+            spPr=_label_graphical_properties(fill_color, border_color),
+            txPr=_label_text_properties(text_color),
         )
     return chart
 
