@@ -3,8 +3,8 @@ from zipfile import ZipFile
 from openpyxl import Workbook
 
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
-    build_traditional_overlays,
     _overlay_chart,
+    _responsive_anchor,
 )
 
 
@@ -18,23 +18,28 @@ def test_overlay_uses_all_markers_and_cutoff_helpers():
     assert 'Weekly Actual Visible' in text
     assert 'Monthly Actual Visible' in text
     assert 'series.marker.symbol = "circle"' in text
+    assert 'OVERLAY_MARKER_SIZE = 7' in text
+    assert 'DataLabelList(' in text
+    assert 'showVal=True' in text
+    assert 'numFmt=OVERLAY_LABEL_FORMAT' in text
     assert 'chart.x_axis.tickLblPos = "none"' in text
     assert 'Dashboard!$K$5' in text
-    assert 'date_col=1, plan_col=2, actual_col=16' in text
-    assert 'date_col=4, plan_col=5, actual_col=17' in text
+    assert 'date_col=1' in text and 'plan_col=2' in text and 'actual_col=16' in text
+    assert 'date_col=4' in text and 'plan_col=5' in text and 'actual_col=17' in text
 
 
-def test_overlay_lw123_lw124_geometry_and_transparency_contract():
+def test_overlay_lw1231_responsive_geometry_and_transparency_contract():
     text = Path('progress_studio/infrastructure/excel/traditional_overlay_workbook.py').read_text()
-    assert 'OVERLAY_ANCHOR_ROW = 5' in text
+    assert 'OVERLAY_TOP_ROW = 5' in text
+    assert 'TwoCellAnchor' in text
+    assert 'editAs="twoCell"' in text
+    assert 'last_weekly_col = dataset.periods[-1].column' in text
+    assert 'schedule_last_row = max(' in text
     assert 'chart.plot_area.graphicalProperties' in text
     assert 'LineProperties(noFill=True)' in text
-    assert 'oneCellAnchor' in text
-    assert 'OVERLAY_HEIGHT_CM' in text
-    assert 'OVERLAY_MAX_WIDTH_CM' in text
 
 
-def test_overlay_serializes_one_cell_anchor_and_two_transparent_layers(tmp_path):
+def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_path):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Dashboard_Data'
@@ -43,10 +48,14 @@ def test_overlay_serializes_one_cell_anchor_and_two_transparent_layers(tmp_path)
         ws.append([i, i / 4, i / 5])
 
     chart = _overlay_chart(
-        data_ws=ws, date_col=1, plan_col=2, actual_col=3,
-        last_row=5, period_count=4,
+        data_ws=ws,
+        date_col=1,
+        plan_col=2,
+        actual_col=3,
+        last_row=5,
     )
-    ws.add_chart(chart, 'D5')
+    chart.anchor = _responsive_anchor(first_col=4, last_col=7, top_row=5, bottom_row=20)
+    ws.add_chart(chart)
     path = tmp_path / 'overlay.xlsx'
     wb.save(path)
 
@@ -54,6 +63,11 @@ def test_overlay_serializes_one_cell_anchor_and_two_transparent_layers(tmp_path)
         drawing_xml = zf.read('xl/drawings/drawing1.xml').decode('utf-8')
         chart_xml = zf.read('xl/charts/chart1.xml').decode('utf-8')
 
-    assert '<oneCellAnchor>' in drawing_xml
+    assert '<twoCellAnchor editAs="twoCell">' in drawing_xml
+    assert '<from><col>3</col>' in drawing_xml
+    assert '<to><col>7</col>' in drawing_xml
     # One noFill is the inner plot area and one is the outer chart area.
     assert chart_xml.count('<a:noFill') >= 2
+    assert '<dLbls>' in chart_xml
+    assert '<showVal val="1"/>' in chart_xml
+    assert '<numFmt formatCode="0.0%"' in chart_xml

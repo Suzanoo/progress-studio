@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
-from openpyxl.utils import get_column_letter
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
 
 from progress_studio.domain.main_dataset import MainDataset
 from progress_studio.infrastructure.excel.dashboard_workbook import BLUE, GREEN, DATA_SHEET
 
 WEEKLY_OVERLAY_NAME = "PS_CURVE_OVERLAY_WEEKLY"
 MONTHLY_OVERLAY_NAME = "PS_CURVE_OVERLAY_MONTHLY"
-OVERLAY_ANCHOR_ROW = 5
-OVERLAY_HEIGHT_CM = 12.0
-OVERLAY_MIN_WIDTH_CM = 18.0
-OVERLAY_MAX_WIDTH_CM = 42.0
-OVERLAY_PERIOD_WIDTH_CM = 0.55
+OVERLAY_TOP_ROW = 5
+OVERLAY_MARKER_SIZE = 7
+OVERLAY_LABEL_FORMAT = "0.0%"
 
 
 def ensure_overlay_visible_actual_columns(workbook) -> None:
@@ -31,12 +30,8 @@ def ensure_overlay_visible_actual_columns(workbook) -> None:
         ws.cell(row, 17).number_format = "0.00%"
 
 
-def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, last_row: int, period_count: int) -> LineChart:
+def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, last_row: int) -> LineChart:
     chart = LineChart()
-    chart.height = OVERLAY_HEIGHT_CM
-    # Prototype geometry: roughly follows visible timescale width, but is capped
-    # so very long schedules remain manageable in Excel.
-    chart.width = max(OVERLAY_MIN_WIDTH_CM, min(OVERLAY_MAX_WIDTH_CM, period_count * OVERLAY_PERIOD_WIDTH_CM))
     chart.y_axis.scaling.min = 0
     chart.y_axis.scaling.max = 1
     chart.y_axis.majorUnit = 0.25
@@ -48,11 +43,11 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, la
     chart.display_blanks = "gap"
     chart.y_axis.majorGridlines = None
 
-    # LW-12.3/12.4: both layers must be transparent.  Excel charts have an
-    # outer chart area and a separate inner plot area; making only the outer
-    # layer transparent still hides schedule bars behind the plot rectangle.
-    transparent = GraphicalProperties(noFill=True, ln=LineProperties(noFill=True))
-    chart.graphical_properties = transparent
+    # Both chart and plot areas must be transparent so the underlying
+    # timescale bars remain visible through the traditional overlay.
+    chart.graphical_properties = GraphicalProperties(
+        noFill=True, ln=LineProperties(noFill=True)
+    )
     chart.plot_area.graphicalProperties = GraphicalProperties(
         noFill=True, ln=LineProperties(noFill=True)
     )
@@ -68,19 +63,47 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, la
         series.graphicalProperties.line.solidFill = color
         series.graphicalProperties.line.width = 19050
         series.marker.symbol = "circle"
-        series.marker.size = 5
+        series.marker.size = OVERLAY_MARKER_SIZE
         series.marker.graphicalProperties.solidFill = color
         series.marker.graphicalProperties.line.solidFill = color
+        # LW-12.3.1 experiment: show compact values at every marker.  We keep
+        # category/series names off so labels stay as short percentages only.
+        series.dLbls = DataLabelList(
+            showVal=True,
+            showCatName=False,
+            showSerName=False,
+            showLegendKey=False,
+            numFmt=OVERLAY_LABEL_FORMAT,
+            dLblPos="t",
+        )
     return chart
 
 
+def _responsive_anchor(*, first_col: int, last_col: int, top_row: int, bottom_row: int) -> TwoCellAnchor:
+    """Create an Excel 'Move and size with cells' anchor over the schedule grid.
+
+    AnchorMarker uses zero-based row/column indexes. The right/bottom marker is
+    placed one cell beyond the intended range so the chart spans the complete
+    Project Start -> Project Finish timescale and schedule height.
+    """
+    start = AnchorMarker(col=max(0, first_col - 1), row=max(0, top_row - 1))
+    end = AnchorMarker(col=max(first_col, last_col), row=max(top_row, bottom_row))
+    return TwoCellAnchor(editAs="twoCell", _from=start, to=end)
+
+
 def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bool]:
-    """LW-12.1-12.4: fixed all-marker overlays safe for outline grouping."""
+    """LW-12.3.1: responsive all-marker overlays following the timescale grid."""
     ensure_overlay_visible_actual_columns(workbook)
     data_ws = workbook[DATA_SHEET]
-    first_timescale_col = dataset.periods[0].column if dataset.periods else None
-    if first_timescale_col is None:
+    if not dataset.periods:
         return False, False
+
+    first_timescale_col = dataset.periods[0].column
+    last_weekly_col = dataset.periods[-1].column
+    schedule_last_row = max(
+        (row.row_number for row in dataset.rows),
+        default=max(dataset.header_row + 1, OVERLAY_TOP_ROW + 1),
+    )
 
     # Remove prior overlay charts when rebuilding the same workbook.
     for sheet_name in ("main", "main_monthly"):
@@ -89,29 +112,47 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
 
     weekly_count = max(1, len(dataset.periods))
     weekly_last = min(data_ws.max_row, weekly_count + 1)
-    monthly_count = sum(1 for r in range(2, data_ws.max_row + 1) if data_ws.cell(r, 4).value not in (None, ""))
+    monthly_count = sum(
+        1 for r in range(2, data_ws.max_row + 1)
+        if data_ws.cell(r, 4).value not in (None, "")
+    )
     monthly_last = max(2, monthly_count + 1)
-    # Anchor in the ungrouped header zone. openpyxl writes a oneCellAnchor,
-    # so the chart keeps a fixed extent; outline collapse/expand below row 5
-    # does not resize the overlay or move its timescale origin.
-    anchor = f"{get_column_letter(first_timescale_col)}{OVERLAY_ANCHOR_ROW}"
+    last_monthly_col = first_timescale_col + max(1, monthly_count) - 1
 
     weekly_added = False
     if "main" in workbook.sheetnames:
         chart = _overlay_chart(
-            data_ws=data_ws, date_col=1, plan_col=2, actual_col=16,
-            last_row=weekly_last, period_count=weekly_count,
+            data_ws=data_ws,
+            date_col=1,
+            plan_col=2,
+            actual_col=16,
+            last_row=weekly_last,
         )
-        workbook["main"].add_chart(chart, anchor)
+        chart.anchor = _responsive_anchor(
+            first_col=first_timescale_col,
+            last_col=last_weekly_col,
+            top_row=OVERLAY_TOP_ROW,
+            bottom_row=schedule_last_row,
+        )
+        workbook["main"].add_chart(chart)
         weekly_added = True
 
     monthly_added = False
     if "main_monthly" in workbook.sheetnames:
         chart = _overlay_chart(
-            data_ws=data_ws, date_col=4, plan_col=5, actual_col=17,
-            last_row=monthly_last, period_count=max(1, monthly_count),
+            data_ws=data_ws,
+            date_col=4,
+            plan_col=5,
+            actual_col=17,
+            last_row=monthly_last,
         )
-        workbook["main_monthly"].add_chart(chart, anchor)
+        chart.anchor = _responsive_anchor(
+            first_col=first_timescale_col,
+            last_col=last_monthly_col,
+            top_row=OVERLAY_TOP_ROW,
+            bottom_row=schedule_last_row,
+        )
+        workbook["main_monthly"].add_chart(chart)
         monthly_added = True
 
     return weekly_added, monthly_added
