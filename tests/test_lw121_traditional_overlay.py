@@ -99,9 +99,11 @@ def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     assert '_project_dates(dataset)' in text
     assert 'p.reporting_date >= start' in text
     assert 'p.reporting_date >= finish' in text
-    assert 'first_row=weekly_first' in text
+    assert 'weekly_chart_first = max(2, weekly_first - 1)' in text
+    assert 'first_row=weekly_chart_first' in text
     assert 'last_row=weekly_last' in text
-    assert 'first_row=monthly_first' in text
+    assert 'monthly_chart_first = max(2, monthly_first - 1)' in text
+    assert 'first_row=monthly_chart_first' in text
     assert 'last_row=monthly_last' in text
     assert 'label.value = "Cutoff Date"' in text
     assert 'value.value = initial_value' in text

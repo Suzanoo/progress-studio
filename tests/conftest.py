@@ -68,6 +68,7 @@ ACTIVE_FILES = {
     "test_lw114_dashboard_info_wbs_rollup.py",
     "test_lw121_traditional_overlay.py",
     "test_lw1311_overlay_rollback_hotfix.py",
+    "test_lw132_period_end_geometry.py",
     "test_ms_p120_activity_status_focus.py",
     "test_ms_rb721_dashboard_interactive_protection.py",
     "test_ms_rb72_lightweight_protection.py",

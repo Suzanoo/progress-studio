@@ -291,7 +291,12 @@ def _overlay_chart(
     chart.x_axis.title = None
     chart.x_axis.tickLblPos = "none"
     chart.legend = None
-    chart.display_blanks = "gap"
+    # Period-end geometry uses the existing reporting point immediately before
+    # the project window as a chart-only start anchor.  Plan may be blank in
+    # that pre-project cell, so Excel must render that one blank as zero.
+    # Cutoff-masked Actual remains #N/A outside its visible window and therefore
+    # still renders as a gap.
+    chart.display_blanks = "zero"
     chart.y_axis.majorGridlines = None
 
     # Both chart and plot areas must be transparent so the underlying
@@ -453,6 +458,26 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
     weekly_first, weekly_last, weekly_first_col, weekly_last_col = _weekly_project_window(dataset)
     monthly_first, monthly_last, monthly_first_col, monthly_last_col = _monthly_project_window(data_ws, dataset)
 
+    # LW-13.2 period-end geometry: the overlay chart spans exactly the visible
+    # schedule cells, while its series includes one already-existing reporting
+    # point immediately before the project window.  With N schedule cells and
+    # N+1 chart points, Excel places the first point on the left boundary and
+    # every reporting marker on the right boundary of its period.  No new
+    # helper table/columns or source-of-truth path is introduced.
+    weekly_chart_first = max(2, weekly_first - 1)
+    monthly_chart_first = max(2, monthly_first - 1)
+
+    # Actual Visible (P/Q) is part of the existing frozen overlay contract.
+    # Seed only the pre-project chart anchor as 0 so Actual can originate at
+    # (start, 0) without creating helper architecture.  All later cutoff masking
+    # formulas remain unchanged.
+    if weekly_chart_first < weekly_first:
+        data_ws.cell(weekly_chart_first, 16, 0)
+        data_ws.cell(weekly_chart_first, 16).number_format = "0.00%"
+    if monthly_chart_first < monthly_first:
+        data_ws.cell(monthly_chart_first, 17, 0)
+        data_ws.cell(monthly_chart_first, 17).number_format = "0.00%"
+
     weekly_added = False
     if "main" in workbook.sheetnames:
         chart = _overlay_chart(
@@ -461,7 +486,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             plan_col=2,
             actual_col=16,
             cutoff_col=18,
-            first_row=weekly_first,
+            first_row=weekly_chart_first,
             last_row=weekly_last,
             cutoff_label_format="dd/mm/yyyy",
         )
@@ -482,7 +507,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             plan_col=5,
             actual_col=17,
             cutoff_col=19,
-            first_row=monthly_first,
+            first_row=monthly_chart_first,
             last_row=monthly_last,
             cutoff_label_format="mmmm yyyy",
         )
