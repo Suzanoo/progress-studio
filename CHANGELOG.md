@@ -402,6 +402,11 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Activity Table parent WBS/Project rows now roll up Total from descendant Plan activities and calculate Plan/Actual Amount from that total.
 - Total is shown on both Plan and Actual rows for clearer two-row comparison.
 
+### LW-12.4.2 — Cutoff control cleanup + readable label
+- Removed legacy duplicate local cutoff controls/validations when rebuilding older workbooks; only the column M selector remains.
+- Deduplicated the current column M data validation when overlays are rebuilt repeatedly.
+- Increased the red cutoff chart label to bold 10 pt for readability on both weekly and monthly overlays.
+
 ### LW-12.4.1 — Traditional overlay cutoff polish
 - Fixed Weekly cutoff red line to use the last reporting point at or before the local cutoff.
 - Moved local cutoff inputs for `main` and `main_monthly` to column M.

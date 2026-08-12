@@ -2,6 +2,7 @@ from pathlib import Path
 from zipfile import ZipFile
 from datetime import datetime
 from openpyxl import Workbook
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from progress_studio.domain.main_dataset import MainDataset, MainPeriod, MainRow
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
@@ -129,6 +130,8 @@ def test_lw124_cutoff_red_line_has_date_label_contract():
     assert 'SeriesLabel(v="Cutoff")' in text
     assert 'CUTOFF_LABEL_BG = "FCE4D6"' in text
     assert 'spPr=_label_graphical_properties(CUTOFF_LABEL_BG, CUTOFF_LABEL_BORDER)' in text
+    assert 'CUTOFF_LABEL_FONT_SIZE = 1000' in text
+    assert 'txPr=_cutoff_label_text_properties()' in text
     assert 'chart.legend = None' in text
 
 
@@ -164,6 +167,8 @@ def test_lw124_cutoff_line_serializes_error_bar_and_label(tmp_path):
     assert '<showSerName val="1"/>' in chart_xml
     assert '<separator val=" "/>' in chart_xml
     assert 'val="FCE4D6"' in chart_xml
+    assert 'sz="1000"' in chart_xml
+    assert 'b="1"' in chart_xml
 
 
 
@@ -261,3 +266,60 @@ def test_lw124_local_cutoff_cells_are_unlocked_without_unprotecting_sheet():
     assert monthly['M19'].protection.locked is False
     assert main['N19'].protection.locked is True
     assert monthly['N19'].protection.locked is True
+
+
+def test_lw1241_removes_legacy_cutoff_dropdown_and_deduplicates_current_validation():
+    wb = Workbook()
+    main = wb.active
+    main.title = 'main'
+    wb.create_sheet('main_monthly')
+    dash = wb.create_sheet('Dashboard')
+    data = wb.create_sheet('Dashboard_Data')
+    dash['K5'] = datetime(2026, 7, 17)
+
+    headers = (
+        ('row type', 1), ('wbs', 2), ('description', 3), ('p/a', 4),
+        ('activity id', 5), ('outline level', 6), ('plan start', 7),
+        ('plan finish', 8), ('amount', 9),
+    )
+    periods = tuple(
+        MainPeriod(10 + i, f'W{i+1}', datetime(2026, 7, 3 + 7 * i))
+        for i in range(4)
+    )
+    activity = MainRow(
+        row_number=5, row_type='Activity', pa='P', wbs='1', description='A',
+        activity_id='A100', outline_level=1,
+        plan_start=datetime(2026, 7, 3), plan_finish=datetime(2026, 7, 24),
+        amount=100.0, percent_complete=None, period_values=(),
+    )
+    scurve = MainRow(
+        row_number=20, row_type='S-Curve', pa='P', wbs='', description='Plan',
+        activity_id='', outline_level=0, plan_start=None, plan_finish=None,
+        amount=None, percent_complete=None, period_values=(),
+    )
+    dataset = MainDataset('p.xlsx', 4, headers, periods, (activity, scurve))
+
+    weekly = [datetime(2026, 7, 3), datetime(2026, 7, 10), datetime(2026, 7, 17), datetime(2026, 7, 24)]
+    for r, dt in enumerate(weekly, 2):
+        data.cell(r, 1, dt); data.cell(r, 2, (r-1)/4); data.cell(r, 3, (r-1)/5); data.cell(r, 10, dt)
+    monthly_dates = [datetime(2026, 7, 31), datetime(2026, 8, 31)]
+    for r, dt in enumerate(monthly_dates, 2):
+        data.cell(r, 4, dt); data.cell(r, 5, .5 * (r-1)); data.cell(r, 6, .4 * (r-1)); data.cell(r, 11, dt)
+
+    # Simulate the old control: Description column C + Amount column I.
+    main['C19'] = 'Cutoff Date'
+    main['I19'] = datetime(2026, 7, 10)
+    old_validation = DataValidation(type='list', formula1='"x,y"')
+    main.add_data_validation(old_validation)
+    old_validation.add(main['I19'])
+
+    build_traditional_overlays(wb, dataset)
+    build_traditional_overlays(wb, dataset)
+
+    assert main['C19'].value is None
+    assert main['I19'].value is None
+    assert main['L19'].value == 'Cutoff Date'
+    assert main['M19'].value == datetime(2026, 7, 17)
+    target_validations = [dv for dv in main.data_validations.dataValidation if 'M19' in dv.cells]
+    assert len(target_validations) == 1
+    assert all('I19' not in dv.cells for dv in main.data_validations.dataValidation)

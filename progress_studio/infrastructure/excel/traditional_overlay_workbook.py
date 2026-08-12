@@ -27,6 +27,7 @@ CUTOFF_VALUE_FILL = "D9EAF7"
 OVERLAY_MARKER_SIZE = 7
 OVERLAY_LABEL_FORMAT = "0.0%"
 OVERLAY_LABEL_FONT_SIZE = 700  # DrawingML uses 1/100 pt -> 7 pt.
+CUTOFF_LABEL_FONT_SIZE = 1000  # 10 pt: cutoff must remain legible over the schedule.
 PLAN_LABEL_TEXT = "1F4E79"
 PLAN_LABEL_FILL = "DDEBF7"
 PLAN_LABEL_BORDER = "9CC2E5"
@@ -156,6 +157,46 @@ def _scurve_plan_row(dataset: MainDataset) -> int:
     return max((row.row_number for row in dataset.rows), default=dataset.header_row + 2) + 1
 
 
+def _remove_data_validations_for_cell(ws, coordinate: str) -> None:
+    """Remove stale single-cell validations that target ``coordinate``.
+
+    Rebuild can run on workbooks created by older LW revisions.  Those files
+    may already contain a local cutoff dropdown in the legacy Activity Data
+    columns, or an earlier validation on the current M cell.  Keeping both
+    produces duplicate cutoff selectors in Excel.
+    """
+    validations = list(ws.data_validations.dataValidation)
+    for validation in validations:
+        try:
+            targets_cell = coordinate in validation.cells
+        except TypeError:
+            targets_cell = False
+        if targets_cell:
+            ws.data_validations.dataValidation.remove(validation)
+
+
+def _clear_legacy_cutoff_control(ws, dataset: MainDataset, *, row: int) -> None:
+    """Remove the pre-LW-12.4.1 cutoff selector from its old columns."""
+    legacy_label_col = dataset.header_column("description") or 3
+    legacy_value_col = dataset.header_column("amount") or max(4, legacy_label_col + 1)
+    if (legacy_label_col, legacy_value_col) == (12, 13):
+        return
+
+    legacy_label = ws.cell(row, legacy_label_col)
+    if str(legacy_label.value or "").strip() != "Cutoff Date":
+        return
+
+    legacy_value = ws.cell(row, legacy_value_col)
+    _remove_data_validations_for_cell(ws, legacy_value.coordinate)
+    for cell in (legacy_label, legacy_value):
+        cell.value = None
+        cell.comment = None
+        cell.fill = PatternFill(fill_type=None)
+        cell.font = Font()
+        cell.alignment = Alignment()
+        cell.number_format = "General"
+
+
 def _add_cutoff_control(
     ws,
     dataset: MainDataset,
@@ -174,8 +215,10 @@ def _add_cutoff_control(
     """
     label_col = 12  # L
     value_col = 13  # M
+    _clear_legacy_cutoff_control(ws, dataset, row=row)
     label = ws.cell(row, label_col)
     value = ws.cell(row, value_col)
+    _remove_data_validations_for_cell(ws, value.coordinate)
     label.value = "Cutoff Date"
     label.fill = PatternFill("solid", fgColor=CUTOFF_LABEL_FILL)
     label.font = Font(color="FFFFFF", bold=True)
@@ -204,6 +247,13 @@ def _add_cutoff_control(
     ws.add_data_validation(validation)
     validation.add(value)
     return f"'{ws.title}'!${get_column_letter(value_col)}${row}"
+
+
+def _cutoff_label_text_properties() -> RichText:
+    """Use a larger bold red font for the cutoff tag than curve values."""
+    run = CharacterProperties(sz=CUTOFF_LABEL_FONT_SIZE, b=True, solidFill=CUTOFF_RED)
+    paragraph = Paragraph(pPr=ParagraphProperties(defRPr=run))
+    return RichText(bodyPr=RichTextProperties(), p=[paragraph])
 
 
 def _label_text_properties(text_color: str) -> RichText:
@@ -308,7 +358,7 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cu
             dLblPos="t",
             separator=" ",
             spPr=_label_graphical_properties(CUTOFF_LABEL_BG, CUTOFF_LABEL_BORDER),
-            txPr=_label_text_properties(CUTOFF_RED),
+            txPr=_cutoff_label_text_properties(),
         )
     return chart
 
