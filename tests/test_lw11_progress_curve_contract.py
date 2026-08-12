@@ -86,10 +86,16 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     dashboard = wb["Dashboard"]
     assert data["L1"].value == "Selected Actual Raw"
     assert "NA()" not in data["L2"].value
-    assert data["M1"].value == "Cutoff Plan Marker"
-    assert data["N1"].value == "Cutoff Actual Marker"
-    assert "Dashboard!$K$5" in data["M2"].value
+    assert data["M1"].value == "Marker Date"
+    assert data["N1"].value == "Cutoff Plan Marker"
+    assert data["O1"].value == "Cutoff Actual Marker"
+    assert data["M2"].value == "=Dashboard!$K$5"
     assert "Dashboard!$K$5" in data["N2"].value
+    assert "Dashboard!$K$5" in data["O2"].value
+    # Marker sources are physically one row only: Excel cannot create labels
+    # for the rest of the weekly/monthly range.
+    assert data["N3"].value is None
+    assert data["O3"].value is None
 
     assert "SUMIFS" in dashboard["B10"].value
     assert "Dashboard_Data!$H$2" in dashboard["B10"].value
@@ -104,6 +110,10 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     assert chart.x_axis.title is None
     assert chart.series[2].marker.symbol == "circle"
     assert chart.series[3].marker.symbol == "circle"
+    assert chart.series[2].cat.numRef.f.endswith("$M$2:$M$2")
+    assert chart.series[3].cat.numRef.f.endswith("$M$2:$M$2")
+    assert chart.series[2].val.numRef.f.endswith("$N$2")
+    assert chart.series[3].val.numRef.f.endswith("$O$2")
     assert chart.series[2].dLbls.showVal is True
     assert chart.series[3].dLbls.showVal is True
     assert chart.series[2].dLbls.position == "t"
@@ -115,5 +125,7 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     assert "+0.00%;-0.00%;0.00%" in dashboard["H10"].value
     assert dashboard["H10"].alignment.wrap_text is True
     # Coincident Plan/Actual cutoff markers collapse to one visible marker.
-    assert "ABS(L2-H2)" in data["N2"].value
+    assert "ABS(SUMIFS" in data["O2"].value
+    # KPI icons are restored in the live dashboard path as well.
+    assert len(dashboard._images) == 4
     wb.close()

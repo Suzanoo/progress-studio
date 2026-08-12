@@ -17,7 +17,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
     AMBER, BLUE, DATA_SHEET, DASHBOARD_SHEET, GREEN,
     LIGHT_AMBER, LIGHT_BLUE, LIGHT_GRAY, LIGHT_GREEN, LIGHT_RED,
     MUTED, NAVY, RED, WHITE, _FONT, _LAYOUT,
-    _merge_title, _remove, _solid, _style_box, _thin_border,
+    _merge_title, _remove, _solid, _style_box, _thin_border, _add_kpi_icon,
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
@@ -97,7 +97,7 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
         "Monthly Date", "Monthly Plan", "Monthly Actual",
         "Selected Date", "Selected Plan", "Selected Actual",
         "Weekly Cutoff", "Monthly Cutoff",
-        "Selected Actual Raw", "Cutoff Plan Marker", "Cutoff Actual Marker",
+        "Selected Actual Raw", "Marker Date", "Cutoff Plan Marker", "Cutoff Actual Marker",
     ])
 
     if "progress" not in workbook.sheetnames:
@@ -154,25 +154,31 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             f'=IF(G{row}="",NA(),IF(G{row}>Dashboard!$K$5,NA(),'
             f'IF(L{row}="",NA(),L{row})))',
         )
-        # Marker helpers contain exactly one visible point at the selected cutoff.
-        ws.cell(row, 13, f'=IF(G{row}=Dashboard!$K$5,H{row},NA())')
-        # Suppress the Actual marker when it lands exactly on the Plan marker;
-        # one point/label is clearer than two overlapping labels at the same value.
-        ws.cell(
-            row, 14,
-            f'=IF(AND(G{row}=Dashboard!$K$5,L{row}<>"",ABS(L{row}-H{row})>0.0000001),L{row},NA())',
-        )
+
+    # LW-11.3.5: marker helpers are a *single-point* range, not a full
+    # weekly/monthly series filled with #N/A. Excel can retain DataLabel objects
+    # for hidden/error points, which caused dozens of labels to appear. Keeping
+    # the marker source physically one row long guarantees one label per marker.
+    ws["M2"] = "=Dashboard!$K$5"
+    ws["N2"] = (
+        f'=IFERROR(SUMIFS($H$2:$H${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5),NA())'
+    )
+    ws["O2"] = (
+        f'=IFERROR(IF(ABS(SUMIFS($L$2:$L${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5)-'
+        f'SUMIFS($H$2:$H${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5))>0.0000001,'
+        f'SUMIFS($L$2:$L${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5),NA()),NA())'
+    )
 
     for row in range(2, ws.max_row + 1):
-        for col in (1, 4, 7, 10, 11):
+        for col in (1, 4, 7, 10, 11, 13):
             ws.cell(row, col).number_format = "dd/mm/yyyy"
-        for col in (2, 3, 5, 6, 8, 9, 12, 13, 14):
+        for col in (2, 3, 5, 6, 8, 9, 12, 14, 15):
             ws.cell(row, col).number_format = "0.00%"
     ws.column_dimensions["J"].hidden = True
     ws.column_dimensions["K"].hidden = True
     ws.sheet_state = "hidden"
 
-def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: str, color: str, number_format: str = "0.00%") -> None:
+def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: str, color: str, number_format: str = "0.00%", *, icon: str | None = None) -> None:
     ws.merge_cells(title_range)
     title_cell = ws[title_range.split(":")[0]]
     title_cell.value = title
@@ -191,6 +197,8 @@ def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: st
             for c in row:
                 c.fill = _solid(fill)
                 c.border = _thin_border()
+    if icon:
+        _add_kpi_icon(ws, value_range.split(":")[0], icon)
 
 
 def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset) -> None:
@@ -411,11 +419,11 @@ def build_live_dashboard(
     impact_formula = f'=ROUND(ABS(E10-B10)*{duration_days},0)&" Days"'
 
     _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
-    _kpi_box(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_formula, LIGHT_BLUE, BLUE)
-    _kpi_box(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_formula, LIGHT_GREEN, GREEN)
-    _kpi_box(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", schedule_formula, LIGHT_AMBER, AMBER, "General")
+    _kpi_box(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_formula, LIGHT_BLUE, BLUE, icon="planned")
+    _kpi_box(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_formula, LIGHT_GREEN, GREEN, icon="actual")
+    _kpi_box(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", schedule_formula, LIGHT_AMBER, AMBER, "General", icon="schedule")
     ws["H10"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    _kpi_box(ws, "K9:M9", "K10:M12", "TIME IMPACT", impact_formula, LIGHT_RED, RED, "General")
+    _kpi_box(ws, "K9:M9", "K10:M12", "TIME IMPACT", impact_formula, LIGHT_RED, RED, "General", icon="time_impact")
 
     _merge_title(ws, "B15:M15", "S-CURVE — PLAN VS ACTUAL", 11)
     _style_box(ws, "B16:M34", WHITE)
@@ -440,8 +448,19 @@ def build_live_dashboard(
 
     # Two marker-only series expose the current cutoff values without cluttering
     # every weekly/monthly point. Their helpers are #N/A everywhere except K5.
-    marker_data = Reference(data_ws, min_col=13, max_col=14, min_row=1, max_row=last_data_row)
+    marker_data = Reference(data_ws, min_col=14, max_col=15, min_row=1, max_row=2)
+    marker_cats = Reference(data_ws, min_col=13, min_row=2, max_row=2)
     chart.add_data(marker_data, titles_from_data=True)
+    # add_data() applies the chart's existing category range to new series in
+    # some Excel/openpyxl combinations. Force both marker series to the single
+    # dynamic cutoff date cell so the marker source remains one physical point.
+    for marker_series in chart.series[2:4]:
+        marker_series.cat = None
+    chart.set_categories(cats)
+    from openpyxl.chart.data_source import AxDataSource, NumRef
+    marker_cat_ref = f"'{DATA_SHEET}'!$M$2:$M$2"
+    for marker_series in chart.series[2:4]:
+        marker_series.cat = AxDataSource(numRef=NumRef(f=marker_cat_ref))
     for idx, color, label_position in ((2, BLUE, "t"), (3, GREEN, "b")):
         if len(chart.series) <= idx:
             continue
