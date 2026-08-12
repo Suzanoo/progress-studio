@@ -1,10 +1,13 @@
 from pathlib import Path
 from zipfile import ZipFile
+from datetime import datetime
 from openpyxl import Workbook
 
+from progress_studio.domain.main_dataset import MainDataset, MainPeriod, MainRow
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
     _overlay_chart,
     _responsive_anchor,
+    build_traditional_overlays,
 )
 
 
@@ -28,7 +31,8 @@ def test_overlay_uses_all_markers_and_cutoff_helpers():
     assert 'spPr=_label_graphical_properties' in text
     assert 'txPr=_label_text_properties' in text
     assert 'chart.x_axis.tickLblPos = "none"' in text
-    assert 'Dashboard!$K$5' in text
+    assert 'weekly_cutoff_ref: str' in text
+    assert 'monthly_cutoff_ref: str' in text
     assert 'date_col=1' in text and 'plan_col=2' in text and 'actual_col=16' in text
     assert 'date_col=4' in text and 'plan_col=5' in text and 'actual_col=17' in text
 
@@ -99,7 +103,124 @@ def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     assert 'first_row=monthly_first' in text
     assert 'last_row=monthly_last' in text
     assert 'label.value = "Cutoff Date"' in text
-    assert 'value.value = "=Dashboard!$K$5"' in text
-    assert 'Clear the cell to fall back to Dashboard Cutoff' in text
+    assert 'value.value = initial_value' in text
+    assert 'This cutoff belongs to this sheet only' in text
+    assert 'weekly_cutoff_ref=weekly_cutoff_ref' in text
+    assert 'monthly_cutoff_ref=monthly_cutoff_ref' in text
     assert 'list_col="J"' in text
     assert 'list_col="K"' in text
+
+
+
+def test_lw124_cutoff_red_line_has_date_label_contract():
+    text = Path('progress_studio/infrastructure/excel/traditional_overlay_workbook.py').read_text()
+    assert 'CUTOFF_RED = "C00000"' in text
+    assert 'cutoff_col=18' in text
+    assert 'cutoff_col=19' in text
+    assert 'ErrorBars(' in text
+    assert 'prstDash="dash"' in text
+    assert 'showCatName=True' in text
+    assert 'showSerName=True' in text
+    assert 'separator=" "' in text
+    assert 'SeriesLabel(v="Cutoff")' in text
+
+
+def test_lw124_cutoff_line_serializes_error_bar_and_label(tmp_path):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Dashboard_Data'
+    ws.append(['Date', 'Plan', 'Actual', 'Cutoff'])
+    for i in range(1, 5):
+        ws.append([i, i / 4, i / 5, 1 if i == 3 else '#N/A'])
+
+    chart = _overlay_chart(
+        data_ws=ws,
+        date_col=1,
+        plan_col=2,
+        actual_col=3,
+        cutoff_col=4,
+        first_row=2,
+        last_row=5,
+    )
+    ws.add_chart(chart, 'F2')
+    path = tmp_path / 'cutoff_line.xlsx'
+    wb.save(path)
+
+    with ZipFile(path) as zf:
+        chart_xml = zf.read('xl/charts/chart1.xml').decode('utf-8')
+
+    assert '<errBars>' in chart_xml
+    assert '<errBarType val="minus"/>' in chart_xml
+    assert 'val="C00000"' in chart_xml
+    assert '<a:prstDash val="dash"/>' in chart_xml
+    assert '<showCatName val="1"/>' in chart_xml
+    assert '<showSerName val="1"/>' in chart_xml
+    assert '<separator val=" "/>' in chart_xml
+
+
+
+def test_lw124_three_cutoffs_are_independent_and_overlay_helpers_are_local():
+    wb = Workbook()
+    main = wb.active
+    main.title = 'main'
+    monthly = wb.create_sheet('main_monthly')
+    dash = wb.create_sheet('Dashboard')
+    data = wb.create_sheet('Dashboard_Data')
+    dash['K5'] = datetime(2026, 7, 17)
+
+    headers = (
+        ('row type', 1), ('wbs', 2), ('description', 3), ('p/a', 4),
+        ('activity id', 5), ('outline level', 6), ('plan start', 7),
+        ('plan finish', 8), ('amount', 9),
+    )
+    periods = tuple(
+        MainPeriod(10 + i, f'W{i+1}', datetime(2026, 7, 3 + 7 * i))
+        for i in range(4)
+    )
+    activity = MainRow(
+        row_number=5, row_type='Activity', pa='P', wbs='1', description='A',
+        activity_id='A100', outline_level=1,
+        plan_start=datetime(2026, 7, 3), plan_finish=datetime(2026, 7, 24),
+        amount=100.0, percent_complete=None, period_values=(),
+    )
+    scurve = MainRow(
+        row_number=20, row_type='S-Curve', pa='P', wbs='', description='Plan',
+        activity_id='', outline_level=0, plan_start=None, plan_finish=None,
+        amount=None, percent_complete=None, period_values=(),
+    )
+    dataset = MainDataset('p.xlsx', 4, headers, periods, (activity, scurve))
+
+    # Weekly source A:C + weekly cutoff list J.
+    for col, value in enumerate(('Weekly Date', 'Weekly Plan', 'Weekly Actual'), 1):
+        data.cell(1, col, value)
+    weekly = [datetime(2026, 7, 3), datetime(2026, 7, 10), datetime(2026, 7, 17), datetime(2026, 7, 24)]
+    for r, dt in enumerate(weekly, 2):
+        data.cell(r, 1, dt); data.cell(r, 2, (r-1)/4); data.cell(r, 3, (r-1)/5); data.cell(r, 10, dt)
+
+    # Monthly source D:F + monthly cutoff list K.
+    for col, value in enumerate(('Monthly Date', 'Monthly Plan', 'Monthly Actual'), 4):
+        data.cell(1, col, value)
+    monthly_dates = [datetime(2026, 7, 31), datetime(2026, 8, 31)]
+    for r, dt in enumerate(monthly_dates, 2):
+        data.cell(r, 4, dt); data.cell(r, 5, .5 * (r-1)); data.cell(r, 6, .4 * (r-1)); data.cell(r, 11, dt)
+
+    build_traditional_overlays(wb, dataset)
+
+    # Control row is immediately above the S-Curve Plan row; Amount is col I.
+    assert main['I19'].value == datetime(2026, 7, 17)
+    # Monthly owns a different value/list and does not bind to Dashboard.
+    assert monthly['I19'].value == datetime(2026, 8, 31)
+    assert dash['K5'].value == datetime(2026, 7, 17)
+
+    assert "'main'!$I$19" in data['P2'].value
+    assert "'main_monthly'!$I$19" in data['Q2'].value
+    assert 'Dashboard!$K$5' not in data['P2'].value
+    assert 'Dashboard!$K$5' not in data['Q2'].value
+    assert "'main'!$I$19" in data['R2'].value
+    assert "'main_monthly'!$I$19" in data['S2'].value
+
+    # Simulate independent user edits: no formula links exist between controls.
+    main['I19'] = datetime(2026, 7, 10)
+    monthly['I19'] = datetime(2026, 7, 31)
+    assert dash['K5'].value == datetime(2026, 7, 17)
+    assert main['I19'].value != monthly['I19'].value

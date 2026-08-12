@@ -1,3 +1,12 @@
+## LW-12.4 — Independent Cutoff Renderers
+
+- Replaced Dashboard-follow/override cutoff behavior with three independent cutoff states: Dashboard, `main`, and `main_monthly`.
+- `main` Weekly Actual and cutoff line now read only the local Weekly cutoff selector.
+- `main_monthly` Monthly Actual and cutoff line now read only the local Monthly cutoff selector.
+- Kept Dashboard `K5` fully independent; changing any one view no longer mutates the other two cutoff values.
+- Added a red dashed cutoff line to both traditional overlays using a chart error-bar series, with a `Cutoff <date>` label at the top.
+- Preserved all-marker Plan/Actual curves, tinted value labels, transparent Chart/Plot areas, project-bounded horizontal span, and outline-responsive two-cell geometry.
+
 ## LW-12.3.3 — Project-Bounded Overlay + Local Cutoff
 
 - Raised the responsive overlay bottom anchor to the boundary immediately above the S-Curve Plan helper row.

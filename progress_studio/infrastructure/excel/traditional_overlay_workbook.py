@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.series import SeriesLabel
 from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.error_bar import ErrorBars
 from openpyxl.chart.text import RichText
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
@@ -30,32 +33,53 @@ PLAN_LABEL_BORDER = "9CC2E5"
 ACTUAL_LABEL_TEXT = "385723"
 ACTUAL_LABEL_FILL = "E2F0D9"
 ACTUAL_LABEL_BORDER = "A9D18E"
+CUTOFF_RED = "C00000"
 
 
 def ensure_overlay_visible_actual_columns(
     workbook,
     *,
-    weekly_cutoff_ref: str = "Dashboard!$K$5",
-    monthly_cutoff_ref: str = "Dashboard!$K$5",
+    weekly_cutoff_ref: str,
+    monthly_cutoff_ref: str,
 ) -> None:
-    """Build fixed Weekly/Monthly Actual-visible helpers for overlay charts.
+    """Build independent cutoff-aware Actual helpers and cutoff-line helpers.
 
-    Each overlay may expose a local cutoff selector.  Its cell initially follows
-    Dashboard!K5, so existing global-cutoff behavior is preserved.  If the user
-    chooses a local date, only that sheet's overlay is overridden; clearing the
-    local selector falls back to the Dashboard cutoff again.
+    Dashboard, main, and main_monthly deliberately own separate cutoff state.
+    The traditional overlays never read Dashboard!K5 after their initial values
+    are seeded; each view masks Actual and renders its red cutoff line from its
+    own local cutoff cell.
     """
     if DATA_SHEET not in workbook.sheetnames:
         raise ValueError("Dashboard_Data is required before building traditional overlays.")
     ws = workbook[DATA_SHEET]
     ws["P1"] = "Weekly Actual Visible"
     ws["Q1"] = "Monthly Actual Visible"
+    ws["R1"] = "Weekly Cutoff Line"
+    ws["S1"] = "Monthly Cutoff Line"
     for row in range(2, ws.max_row + 1):
+        next_row = row + 1
         ws.cell(row, 16, f'=IF(A{row}="",NA(),IF(A{row}>{weekly_cutoff_ref},NA(),IF(C{row}="",NA(),C{row})))')
         ws.cell(row, 17, f'=IF(D{row}="",NA(),IF(D{row}>{monthly_cutoff_ref},NA(),IF(F{row}="",NA(),F{row})))')
+        # A single 1.0 point plus a full-height negative Y error bar produces
+        # a vertical cutoff line without VBA or movable worksheet shapes.
+        ws.cell(row, 18, f'=IF(A{row}={weekly_cutoff_ref},1,NA())')
+        ws.cell(
+            row, 19,
+            f'=IF(D{row}="",NA(),IF(AND(D{row}<={monthly_cutoff_ref},OR(D{next_row}="",D{next_row}>{monthly_cutoff_ref})),1,NA()))'
+        )
         ws.cell(row, 16).number_format = "0.00%"
         ws.cell(row, 17).number_format = "0.00%"
+        ws.cell(row, 18).number_format = "0%"
+        ws.cell(row, 19).number_format = "0%"
 
+
+
+def _as_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
 
 def _project_dates(dataset: MainDataset):
     rows = dataset.activities or tuple(
@@ -137,13 +161,9 @@ def _add_cutoff_control(
     row: int,
     list_col: str,
     list_last_row: int,
+    initial_value,
 ) -> str:
-    """Add a compact local cutoff selector in the spacer row above S-Curve helpers.
-
-    The control lives in the Activity Data area (outside the overlay's horizontal
-    footprint), so the chart never blocks access to the dropdown.  It follows the
-    Dashboard cutoff initially; selecting a date creates a local override.
-    """
+    """Add a compact independent cutoff selector outside the overlay footprint."""
     label_col = dataset.header_column("description") or 3
     value_col = dataset.header_column("amount") or max(4, label_col + 1)
     label = ws.cell(row, label_col)
@@ -152,23 +172,22 @@ def _add_cutoff_control(
     label.fill = PatternFill("solid", fgColor=CUTOFF_LABEL_FILL)
     label.font = Font(color="FFFFFF", bold=True)
     label.alignment = Alignment(horizontal="right", vertical="center")
-    value.value = "=Dashboard!$K$5"
+    value.value = initial_value
     value.number_format = "dd/mm/yyyy"
     value.fill = PatternFill("solid", fgColor=CUTOFF_VALUE_FILL)
     value.font = Font(color="1F1F1F", bold=True)
     value.alignment = Alignment(horizontal="center", vertical="center")
     value.comment = Comment(
-        "This selector follows Dashboard Cutoff by default. Choose a date to override this sheet's overlay. "
-        "Clear the cell to fall back to Dashboard Cutoff.",
+        "This cutoff belongs to this sheet only. Press F9 or Save after changing it to recalculate the overlay.",
         "Progress Studio",
     )
     validation = DataValidation(
         type="list",
         formula1=f'=INDIRECT("{DATA_SHEET}!${list_col}$2:${list_col}${max(2, list_last_row)}")',
-        allow_blank=True,
+        allow_blank=False,
     )
     validation.promptTitle = "Cutoff Date"
-    validation.prompt = "Choose a reporting date. Clear this cell to follow Dashboard Cutoff."
+    validation.prompt = "Choose this sheet's reporting cutoff date."
     validation.errorTitle = "Invalid Cutoff"
     validation.error = "Select a date from the list."
     validation.errorStyle = "stop"
@@ -177,6 +196,7 @@ def _add_cutoff_control(
     ws.add_data_validation(validation)
     validation.add(value)
     return f"'{ws.title}'!${get_column_letter(value_col)}${row}"
+
 
 def _label_text_properties(text_color: str) -> RichText:
     """Compact 7 pt series-tinted label text for a dense traditional overlay."""
@@ -193,7 +213,7 @@ def _label_graphical_properties(fill_color: str, border_color: str) -> Graphical
     return props
 
 
-def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, first_row: int, last_row: int) -> LineChart:
+def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cutoff_col: int | None = None, first_row: int, last_row: int) -> LineChart:
     chart = LineChart()
     chart.y_axis.scaling.min = 0
     chart.y_axis.scaling.max = 1
@@ -251,6 +271,36 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, fi
             spPr=_label_graphical_properties(fill_color, border_color),
             txPr=_label_text_properties(text_color),
         )
+
+    if cutoff_col is not None:
+        cutoff = Reference(data_ws, min_col=cutoff_col, max_col=cutoff_col, min_row=first_row, max_row=last_row)
+        chart.add_data(cutoff, titles_from_data=False)
+        cutoff_series = chart.series[2]
+        cutoff_series.tx = SeriesLabel(v="Cutoff")
+        cutoff_series.graphicalProperties.line.noFill = True
+        cutoff_series.marker.symbol = "none"
+        cutoff_series.errBars = ErrorBars(
+            errDir="y",
+            errBarType="minus",
+            errValType="fixedVal",
+            noEndCap=True,
+            val=1,
+            spPr=GraphicalProperties(
+                ln=LineProperties(solidFill=CUTOFF_RED, w=19050, prstDash="dash")
+            ),
+        )
+        # Only the single non-#N/A cutoff point receives a label.  Category
+        # name contributes the reporting date, so the visible tag reads
+        # "Cutoff <date>" without worksheet shapes or VBA.
+        cutoff_series.dLbls = DataLabelList(
+            showVal=False,
+            showCatName=True,
+            showSerName=True,
+            showLegendKey=False,
+            dLblPos="t",
+            separator=" ",
+            txPr=_label_text_properties(CUTOFF_RED),
+        )
     return chart
 
 
@@ -267,7 +317,7 @@ def _responsive_anchor(*, first_col: int, last_col: int, top_row: int, bottom_ro
 
 
 def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bool]:
-    """LW-12.3.3: project-bounded overlays with bottom anchor above S-Curve helpers."""
+    """LW-12.4: independent-cutoff, project-bounded responsive overlays."""
     if not dataset.periods:
         return False, False
     if DATA_SHEET not in workbook.sheetnames:
@@ -284,23 +334,41 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
         1 + sum(1 for r in range(2, data_ws.max_row + 1) if data_ws.cell(r, 11).value not in (None, "")),
     )
 
-    weekly_cutoff_ref = "Dashboard!$K$5"
-    monthly_cutoff_ref = "Dashboard!$K$5"
+    dashboard_cutoff = workbook["Dashboard"]["K5"].value if "Dashboard" in workbook.sheetnames else None
+    weekly_dates = [data_ws.cell(r, 10).value for r in range(2, weekly_list_last + 1) if data_ws.cell(r, 10).value not in (None, "")]
+    monthly_dates = [data_ws.cell(r, 11).value for r in range(2, monthly_list_last + 1) if data_ws.cell(r, 11).value not in (None, "")]
+    dashboard_day = _as_date(dashboard_cutoff)
+    weekly_initial = next(
+        (d for d in weekly_dates if _as_date(d) == dashboard_day),
+        weekly_dates[-1] if weekly_dates else dashboard_cutoff,
+    )
+    eligible_monthly = [
+        d for d in monthly_dates
+        if dashboard_day is not None and _as_date(d) is not None and _as_date(d) <= dashboard_day
+    ]
+    monthly_initial = eligible_monthly[-1] if eligible_monthly else (monthly_dates[-1] if monthly_dates else dashboard_cutoff)
+
+    weekly_cutoff_ref = None
+    monthly_cutoff_ref = None
     if "main" in workbook.sheetnames:
         weekly_cutoff_ref = _add_cutoff_control(
-            workbook["main"], dataset, row=control_row, list_col="J", list_last_row=weekly_list_last
+            workbook["main"], dataset, row=control_row, list_col="J", list_last_row=weekly_list_last,
+            initial_value=weekly_initial,
         )
     if "main_monthly" in workbook.sheetnames:
         monthly_cutoff_ref = _add_cutoff_control(
-            workbook["main_monthly"], dataset, row=control_row, list_col="K", list_last_row=monthly_list_last
+            workbook["main_monthly"], dataset, row=control_row, list_col="K", list_last_row=monthly_list_last,
+            initial_value=monthly_initial,
         )
 
-    weekly_effective = f'IF({weekly_cutoff_ref}="",Dashboard!$K$5,{weekly_cutoff_ref})'
-    monthly_effective = f'IF({monthly_cutoff_ref}="",Dashboard!$K$5,{monthly_cutoff_ref})'
+    if weekly_cutoff_ref is None:
+        weekly_cutoff_ref = "Dashboard!$K$5"
+    if monthly_cutoff_ref is None:
+        monthly_cutoff_ref = "Dashboard!$K$5"
     ensure_overlay_visible_actual_columns(
         workbook,
-        weekly_cutoff_ref=weekly_effective,
-        monthly_cutoff_ref=monthly_effective,
+        weekly_cutoff_ref=weekly_cutoff_ref,
+        monthly_cutoff_ref=monthly_cutoff_ref,
     )
 
     # Remove prior overlay charts when rebuilding the same workbook.
@@ -318,6 +386,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             date_col=1,
             plan_col=2,
             actual_col=16,
+            cutoff_col=18,
             first_row=weekly_first,
             last_row=weekly_last,
         )
@@ -337,6 +406,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             date_col=4,
             plan_col=5,
             actual_col=17,
+            cutoff_col=19,
             first_row=monthly_first,
             last_row=monthly_last,
         )
