@@ -127,7 +127,16 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             ws.cell(row, 11, reporting)
 
         # LW-11.3: renderer-only selection. progress already owns cutoff.
-        ws.cell(row, 7, f'=IF(Dashboard!$G$5="Weekly",A{row},D{row})')
+        # Do not let an empty Monthly source cell become Excel serial date 0.
+        # A direct IF(..., Dn) over a blank Dn is evaluated as 0 by Excel; when
+        # the chart auto-treats dates as a date axis this stretches the axis back
+        # to 1899 and squeezes all real monthly points into a vertical line.
+        ws.cell(
+            row, 7,
+            f'=IF(Dashboard!$G$5="Weekly",'
+            f'IF(A{row}="","",A{row}),'
+            f'IF(D{row}="","",D{row}))',
+        )
         ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
         ws.cell(row, 9, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",C{row},F{row}))')
 
@@ -388,6 +397,7 @@ def build_live_dashboard(
     chart.y_axis.scaling.max = 1
     chart.y_axis.numFmt = "0%"
     chart.legend.position = "t"
+    chart.display_blanks = "gap"
     data = Reference(data_ws, min_col=8, max_col=9, min_row=1, max_row=last_data_row)
     cats = Reference(data_ws, min_col=7, min_row=2, max_row=last_data_row)
     chart.add_data(data, titles_from_data=True)

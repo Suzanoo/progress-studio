@@ -97,7 +97,7 @@ def test_rb72_visibility_keeps_public_data_easy_to_unhide(tmp_path) -> None:
     try:
         assert wb["progress"].sheet_state == "hidden"
         assert wb["progress_table"].sheet_state == "hidden"
-        assert wb["Dashboard_Data"].sheet_state == "veryHidden"
+        assert wb["Dashboard_Data"].sheet_state == "hidden"
     finally:
         wb.close()
 

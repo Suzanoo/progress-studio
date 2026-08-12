@@ -69,4 +69,7 @@ def test_lw11_dashboard_data_is_progress_renderer(tmp_path: Path) -> None:
     assert data["F2"].value == "='progress'!C5"
     # Dashboard selector does not duplicate cutoff behavior.
     assert "Dashboard!$K$5" not in data["I2"].value
+    # Empty monthly slots must stay blank instead of becoming Excel serial date 0.
+    assert 'IF(D6="","",D6)' in data["G6"].value
+    assert data.sheet_state == "hidden"
     wb.close()

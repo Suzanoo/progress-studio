@@ -13,6 +13,7 @@ VISIBLE_SHEETS = (
 HIDDEN_SHEETS = (
     "progress",
     "progress_table",
+    "Dashboard_Data",
 )
 
 
@@ -23,7 +24,7 @@ def apply_final_sheet_visibility(workbook) -> tuple[tuple[str, ...], tuple[str, 
       main, main_monthly, Payment Input, Payment, Dashboard
 
     Normal hidden:
-      progress, progress_table
+      progress, progress_table, Dashboard_Data
 
     Very hidden:
       every other existing support/internal sheet
