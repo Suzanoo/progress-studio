@@ -501,6 +501,13 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
 
     monthly_added = False
     if "main_monthly" in workbook.sheetnames:
+        # Excel builds a category-name data label from the source category cell.
+        # DataLabelList.numFmt alone does not control the displayed category date,
+        # so format the existing monthly category cells themselves as Month Year.
+        # This changes display only; values/formulas/source columns stay untouched.
+        for row in range(monthly_chart_first, monthly_last + 1):
+            data_ws.cell(row, 4).number_format = "mmmm yyyy"
+
         chart = _overlay_chart(
             data_ws=data_ws,
             date_col=4,

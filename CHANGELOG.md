@@ -1,3 +1,9 @@
+## LW-13.2.1 — Monthly Cutoff Label Fix
+
+- Monthly red-line label now displays `Cutoff Month YYYY` by formatting the existing monthly category source cells as `mmmm yyyy`.
+- Weekly cutoff label behavior is unchanged.
+- No chart source columns, formulas, geometry, or data-flow architecture changed.
+
 ## LW-12.4 — Independent Cutoff Renderers
 
 - Replaced Dashboard-follow/override cutoff behavior with three independent cutoff states: Dashboard, `main`, and `main_monthly`.
