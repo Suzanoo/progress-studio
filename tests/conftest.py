@@ -64,6 +64,7 @@ ACTIVE_FILES = {
     "test_lw10_0_2_dashboard_monthly_correctness.py",
     "test_lw10_0_3_curve_source_status.py",
     "test_lw11_progress_curve_contract.py",
+    "test_lw114_dashboard_info_wbs_rollup.py",
     "test_ms_p120_activity_status_focus.py",
     "test_ms_rb721_dashboard_interactive_protection.py",
     "test_ms_rb72_lightweight_protection.py",

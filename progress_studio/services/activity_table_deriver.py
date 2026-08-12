@@ -39,6 +39,37 @@ def _outline_level(row: MainRow) -> int:
     return min(max(len(parts), 1), 7)
 
 
+
+
+def _rollup_total(source_rows: list[MainRow], index: int, row: MainRow) -> float | None:
+    """Return budget total for an Activity/WBS/Project Summary row.
+
+    Activity totals come directly from the row Amount. Parent totals are the
+    sum of descendant Plan activities until the outline climbs back to the
+    parent's level. This keeps Dashboard roll-ups independent of whether a
+    parent Amount cell happens to be populated in ``main``.
+    """
+    kind = row.row_type.strip().lower()
+    if kind == "activity":
+        return float(row.amount) if row.amount is not None else None
+
+    parent_level = _outline_level(row)
+    total = 0.0
+    found = False
+    for candidate in source_rows[index + 1:]:
+        if candidate.pa.strip().upper() != "P":
+            continue
+        candidate_kind = candidate.row_type.strip().lower()
+        if candidate_kind not in {"project summary", "wbs", "activity"}:
+            continue
+        candidate_level = _outline_level(candidate)
+        if candidate_level <= parent_level:
+            break
+        if candidate_kind == "activity" and candidate.amount is not None:
+            total += float(candidate.amount)
+            found = True
+    return total if found else (float(row.amount) if row.amount is not None else None)
+
 def _status(plan_progress: float, actual_progress: float) -> str:
     if plan_progress <= 0 and actual_progress <= 0:
         return "Not Due"
@@ -94,7 +125,7 @@ class ActivityTableDeriver:
 
             plan_progress = _progress(dataset, plan, cutoff)
             actual_progress = _progress(dataset, actual, cutoff)
-            total = float(plan.amount) if plan.amount is not None else None
+            total = _rollup_total(source_rows, index, plan)
             plan_amount = total * plan_progress if total is not None else None
             actual_amount = total * actual_progress if total is not None else None
             variance = actual_progress - plan_progress
@@ -129,7 +160,7 @@ class ActivityTableDeriver:
                     activity="",
                     activity_id=activity_id,
                     type_label="Actual",
-                    total=None,
+                    total=total,
                     amount=actual_amount,
                     progress=actual_progress,
                     variance=variance,

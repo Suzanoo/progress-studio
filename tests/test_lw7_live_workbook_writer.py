@@ -65,7 +65,9 @@ def test_lw7_live_progress_rebuild_is_one_pass_output_contract(tmp_path: Path) -
         assert "progress_table" not in wb.sheetnames
         assert wb["Payment Input"]["A1"].value == "KEEP"
         assert wb["Payment"]["A1"].value == "KEEP_PAYMENT"
-        assert wb["Dashboard"]["C6"].value.startswith("Live curve: progress")
+        assert wb["Dashboard"]["B6"].value == "Project Start"
+        assert wb["Dashboard"]["F6"].value == "Project Finish"
+        assert wb["Dashboard"]["J6"].value == "Project Value"
     finally:
         wb.close()
 

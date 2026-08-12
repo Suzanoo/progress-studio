@@ -45,7 +45,9 @@ def test_lw5_live_dashboard_renders_with_progress_contract_without_progress_tabl
     assert "Dashboard_Data" in wb.sheetnames
     assert "progress" in wb.sheetnames
     assert "progress_table" not in wb.sheetnames
-    assert wb["Dashboard"]["C6"].value.startswith("Live curve: progress")
+    assert wb["Dashboard"]["B6"].value == "Project Start"
+    assert wb["Dashboard"]["F6"].value == "Project Finish"
+    assert wb["Dashboard"]["J6"].value == "Project Value"
     assert wb["Dashboard"]["C39"].value == "Concrete"
     assert wb["Dashboard"]["F39"].value == "Plan"
     assert wb["Dashboard"]["F40"].value == "Actual"

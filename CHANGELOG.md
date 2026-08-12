@@ -361,3 +361,9 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Kept Snapshot rebuild behavior unchanged.
 - Added an explicit guard so Live mode cannot call the Snapshot engine before the Live engine exists.
 - Added LW-0 regression tests and froze obsolete pre-LW UI contracts without deleting them.
+
+## LW-11.4 — Dashboard Information + WBS Rollup
+- Added Project Start, Project Finish, and Project Value to Dashboard Project Information while preserving View at G5 and Cutoff Date at K5.
+- Added chart axis titles: Date and Progress (%).
+- Activity Table parent WBS/Project rows now roll up Total from descendant Plan activities and calculate Plan/Actual Amount from that total.
+- Total is shown on both Plan and Actual rows for clearer two-row comparison.

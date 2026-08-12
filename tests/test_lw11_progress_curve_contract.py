@@ -106,8 +106,8 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     chart = dashboard._charts[0]
     assert len(chart.series) == 4
     assert chart.y_axis.majorUnit == 0.25
-    assert chart.y_axis.title is None
-    assert chart.x_axis.title is None
+    assert chart.y_axis.title is not None
+    assert chart.x_axis.title is not None
     assert chart.series[2].marker.symbol == "circle"
     assert chart.series[3].marker.symbol == "circle"
     assert chart.series[2].cat.numRef.f.endswith("$M$2:$M$2")

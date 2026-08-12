@@ -241,7 +241,7 @@ def _write_activity_section(ws, model: ActivityTableModel, dataset: MainDataset)
         ws.merge_cells(f"F{row}:G{row}")
         ws[f"F{row}"] = item.type_label
         ws.merge_cells(f"H{row}:I{row}")
-        ws[f"H{row}"] = item.total if is_plan else None
+        ws[f"H{row}"] = item.total
         ws.merge_cells(f"J{row}:K{row}")
         ws.merge_cells(f"L{row}:M{row}")
         ws.merge_cells(f"N{row}:O{row}")
@@ -357,6 +357,12 @@ def build_live_dashboard(
 
     _merge_title(ws, "B4:M4", "PROJECT INFORMATION", 11)
     _style_box(ws, "B5:M6", LIGHT_GRAY)
+    start_date, finish_date = _project_dates(dataset)
+    project_value = float(cache.total_amount or 0.0)
+
+    # Keep the established View/Cutoff control cells stable (G5/K5). Extra
+    # project information lives on row 6 so older workbook formulas and user
+    # muscle-memory do not move just because the information panel grew.
     ws["B5"] = "Project"
     ws.merge_cells("C5:D5")
     ws["C5"] = project_name or dataset.workbook_name
@@ -367,6 +373,19 @@ def build_live_dashboard(
     ws.merge_cells("K5:M5")
     ws["K5"] = cutoff_date
     ws["K5"].number_format = "dd/mm/yyyy"
+
+    ws["B6"] = "Project Start"
+    ws.merge_cells("C6:D6")
+    ws["C6"] = start_date
+    ws["C6"].number_format = "dd/mm/yyyy"
+    ws["F6"] = "Project Finish"
+    ws.merge_cells("G6:H6")
+    ws["G6"] = finish_date
+    ws["G6"].number_format = "dd/mm/yyyy"
+    ws["J6"] = "Project Value"
+    ws.merge_cells("K6:M6")
+    ws["K6"] = project_value
+    ws["K6"].number_format = "#,##0.00"
 
     view_validation = DataValidation(type="list", formula1='"Weekly,Monthly"', allow_blank=False)
     ws.add_data_validation(view_validation)
@@ -386,15 +405,6 @@ def build_live_dashboard(
     ws.add_data_validation(cutoff_validation)
     cutoff_validation.add(ws["K5"])
 
-    ws["B6"] = "Data source"
-    ws.merge_cells("C6:H6")
-    ws["C6"] = "Live curve: progress • Monthly: last progress point/month"
-    ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
-    ws["J6"] = "Recalc"
-    ws.merge_cells("K6:M6")
-    ws["K6"] = "Manual during edit • calculate on Save/F9"
-    ws["K6"].font = Font(name=_FONT, size=9, color=MUTED)
-
     # KPI formulas read only the tiny selected-view cache.
     last_data_row = max(2, data_ws.max_row)
     # The cutoff dropdown contains exact reporting dates, so KPI values can use
@@ -408,7 +418,6 @@ def build_live_dashboard(
         f'=IFERROR(SUMIFS(Dashboard_Data!$L$2:$L${last_data_row},'
         f'Dashboard_Data!$G$2:$G${last_data_row},$K$5),0)'
     )
-    start_date, finish_date = _project_dates(dataset)
     duration_days = max(0, (finish_date - start_date).days) if start_date and finish_date else 0
     schedule_formula = (
         '=IF(ROUND(E10-B10,4)=0,"ON SCHEDULE"&CHAR(10)&"0.00%",'
@@ -478,8 +487,8 @@ def build_live_dashboard(
     # Minimal axes: percent scale is self-explanatory; dates remain the only
     # horizontal context. Excel will thin date labels automatically as needed.
     chart.y_axis.majorUnit = 0.25
-    chart.y_axis.title = None
-    chart.x_axis.title = None
+    chart.y_axis.title = "Progress (%)"
+    chart.x_axis.title = "Date"
     chart.x_axis.number_format = "mmm-yy"
     chart.x_axis.majorTimeUnit = "days"
     ws.add_chart(chart, "B16")
