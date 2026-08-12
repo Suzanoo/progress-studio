@@ -1,3 +1,11 @@
+## LW-12.3.3 — Project-Bounded Overlay + Local Cutoff
+
+- Raised the responsive overlay bottom anchor to the boundary immediately above the S-Curve Plan helper row.
+- Restricted Weekly and Monthly overlay series to reporting periods that cover Project Start through Project Finish instead of plotting margin periods before/after the project.
+- Added compact Cutoff Date selectors to `main` and `main_monthly` in the Activity Data spacer row outside the chart footprint.
+- Each local cutoff follows Dashboard cutoff initially; choosing a local date overrides only that sheet overlay, while clearing the cell falls back to Dashboard cutoff.
+- Preserved all-marker size 7, all value labels, tinted label backgrounds, transparent Chart/Plot areas, 0–100% Y scale, and outline-responsive two-cell geometry.
+
 ## LW-12.3.2 — Overlay Label Readability
 
 - Kept value labels on every Weekly and Monthly Plan/Actual marker.

@@ -38,8 +38,9 @@ def test_overlay_lw1231_responsive_geometry_and_transparency_contract():
     assert 'OVERLAY_TOP_ROW = 5' in text
     assert 'TwoCellAnchor' in text
     assert 'editAs="twoCell"' in text
-    assert 'last_weekly_col = dataset.periods[-1].column' in text
-    assert 'schedule_last_row = max(' in text
+    assert '_weekly_project_window(dataset)' in text
+    assert '_scurve_plan_row(dataset)' in text
+    assert 'scurve_plan_row - 1' in text
     assert 'chart.plot_area.graphicalProperties' in text
     assert 'LineProperties(noFill=True)' in text
 
@@ -57,6 +58,7 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
         date_col=1,
         plan_col=2,
         actual_col=3,
+        first_row=2,
         last_row=5,
     )
     chart.anchor = _responsive_anchor(first_col=4, last_col=7, top_row=5, bottom_row=20)
@@ -85,3 +87,19 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
     assert 'val="1F4E79"' in chart_xml
     assert 'val="385723"' in chart_xml
     assert 'sz="700"' in chart_xml
+
+
+def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
+    text = Path('progress_studio/infrastructure/excel/traditional_overlay_workbook.py').read_text()
+    assert '_project_dates(dataset)' in text
+    assert 'p.reporting_date >= start' in text
+    assert 'p.reporting_date >= finish' in text
+    assert 'first_row=weekly_first' in text
+    assert 'last_row=weekly_last' in text
+    assert 'first_row=monthly_first' in text
+    assert 'last_row=monthly_last' in text
+    assert 'label.value = "Cutoff Date"' in text
+    assert 'value.value = "=Dashboard!$K$5"' in text
+    assert 'Clear the cell to fall back to Dashboard Cutoff' in text
+    assert 'list_col="J"' in text
+    assert 'list_col="K"' in text

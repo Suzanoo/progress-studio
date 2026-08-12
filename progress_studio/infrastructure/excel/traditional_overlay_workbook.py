@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.series import SeriesLabel
 from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.text import RichText
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
 from openpyxl.drawing.text import CharacterProperties, Paragraph, ParagraphProperties, RichTextProperties
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+from openpyxl.comments import Comment
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
 
 from progress_studio.domain.main_dataset import MainDataset
 from progress_studio.infrastructure.excel.dashboard_workbook import BLUE, GREEN, DATA_SHEET
@@ -14,6 +19,8 @@ from progress_studio.infrastructure.excel.dashboard_workbook import BLUE, GREEN,
 WEEKLY_OVERLAY_NAME = "PS_CURVE_OVERLAY_WEEKLY"
 MONTHLY_OVERLAY_NAME = "PS_CURVE_OVERLAY_MONTHLY"
 OVERLAY_TOP_ROW = 5
+CUTOFF_LABEL_FILL = "1F4E78"
+CUTOFF_VALUE_FILL = "D9EAF7"
 OVERLAY_MARKER_SIZE = 7
 OVERLAY_LABEL_FORMAT = "0.0%"
 OVERLAY_LABEL_FONT_SIZE = 700  # DrawingML uses 1/100 pt -> 7 pt.
@@ -25,19 +32,151 @@ ACTUAL_LABEL_FILL = "E2F0D9"
 ACTUAL_LABEL_BORDER = "A9D18E"
 
 
-def ensure_overlay_visible_actual_columns(workbook) -> None:
-    """Reuse the Dashboard cutoff rule for fixed Weekly/Monthly overlay views."""
+def ensure_overlay_visible_actual_columns(
+    workbook,
+    *,
+    weekly_cutoff_ref: str = "Dashboard!$K$5",
+    monthly_cutoff_ref: str = "Dashboard!$K$5",
+) -> None:
+    """Build fixed Weekly/Monthly Actual-visible helpers for overlay charts.
+
+    Each overlay may expose a local cutoff selector.  Its cell initially follows
+    Dashboard!K5, so existing global-cutoff behavior is preserved.  If the user
+    chooses a local date, only that sheet's overlay is overridden; clearing the
+    local selector falls back to the Dashboard cutoff again.
+    """
     if DATA_SHEET not in workbook.sheetnames:
         raise ValueError("Dashboard_Data is required before building traditional overlays.")
     ws = workbook[DATA_SHEET]
     ws["P1"] = "Weekly Actual Visible"
     ws["Q1"] = "Monthly Actual Visible"
     for row in range(2, ws.max_row + 1):
-        ws.cell(row, 16, f'=IF(A{row}="",NA(),IF(A{row}>Dashboard!$K$5,NA(),IF(C{row}="",NA(),C{row})))')
-        ws.cell(row, 17, f'=IF(D{row}="",NA(),IF(D{row}>Dashboard!$K$5,NA(),IF(F{row}="",NA(),F{row})))')
+        ws.cell(row, 16, f'=IF(A{row}="",NA(),IF(A{row}>{weekly_cutoff_ref},NA(),IF(C{row}="",NA(),C{row})))')
+        ws.cell(row, 17, f'=IF(D{row}="",NA(),IF(D{row}>{monthly_cutoff_ref},NA(),IF(F{row}="",NA(),F{row})))')
         ws.cell(row, 16).number_format = "0.00%"
         ws.cell(row, 17).number_format = "0.00%"
 
+
+def _project_dates(dataset: MainDataset):
+    rows = dataset.activities or tuple(
+        row for row in dataset.rows if row.plan_start is not None or row.plan_finish is not None
+    )
+    starts = [row.plan_start for row in rows if row.plan_start is not None]
+    finishes = [row.plan_finish for row in rows if row.plan_finish is not None]
+    return (min(starts) if starts else None, max(finishes) if finishes else None)
+
+
+def _weekly_project_window(dataset: MainDataset) -> tuple[int, int, int, int]:
+    """Return Dashboard_Data row bounds and physical timescale columns for project duration."""
+    start, finish = _project_dates(dataset)
+    dated = [(idx, p) for idx, p in enumerate(dataset.periods) if p.reporting_date is not None]
+    if not dated or start is None or finish is None:
+        return 2, max(2, len(dataset.periods) + 1), dataset.periods[0].column, dataset.periods[-1].column
+
+    first_idx = next((idx for idx, p in dated if p.reporting_date >= start), dated[0][0])
+    last_idx = next((idx for idx, p in dated if p.reporting_date >= finish), dated[-1][0])
+    if last_idx < first_idx:
+        last_idx = first_idx
+    return (
+        first_idx + 2,
+        last_idx + 2,
+        dataset.periods[first_idx].column,
+        dataset.periods[last_idx].column,
+    )
+
+
+def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int, int]:
+    """Return monthly helper row bounds and physical monthly columns for project duration."""
+    start, finish = _project_dates(dataset)
+    months = []
+    for row in range(2, data_ws.max_row + 1):
+        value = data_ws.cell(row, 4).value
+        if value in (None, ""):
+            continue
+        months.append((row, value))
+    first_timescale_col = dataset.periods[0].column
+    if not months or start is None or finish is None:
+        last = months[-1][0] if months else 2
+        return 2, last, first_timescale_col, first_timescale_col + max(0, len(months) - 1)
+
+    start_key = (start.year, start.month)
+    finish_key = (finish.year, finish.month)
+    first_pos = next((i for i, (_, d) in enumerate(months) if (d.year, d.month) >= start_key), 0)
+    last_pos = max(
+        (i for i, (_, d) in enumerate(months) if (d.year, d.month) <= finish_key),
+        default=len(months) - 1,
+    )
+    if last_pos < first_pos:
+        last_pos = first_pos
+    return (
+        months[first_pos][0],
+        months[last_pos][0],
+        first_timescale_col + first_pos,
+        first_timescale_col + last_pos,
+    )
+
+
+def _scurve_plan_row(dataset: MainDataset) -> int:
+    candidates = [
+        row.row_number for row in dataset.rows
+        if row.row_type.strip().lower() == "s-curve"
+        and row.description.strip().lower() == "plan"
+    ]
+    if candidates:
+        return min(candidates)
+    any_scurve = [row.row_number for row in dataset.rows if row.row_type.strip().lower() == "s-curve"]
+    if any_scurve:
+        return min(any_scurve)
+    return max((row.row_number for row in dataset.rows), default=dataset.header_row + 2) + 1
+
+
+def _add_cutoff_control(
+    ws,
+    dataset: MainDataset,
+    *,
+    row: int,
+    list_col: str,
+    list_last_row: int,
+) -> str:
+    """Add a compact local cutoff selector in the spacer row above S-Curve helpers.
+
+    The control lives in the Activity Data area (outside the overlay's horizontal
+    footprint), so the chart never blocks access to the dropdown.  It follows the
+    Dashboard cutoff initially; selecting a date creates a local override.
+    """
+    label_col = dataset.header_column("description") or 3
+    value_col = dataset.header_column("amount") or max(4, label_col + 1)
+    label = ws.cell(row, label_col)
+    value = ws.cell(row, value_col)
+    label.value = "Cutoff Date"
+    label.fill = PatternFill("solid", fgColor=CUTOFF_LABEL_FILL)
+    label.font = Font(color="FFFFFF", bold=True)
+    label.alignment = Alignment(horizontal="right", vertical="center")
+    value.value = "=Dashboard!$K$5"
+    value.number_format = "dd/mm/yyyy"
+    value.fill = PatternFill("solid", fgColor=CUTOFF_VALUE_FILL)
+    value.font = Font(color="1F1F1F", bold=True)
+    value.alignment = Alignment(horizontal="center", vertical="center")
+    value.comment = Comment(
+        "This selector follows Dashboard Cutoff by default. Choose a date to override this sheet's overlay. "
+        "Clear the cell to fall back to Dashboard Cutoff.",
+        "Progress Studio",
+    )
+    validation = DataValidation(
+        type="list",
+        formula1=f'=INDIRECT("{DATA_SHEET}!${list_col}$2:${list_col}${max(2, list_last_row)}")',
+        allow_blank=True,
+    )
+    validation.promptTitle = "Cutoff Date"
+    validation.prompt = "Choose a reporting date. Clear this cell to follow Dashboard Cutoff."
+    validation.errorTitle = "Invalid Cutoff"
+    validation.error = "Select a date from the list."
+    validation.errorStyle = "stop"
+    validation.showInputMessage = True
+    validation.showErrorMessage = True
+    ws.add_data_validation(validation)
+    validation.add(value)
+    return f"'{ws.title}'!${get_column_letter(value_col)}${row}"
 
 def _label_text_properties(text_color: str) -> RichText:
     """Compact 7 pt series-tinted label text for a dense traditional overlay."""
@@ -54,7 +193,7 @@ def _label_graphical_properties(fill_color: str, border_color: str) -> Graphical
     return props
 
 
-def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, last_row: int) -> LineChart:
+def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, first_row: int, last_row: int) -> LineChart:
     chart = LineChart()
     chart.y_axis.scaling.min = 0
     chart.y_axis.scaling.max = 1
@@ -76,12 +215,14 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, la
         noFill=True, ln=LineProperties(noFill=True)
     )
 
-    plan = Reference(data_ws, min_col=plan_col, max_col=plan_col, min_row=1, max_row=last_row)
-    actual = Reference(data_ws, min_col=actual_col, max_col=actual_col, min_row=1, max_row=last_row)
-    cats = Reference(data_ws, min_col=date_col, min_row=2, max_row=last_row)
-    chart.add_data(plan, titles_from_data=True)
-    chart.add_data(actual, titles_from_data=True)
+    plan = Reference(data_ws, min_col=plan_col, max_col=plan_col, min_row=first_row, max_row=last_row)
+    actual = Reference(data_ws, min_col=actual_col, max_col=actual_col, min_row=first_row, max_row=last_row)
+    cats = Reference(data_ws, min_col=date_col, min_row=first_row, max_row=last_row)
+    chart.add_data(plan, titles_from_data=False)
+    chart.add_data(actual, titles_from_data=False)
     chart.set_categories(cats)
+    chart.series[0].tx = SeriesLabel(v="Plan")
+    chart.series[1].tx = SeriesLabel(v="Actual")
 
     label_styles = (
         (BLUE, "t", PLAN_LABEL_TEXT, PLAN_LABEL_FILL, PLAN_LABEL_BORDER),
@@ -126,17 +267,40 @@ def _responsive_anchor(*, first_col: int, last_col: int, top_row: int, bottom_ro
 
 
 def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bool]:
-    """LW-12.3.1: responsive all-marker overlays following the timescale grid."""
-    ensure_overlay_visible_actual_columns(workbook)
-    data_ws = workbook[DATA_SHEET]
+    """LW-12.3.3: project-bounded overlays with bottom anchor above S-Curve helpers."""
     if not dataset.periods:
         return False, False
+    if DATA_SHEET not in workbook.sheetnames:
+        raise ValueError("Dashboard_Data is required before building traditional overlays.")
+    data_ws = workbook[DATA_SHEET]
 
-    first_timescale_col = dataset.periods[0].column
-    last_weekly_col = dataset.periods[-1].column
-    schedule_last_row = max(
-        (row.row_number for row in dataset.rows),
-        default=max(dataset.header_row + 1, OVERLAY_TOP_ROW + 1),
+    scurve_plan_row = _scurve_plan_row(dataset)
+    control_row = max(dataset.header_row + 1, scurve_plan_row - 1)
+    bottom_anchor_row = max(OVERLAY_TOP_ROW + 1, scurve_plan_row - 1)
+
+    weekly_list_last = max(2, len(dataset.periods) + 1)
+    monthly_list_last = max(
+        2,
+        1 + sum(1 for r in range(2, data_ws.max_row + 1) if data_ws.cell(r, 11).value not in (None, "")),
+    )
+
+    weekly_cutoff_ref = "Dashboard!$K$5"
+    monthly_cutoff_ref = "Dashboard!$K$5"
+    if "main" in workbook.sheetnames:
+        weekly_cutoff_ref = _add_cutoff_control(
+            workbook["main"], dataset, row=control_row, list_col="J", list_last_row=weekly_list_last
+        )
+    if "main_monthly" in workbook.sheetnames:
+        monthly_cutoff_ref = _add_cutoff_control(
+            workbook["main_monthly"], dataset, row=control_row, list_col="K", list_last_row=monthly_list_last
+        )
+
+    weekly_effective = f'IF({weekly_cutoff_ref}="",Dashboard!$K$5,{weekly_cutoff_ref})'
+    monthly_effective = f'IF({monthly_cutoff_ref}="",Dashboard!$K$5,{monthly_cutoff_ref})'
+    ensure_overlay_visible_actual_columns(
+        workbook,
+        weekly_cutoff_ref=weekly_effective,
+        monthly_cutoff_ref=monthly_effective,
     )
 
     # Remove prior overlay charts when rebuilding the same workbook.
@@ -144,14 +308,8 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
         if sheet_name in workbook.sheetnames:
             workbook[sheet_name]._charts = []
 
-    weekly_count = max(1, len(dataset.periods))
-    weekly_last = min(data_ws.max_row, weekly_count + 1)
-    monthly_count = sum(
-        1 for r in range(2, data_ws.max_row + 1)
-        if data_ws.cell(r, 4).value not in (None, "")
-    )
-    monthly_last = max(2, monthly_count + 1)
-    last_monthly_col = first_timescale_col + max(1, monthly_count) - 1
+    weekly_first, weekly_last, weekly_first_col, weekly_last_col = _weekly_project_window(dataset)
+    monthly_first, monthly_last, monthly_first_col, monthly_last_col = _monthly_project_window(data_ws, dataset)
 
     weekly_added = False
     if "main" in workbook.sheetnames:
@@ -160,13 +318,14 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             date_col=1,
             plan_col=2,
             actual_col=16,
+            first_row=weekly_first,
             last_row=weekly_last,
         )
         chart.anchor = _responsive_anchor(
-            first_col=first_timescale_col,
-            last_col=last_weekly_col,
+            first_col=weekly_first_col,
+            last_col=weekly_last_col,
             top_row=OVERLAY_TOP_ROW,
-            bottom_row=schedule_last_row,
+            bottom_row=bottom_anchor_row,
         )
         workbook["main"].add_chart(chart)
         weekly_added = True
@@ -178,13 +337,14 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             date_col=4,
             plan_col=5,
             actual_col=17,
+            first_row=monthly_first,
             last_row=monthly_last,
         )
         chart.anchor = _responsive_anchor(
-            first_col=first_timescale_col,
-            last_col=last_monthly_col,
+            first_col=monthly_first_col,
+            last_col=monthly_last_col,
             top_row=OVERLAY_TOP_ROW,
-            bottom_row=schedule_last_row,
+            bottom_row=bottom_anchor_row,
         )
         workbook["main_monthly"].add_chart(chart)
         monthly_added = True
