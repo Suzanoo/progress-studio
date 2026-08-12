@@ -6,6 +6,7 @@ from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.legend import LegendEntry
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -155,7 +156,12 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
         )
         # Marker helpers contain exactly one visible point at the selected cutoff.
         ws.cell(row, 13, f'=IF(G{row}=Dashboard!$K$5,H{row},NA())')
-        ws.cell(row, 14, f'=IF(AND(G{row}=Dashboard!$K$5,L{row}<>""),L{row},NA())')
+        # Suppress the Actual marker when it lands exactly on the Plan marker;
+        # one point/label is clearer than two overlapping labels at the same value.
+        ws.cell(
+            row, 14,
+            f'=IF(AND(G{row}=Dashboard!$K$5,L{row}<>"",ABS(L{row}-H{row})>0.0000001),L{row},NA())',
+        )
 
     for row in range(2, ws.max_row + 1):
         for col in (1, 4, 7, 10, 11):
@@ -397,13 +403,18 @@ def build_live_dashboard(
     )
     start_date, finish_date = _project_dates(dataset)
     duration_days = max(0, (finish_date - start_date).days) if start_date and finish_date else 0
-    schedule_formula = '=IF(E10=B10,"ON SCHEDULE",IF(E10<B10,"DELAY","AHEAD"))'
+    schedule_formula = (
+        '=IF(ROUND(E10-B10,4)=0,"ON SCHEDULE"&CHAR(10)&"0.00%",'
+        'IF(E10<B10,"DELAY"&CHAR(10)&TEXT(E10-B10,"+0.00%;-0.00%;0.00%"),'
+        '"AHEAD"&CHAR(10)&TEXT(E10-B10,"+0.00%;-0.00%;0.00%")))'
+    )
     impact_formula = f'=ROUND(ABS(E10-B10)*{duration_days},0)&" Days"'
 
     _merge_title(ws, "B8:M8", "KPI SUMMARY", 11)
     _kpi_box(ws, "B9:D9", "B10:D12", "PLANNED PROGRESS", plan_formula, LIGHT_BLUE, BLUE)
     _kpi_box(ws, "E9:G9", "E10:G12", "ACTUAL PROGRESS", actual_formula, LIGHT_GREEN, GREEN)
     _kpi_box(ws, "H9:J9", "H10:J12", "SCHEDULE STATUS", schedule_formula, LIGHT_AMBER, AMBER, "General")
+    ws["H10"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     _kpi_box(ws, "K9:M9", "K10:M12", "TIME IMPACT", impact_formula, LIGHT_RED, RED, "General")
 
     _merge_title(ws, "B15:M15", "S-CURVE — PLAN VS ACTUAL", 11)
@@ -431,7 +442,7 @@ def build_live_dashboard(
     # every weekly/monthly point. Their helpers are #N/A everywhere except K5.
     marker_data = Reference(data_ws, min_col=13, max_col=14, min_row=1, max_row=last_data_row)
     chart.add_data(marker_data, titles_from_data=True)
-    for idx, color in ((2, BLUE), (3, GREEN)):
+    for idx, color, label_position in ((2, BLUE, "t"), (3, GREEN, "b")):
         if len(chart.series) <= idx:
             continue
         series = chart.series[idx]
@@ -443,7 +454,12 @@ def build_live_dashboard(
         series.dLbls = DataLabelList()
         series.dLbls.showVal = True
         series.dLbls.numFmt = "0.0%"
-        series.dLbls.position = "t"
+        series.dLbls.position = label_position
+
+    # Marker-only helper series are useful on the plot but add noise to the
+    # legend; keep the legend focused on the two actual curves.
+    if chart.legend is not None:
+        chart.legend.legendEntry = [LegendEntry(idx=2, delete=True), LegendEntry(idx=3, delete=True)]
 
     # Minimal axes: percent scale is self-explanatory; dates remain the only
     # horizontal context. Excel will thin date labels automatically as needed.

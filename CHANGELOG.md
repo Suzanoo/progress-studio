@@ -1,3 +1,11 @@
+## LW-11.3.4 — KPI Gap and Marker Label Polish
+
+- Restored signed schedule variance in KPI Card 3 as a second line beneath status (`+x.xx%`, `-x.xx%`, or `0.00%`).
+- Positioned the Plan cutoff label above its marker and Actual below its marker.
+- Removed marker-only helper series from the chart legend so only Plan and Actual remain.
+- Suppressed the Actual cutoff marker when it exactly overlaps Plan, preventing duplicate labels at 0% or any coincident value.
+- Preserved the LW-11.3.2/11.3.3 Actual cutoff contract and KPI source logic unchanged.
+
 ## LW-11.1–11.3 — Progress Curve Contract
 
 - Restored `progress` as the Live Workbook S-Curve calculation contract.

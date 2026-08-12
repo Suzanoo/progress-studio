@@ -106,4 +106,14 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     assert chart.series[3].marker.symbol == "circle"
     assert chart.series[2].dLbls.showVal is True
     assert chart.series[3].dLbls.showVal is True
+    assert chart.series[2].dLbls.position == "t"
+    assert chart.series[3].dLbls.position == "b"
+    assert [(entry.idx, entry.delete) for entry in chart.legend.legendEntry] == [(2, True), (3, True)]
+
+    # LW-11.3.4: schedule card keeps both status and signed progress gap.
+    assert "CHAR(10)" in dashboard["H10"].value
+    assert "+0.00%;-0.00%;0.00%" in dashboard["H10"].value
+    assert dashboard["H10"].alignment.wrap_text is True
+    # Coincident Plan/Actual cutoff markers collapse to one visible marker.
+    assert "ABS(L2-H2)" in data["N2"].value
     wb.close()
