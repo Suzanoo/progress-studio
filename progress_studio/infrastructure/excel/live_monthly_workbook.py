@@ -135,21 +135,12 @@ def build_live_monthly_view(
             monthly_date_ref = f"{get_column_letter(col)}$4"
 
             if row_type == "s-curve":
-                # Monthly S-Curve is a true live view of main.
-                # P/AP remain full baseline. A/AA stop at the Dashboard cutoff.
-                if pa == "AP":
+                # LW-11.2: main_monthly remains an Activity Data view only.
+                # It has no Dashboard/cutoff ownership. Chart monthly data is
+                # adapted from the authoritative `progress` contract instead.
+                if pa in {"AP", "AA"}:
                     cell.value = f"={source_ref}!{last_week}{source_row}"
-                elif pa == "AA":
-                    cell.value = (
-                        f'=IF({monthly_date_ref}>Dashboard!$K$5,"",'
-                        f'{source_ref}!{last_week}{source_row})'
-                    )
-                elif pa == "A":
-                    cell.value = (
-                        f'=IF({monthly_date_ref}>Dashboard!$K$5,"",'
-                        f'IF(COUNT({source_range})=0,"",SUM({source_range})))'
-                    )
-                else:  # S-Curve Plan
+                else:
                     cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
             else:
                 # Full-live baseline intentionally uses the same straightforward

@@ -336,6 +336,8 @@ class WorkbookRebuildEngine:
                     source_sheet=self.MAIN_SHEET,
                     target_sheet="main_monthly",
                 )
+                # build_live_dashboard creates the LW-11 `progress` calculation
+                # contract before Dashboard_Data/Chart.
                 build_live_dashboard(
                     wb,
                     dataset,
@@ -362,7 +364,7 @@ class WorkbookRebuildEngine:
                 week_count=len(dataset.periods),
                 monthly_periods=monthly_periods,
                 dashboard_rows=(len(dataset.rows) * 2),
-                rebuilt_sheets=("main_monthly", "Dashboard_Data", "Dashboard"),
+                rebuilt_sheets=("main_monthly", "progress", "Dashboard_Data", "Dashboard"),
                 preserved_payment_sheet=preserved_payment_sheet,
                 preserved_payment_input_sheet=preserved_payment_input_sheet,
             )

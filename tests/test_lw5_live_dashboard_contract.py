@@ -33,7 +33,7 @@ def _fixture(path: Path) -> Path:
     return path
 
 
-def test_lw5_live_dashboard_renders_without_progress_or_progress_table(tmp_path: Path) -> None:
+def test_lw5_live_dashboard_renders_with_progress_contract_without_progress_table(tmp_path: Path) -> None:
     source = _fixture(tmp_path / "source.xlsx")
     dataset = RebuildWorkbookReader().read_main_dataset(source)
 
@@ -43,9 +43,9 @@ def test_lw5_live_dashboard_renders_without_progress_or_progress_table(tmp_path:
 
     assert "Dashboard" in wb.sheetnames
     assert "Dashboard_Data" in wb.sheetnames
-    assert "progress" not in wb.sheetnames
+    assert "progress" in wb.sheetnames
     assert "progress_table" not in wb.sheetnames
-    assert wb["Dashboard"]["C6"].value.startswith("Live: main / main_monthly Acc. rows")
+    assert wb["Dashboard"]["C6"].value.startswith("Live curve: progress")
     assert wb["Dashboard"]["C39"].value == "Concrete"
     assert wb["Dashboard"]["F39"].value == "Plan"
     assert wb["Dashboard"]["F40"].value == "Actual"
@@ -79,4 +79,4 @@ def test_lw5_live_dashboard_boundary_uses_openpyxl_only_for_rendering() -> None:
     ).read_text(encoding="utf-8")
     assert "openpyxl" in renderer
     assert 'workbook["progress_table"]' not in renderer
-    assert 'workbook["progress"]' not in renderer
+    assert 'workbook["progress"]' in renderer

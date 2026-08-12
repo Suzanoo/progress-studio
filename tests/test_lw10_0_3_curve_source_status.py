@@ -49,12 +49,10 @@ def test_weekly_scurve_actual_is_source_cutoff_aware(tmp_path: Path) -> None:
     ws = wb["main"]
 
     assert apply_weekly_scurve_cutoff_contract(wb, dataset)
-    assert "Dashboard!$K$5" in ws["J9"].value
-    assert "Dashboard!$K$5" in ws["M9"].value
-    assert "Dashboard!$K$5" in ws["J10"].value
-    assert "Dashboard!$K$5" in ws["M10"].value
-    assert "Dashboard!$K$5" not in ws["M7"].value
-    assert "Dashboard!$K$5" not in ws["M8"].value
+    assert "Dashboard!$K$5" not in ws["J9"].value
+    assert "Dashboard!$K$5" not in ws["M9"].value
+    assert "Dashboard!$K$5" not in ws["J10"].value
+    assert "Dashboard!$K$5" not in ws["M10"].value
     wb.close()
 
 
@@ -66,14 +64,13 @@ def test_status_semantics_distinguish_not_due_and_no_progress() -> None:
     assert _status(1.00, 1.00) == "Complete"
 
 
-def test_monthly_scurve_actual_formula_is_cutoff_aware() -> None:
+def test_monthly_scurve_has_no_dashboard_cutoff_ownership() -> None:
     source = Path(
         "progress_studio/infrastructure/excel/live_monthly_workbook.py"
     ).read_text(encoding="utf-8")
-    assert 'pa == "AA"' in source
-    assert 'pa == "A"' in source
-    assert "Dashboard!$K$5" in source
-    assert "monthly_date_ref" in source
+    assert 'pa in {"AP", "AA"}' in source
+    assert "Dashboard!$K$5" not in source
+    assert "Chart monthly data is" in source
 
 
 def test_dashboard_chart_is_adapter_not_second_scurve_deriver() -> None:
@@ -81,6 +78,6 @@ def test_dashboard_chart_is_adapter_not_second_scurve_deriver() -> None:
         "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
     ).read_text(encoding="utf-8")
     block = source[source.index("def _build_live_data_sheet"):source.index("def _kpi_box")]
-    assert "_find_scurve_rows(main, dataset)" in block
-    assert "_find_scurve_rows(monthly_ws, dataset)" in block
-    assert "Selected Actual stops at the chosen cutoff" in block
+    assert 'workbook["progress"]' in block
+    assert "main_monthly" not in block
+    assert "progress already owns cutoff" in block

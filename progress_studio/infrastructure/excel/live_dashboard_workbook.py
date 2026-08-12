@@ -19,7 +19,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
-from progress_studio.infrastructure.excel.live_scurve_workbook import apply_weekly_scurve_cutoff_contract
+from progress_studio.infrastructure.excel.live_scurve_workbook import build_live_progress_contract
 
 
 def _as_date(value: date | datetime | None) -> date | None:
@@ -80,93 +80,56 @@ def _find_scurve_rows(ws, dataset: MainDataset) -> tuple[int | None, int | None]
 
 
 def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache) -> None:
-    """Tiny selector cache sourced from the workbook's live Acc. rows.
+    """LW-11.2/11.3 thin Weekly/Monthly selector over ``progress``.
 
-    Weekly view reads main!Acc.Plan/Acc.Actual.
-    Monthly view reads main_monthly!Acc.Plan/Acc.Actual.
-    Plan remains full baseline; Actual is blanked after Dashboard cutoff.
+    ``progress`` owns S-Curve calculation and cutoff behavior. Dashboard_Data
+    owns presentation granularity only: Weekly uses every progress row; Monthly
+    selects the last reporting point in each calendar month. No S-Curve business
+    logic and no second cutoff condition live here.
     """
     _remove(workbook, DATA_SHEET)
     ws = workbook.create_sheet(DATA_SHEET)
-    headers = [
+    ws.append([
         "Weekly Date", "Weekly Plan", "Weekly Actual",
         "Monthly Date", "Monthly Plan", "Monthly Actual",
         "Selected Date", "Selected Plan", "Selected Actual",
         "Weekly Cutoff", "Monthly Cutoff",
-    ]
-    ws.append(headers)
+    ])
 
-    main = workbook["main"]
-    monthly_ws = workbook["main_monthly"] if "main_monthly" in workbook.sheetnames else None
-    weekly_ap, weekly_aa = _find_scurve_rows(main, dataset)
-    monthly_ap, monthly_aa = (
-        _find_scurve_rows(monthly_ws, dataset) if monthly_ws is not None else (None, None)
-    )
+    if "progress" not in workbook.sheetnames:
+        build_live_progress_contract(workbook, dataset)
+    progress = workbook["progress"]
 
-    from openpyxl.utils import get_column_letter
+    weekly_count = max(0, progress.max_row - 1)
+    month_last_rows: OrderedDict[tuple[int, int], tuple[int, date]] = OrderedDict()
+    for idx, period in enumerate(dataset.periods, start=2):
+        reporting = _as_date(period.reporting_date)
+        if reporting is not None:
+            month_last_rows[(reporting.year, reporting.month)] = (idx, reporting)
+    monthly_points = list(month_last_rows.values())
 
-    weekly_points = list(dataset.periods)
-    fallback_monthly = _monthly_points(cache)
-    monthly_columns: list[tuple[int, object]] = []
-    if dataset.periods and monthly_ws is not None:
-        first_monthly_col = dataset.periods[0].column
-        month_count = max(0, monthly_ws.max_column - first_monthly_col + 1)
-        for offset in range(month_count):
-            col = first_monthly_col + offset
-            reporting_date = monthly_ws.cell(dataset.header_row, col).value
-            if reporting_date not in (None, ""):
-                monthly_columns.append((col, reporting_date))
-    elif fallback_monthly:
-        # Standalone renderer compatibility used by earlier LW tests.
-        first_monthly_col = dataset.periods[0].column if dataset.periods else 1
-        monthly_columns = [
-            (first_monthly_col + idx, point.reporting_date)
-            for idx, point in enumerate(fallback_monthly)
-            if point.reporting_date is not None
-        ]
-
-    max_rows = max(len(weekly_points), len(monthly_columns), 1)
+    max_rows = max(weekly_count, len(monthly_points), 1)
     for idx in range(max_rows):
         row = idx + 2
 
-        if idx < len(weekly_points):
-            period = weekly_points[idx]
-            col_letter = get_column_letter(period.column)
-            ws.cell(row, 1, period.reporting_date)
-            if weekly_ap is not None:
-                ws.cell(row, 2, f"='main'!{col_letter}{weekly_ap}")
-            else:
-                ws.cell(row, 2, cache.points[idx].plan_cumulative)
-            if weekly_aa is not None:
-                ws.cell(row, 3, f"='main'!{col_letter}{weekly_aa}")
-            else:
-                ws.cell(row, 3, cache.points[idx].actual_cumulative)
-            ws.cell(row, 10, period.reporting_date)
+        if idx < weekly_count:
+            progress_row = idx + 2
+            ws.cell(row, 1, f"='progress'!A{progress_row}")
+            ws.cell(row, 2, f"='progress'!B{progress_row}")
+            ws.cell(row, 3, f"='progress'!C{progress_row}")
+            ws.cell(row, 10, f"='progress'!A{progress_row}")
 
-        if idx < len(monthly_columns):
-            col, reporting_date = monthly_columns[idx]
-            col_letter = get_column_letter(col)
-            ws.cell(row, 4, reporting_date)
-            if monthly_ws is not None and monthly_ap is not None:
-                ws.cell(row, 5, f"='main_monthly'!{col_letter}{monthly_ap}")
-            elif idx < len(fallback_monthly):
-                ws.cell(row, 5, fallback_monthly[idx].plan_cumulative)
-            if monthly_ws is not None and monthly_aa is not None:
-                ws.cell(row, 6, f"='main_monthly'!{col_letter}{monthly_aa}")
-            elif idx < len(fallback_monthly):
-                ws.cell(row, 6, fallback_monthly[idx].actual_cumulative
-                )
-            ws.cell(row, 11, reporting_date)
+        if idx < len(monthly_points):
+            progress_row, reporting = monthly_points[idx]
+            ws.cell(row, 4, reporting)
+            ws.cell(row, 5, f"='progress'!B{progress_row}")
+            ws.cell(row, 6, f"='progress'!C{progress_row}")
+            ws.cell(row, 11, reporting)
 
-        # Selected Plan always renders the full baseline.
+        # LW-11.3: renderer-only selection. progress already owns cutoff.
         ws.cell(row, 7, f'=IF(Dashboard!$G$5="Weekly",A{row},D{row})')
         ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
-        # Selected Actual stops at the chosen cutoff in both views.
-        ws.cell(
-            row, 9,
-            f'=IF(OR(G{row}="",G{row}>Dashboard!$K$5),"",'
-            f'IF(Dashboard!$G$5="Weekly",C{row},F{row}))'
-        )
+        ws.cell(row, 9, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",C{row},F{row}))')
 
     for row in range(2, ws.max_row + 1):
         for col in (1, 4, 7, 10, 11):
@@ -176,7 +139,6 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
     ws.column_dimensions["J"].hidden = True
     ws.column_dimensions["K"].hidden = True
     ws.sheet_state = "hidden"
-
 
 def _kpi_box(ws, title_range: str, value_range: str, title: str, value, fill: str, color: str, number_format: str = "0.00%") -> None:
     ws.merge_cells(title_range)
@@ -333,6 +295,8 @@ def build_live_dashboard(
     cache = ProgressCacheDeriver().derive(dataset)
     cutoff_date = _as_date(cutoff) or _default_cutoff(cache)
     activity_model = ActivityTableDeriver().derive(dataset, cutoff=cutoff_date)
+    # LW-11.1: progress is the sole curve calculation contract.
+    build_live_progress_contract(workbook, dataset)
     _build_live_data_sheet(workbook, dataset, cache)
 
     _remove(workbook, DASHBOARD_SHEET)
@@ -385,7 +349,7 @@ def build_live_dashboard(
 
     ws["B6"] = "Data source"
     ws.merge_cells("C6:H6")
-    ws["C6"] = "Live: main / main_monthly Acc. rows + direct-to-main formulas"
+    ws["C6"] = "Live curve: progress • Monthly: last progress point/month"
     ws["C6"].font = Font(name=_FONT, size=9, color=MUTED)
     ws["J6"] = "Recalc"
     ws.merge_cells("K6:M6")
@@ -434,11 +398,7 @@ def build_live_dashboard(
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")
-    ws["B35"] = "Plan = full baseline • Actual/KPI/Activity = selected cutoff"
+    ws["B35"] = "Plan = full baseline • Actual curve = progress contract cutoff"
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
 
     _write_activity_section(ws, activity_model, dataset)
-
-    # Source-layer contract: main Acc.Actual itself stops at Dashboard cutoff.
-    # Dashboard_Data/Chart only render the authoritative source rows.
-    apply_weekly_scurve_cutoff_contract(workbook, dataset)

@@ -4,14 +4,15 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def test_dashboard_monthly_curve_prefers_main_monthly_acc_rows() -> None:
+def test_dashboard_monthly_curve_prefers_progress_contract() -> None:
     source = Path(
         "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
     ).read_text(encoding="utf-8")
     block = source[source.index("def _build_live_data_sheet"):source.index("def _kpi_box")]
-    assert "_find_scurve_rows(main, dataset)" in block
-    assert "_find_scurve_rows(monthly_ws, dataset)" in block
-    assert 'G{row}>Dashboard!$K$5' in block
+    assert 'workbook["progress"]' in block
+    assert "month_last_rows" in block
+    assert "main_monthly" not in block
+    assert 'Dashboard!$K$5' not in block
 
 
 def test_activity_pair_filter_keeps_plan_status_value_but_hides_it() -> None:
@@ -40,5 +41,5 @@ def test_plan_curve_full_actual_curve_cutoff_contract_is_explicit() -> None:
     source = Path(
         "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
     ).read_text(encoding="utf-8")
-    assert "Selected Plan always renders the full baseline." in source
-    assert "Selected Actual stops at the chosen cutoff in both views." in source
+    assert "progress is the sole curve calculation contract" in source
+    assert "renderer-only selection. progress already owns cutoff" in source

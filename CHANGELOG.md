@@ -1,3 +1,12 @@
+## LW-11.1–11.3 — Progress Curve Contract
+
+- Restored `progress` as the Live Workbook S-Curve calculation contract.
+- Moved Actual cutoff ownership out of `main` and into `progress`.
+- Kept Plan as the full baseline from project start through project finish.
+- Changed Monthly Dashboard curves to use the last `progress` point in each month instead of re-deriving from `main_monthly`.
+- Reduced `Dashboard_Data` to Weekly/Monthly selection only; it no longer applies a second cutoff rule.
+- Preserved Manual calculation with calculate-on-save so F9/Save refreshes the live curve chain.
+
 ## MS-P1.19 — Snapshot Progress Table
 
 - Changed `progress_table` from a large live weekly dependency matrix to a value-only Plan/Actual snapshot.
