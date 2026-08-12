@@ -421,3 +421,10 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Documented the frozen Dashboard/Weekly/Monthly cutoff and curve behavior in
   `docs/DASHBOARD_V1_FREEZE.md`.
 - No user-visible Dashboard logic was changed from the accepted LW-12.4.2 baseline.
+
+## LW-13.1.1 - Overlay rollback hotfix
+
+- Rolled the traditional overlay renderer back to the frozen LW-13 data flow.
+- Removed the LW-13.1 synthetic helper-series architecture; charts again read the existing Dashboard_Data series directly.
+- Kept the monthly cutoff-label polish as a display-only change: Monthly uses `mmmm yyyy`; Weekly keeps `dd/mm/yyyy`.
+- No new helper columns, formulas, source-of-truth changes, calculation-mode changes, or dashboard data-flow changes.

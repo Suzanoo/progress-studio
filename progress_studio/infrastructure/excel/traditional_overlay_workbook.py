@@ -271,7 +271,17 @@ def _label_graphical_properties(fill_color: str, border_color: str) -> Graphical
     return props
 
 
-def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cutoff_col: int | None = None, first_row: int, last_row: int) -> LineChart:
+def _overlay_chart(
+    *,
+    data_ws,
+    date_col: int,
+    plan_col: int,
+    actual_col: int,
+    cutoff_col: int | None = None,
+    first_row: int,
+    last_row: int,
+    cutoff_label_format: str | None = None,
+) -> LineChart:
     chart = LineChart()
     chart.y_axis.scaling.min = 0
     chart.y_axis.scaling.max = 1
@@ -333,6 +343,10 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cu
     if cutoff_col is not None:
         cutoff = Reference(data_ws, min_col=cutoff_col, max_col=cutoff_col, min_row=first_row, max_row=last_row)
         chart.add_data(cutoff, titles_from_data=False)
+        # The cutoff series is appended after the initial category assignment.
+        # Re-apply the same categories so its category-name data label has a
+        # real date/category reference without introducing helper data.
+        chart.set_categories(cats)
         cutoff_series = chart.series[2]
         cutoff_series.tx = SeriesLabel(v="Cutoff")
         cutoff_series.graphicalProperties.line.noFill = True
@@ -357,6 +371,7 @@ def _overlay_chart(*, data_ws, date_col: int, plan_col: int, actual_col: int, cu
             showLegendKey=False,
             dLblPos="t",
             separator=" ",
+            numFmt=cutoff_label_format,
             spPr=_label_graphical_properties(CUTOFF_LABEL_BG, CUTOFF_LABEL_BORDER),
             txPr=_cutoff_label_text_properties(),
         )
@@ -448,6 +463,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             cutoff_col=18,
             first_row=weekly_first,
             last_row=weekly_last,
+            cutoff_label_format="dd/mm/yyyy",
         )
         chart.anchor = _responsive_anchor(
             first_col=weekly_first_col,
@@ -468,6 +484,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             cutoff_col=19,
             first_row=monthly_first,
             last_row=monthly_last,
+            cutoff_label_format="mmmm yyyy",
         )
         chart.anchor = _responsive_anchor(
             first_col=monthly_first_col,
