@@ -80,4 +80,5 @@ def test_dashboard_chart_is_adapter_not_second_scurve_deriver() -> None:
     block = source[source.index("def _build_live_data_sheet"):source.index("def _kpi_box")]
     assert 'workbook["progress"]' in block
     assert "main_monthly" not in block
-    assert "progress already owns cutoff" in block
+    assert "renderer-only cutoff mask" in block
+    assert "NA()" in block

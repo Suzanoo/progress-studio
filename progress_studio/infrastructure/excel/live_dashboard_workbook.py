@@ -82,10 +82,11 @@ def _find_scurve_rows(ws, dataset: MainDataset) -> tuple[int | None, int | None]
 def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache) -> None:
     """LW-11.2/11.3 thin Weekly/Monthly selector over ``progress``.
 
-    ``progress`` owns S-Curve calculation and cutoff behavior. Dashboard_Data
-    owns presentation granularity only: Weekly uses every progress row; Monthly
-    selects the last reporting point in each calendar month. No S-Curve business
-    logic and no second cutoff condition live here.
+    ``progress`` owns the complete S-Curve history only. Dashboard_Data owns the
+    lightweight presentation mask: Weekly uses every progress row; Monthly uses
+    the last reporting point in each calendar month; Actual points after cutoff
+    return ``#N/A`` so Excel does not plot them. Actual values themselves are
+    never recalculated because cutoff changed.
     """
     _remove(workbook, DATA_SHEET)
     ws = workbook.create_sheet(DATA_SHEET)
@@ -126,7 +127,8 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             ws.cell(row, 6, f"='progress'!C{progress_row}")
             ws.cell(row, 11, reporting)
 
-        # LW-11.3: renderer-only selection. progress already owns cutoff.
+        # LW-11.3.2: renderer-only cutoff mask. ``progress`` keeps complete
+        # Actual history; only this selected chart series is cutoff-aware.
         # Do not let an empty Monthly source cell become Excel serial date 0.
         # A direct IF(..., Dn) over a blank Dn is evaluated as 0 by Excel; when
         # the chart auto-treats dates as a date axis this stretches the axis back
@@ -138,7 +140,12 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             f'IF(D{row}="","",D{row}))',
         )
         ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
-        ws.cell(row, 9, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",C{row},F{row}))')
+        ws.cell(
+            row, 9,
+            f'=IF(G{row}="",NA(),IF(G{row}>Dashboard!$K$5,NA(),'
+            f'IF(Dashboard!$G$5="Weekly",IF(C{row}="",NA(),C{row}),'
+            f'IF(F{row}="",NA(),F{row}))))',
+        )
 
     for row in range(2, ws.max_row + 1):
         for col in (1, 4, 7, 10, 11):
@@ -374,8 +381,8 @@ def build_live_dashboard(
     )
     actual_formula = (
         f'=IFERROR(LOOKUP(2,1/((Dashboard_Data!$G$2:$G${last_data_row}<=$K$5)*'
-        f'(Dashboard_Data!$I$2:$I${last_data_row}<>"")),'
-        f'Dashboard_Data!$I$2:$I${last_data_row}),0)'
+        f'(IFERROR(Dashboard_Data!$I$2:$I${last_data_row},"")<>"")),'
+        f'IFERROR(Dashboard_Data!$I$2:$I${last_data_row},"")),0)'
     )
     start_date, finish_date = _project_dates(dataset)
     duration_days = max(0, (finish_date - start_date).days) if start_date and finish_date else 0
@@ -408,7 +415,7 @@ def build_live_dashboard(
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")
-    ws["B35"] = "Plan = full baseline • Actual curve = progress contract cutoff"
+    ws["B35"] = "Plan = full baseline • Actual history stays fixed • Cutoff masks visible Actual points"
     ws["B35"].font = Font(name=_FONT, size=9, italic=True, color=MUTED)
 
     _write_activity_section(ws, activity_model, dataset)

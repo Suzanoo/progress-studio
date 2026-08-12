@@ -89,13 +89,16 @@ def build_live_progress_contract(
     target_sheet: str = PROGRESS_SHEET,
     cutoff_ref: str = "Dashboard!$K$5",
 ) -> int:
-    """Build the LW-11 S-Curve calculation API.
+    """Build the lightweight LW-11 S-Curve history contract.
 
-    Contract columns are deliberately tiny: Date, Plan and Actual. Plan always
-    exposes the full baseline. Actual exposes cumulative source Actual only when
-    Date <= Dashboard cutoff and otherwise returns blank. Dashboard and monthly
-    chart adapters must consume this sheet rather than derive S-Curve logic.
+    Contract columns are deliberately tiny: Date, Plan and Actual. Both Plan and
+    Actual expose their complete cumulative history from ``main``.  Cutoff is a
+    presentation concern owned by ``Dashboard_Data``; changing Dashboard cutoff
+    must never recalculate or rewrite the underlying Actual curve.
+
+    ``cutoff_ref`` is retained only for API compatibility with LW-11.1 callers.
     """
+    del cutoff_ref
     if source_sheet not in workbook.sheetnames:
         raise ValueError(f"Progress source worksheet was not found: {source_sheet}")
     if not dataset.periods:
@@ -142,8 +145,7 @@ def build_live_progress_contract(
             ws.cell(
                 out_row,
                 3,
-                f'=IF(A{out_row}>{cutoff_ref},"",'
-                f'IF({actual_source}="","",{actual_source}))',
+                f'=IF({actual_source}="","",{actual_source})',
             )
         elif has_project_summary:
             plan_range = f'{source_ref}!${first_letter}${project_plan}:{letter}${project_plan}'
@@ -152,8 +154,7 @@ def build_live_progress_contract(
             ws.cell(
                 out_row,
                 3,
-                f'=IF(A{out_row}>{cutoff_ref},"",'
-                f'IF(COUNT({actual_range})=0,"",SUM({actual_range})))',
+                f'=IF(COUNT({actual_range})=0,"",SUM({actual_range}))',
             )
         else:
             point = fallback_cache.points[out_row - 2]

@@ -12,7 +12,8 @@ def test_dashboard_monthly_curve_prefers_progress_contract() -> None:
     assert 'workbook["progress"]' in block
     assert "month_last_rows" in block
     assert "main_monthly" not in block
-    assert 'Dashboard!$K$5' not in block
+    assert 'Dashboard!$K$5' in block
+    assert 'NA()' in block
 
 
 def test_activity_pair_filter_keeps_plan_status_value_but_hides_it() -> None:
@@ -42,4 +43,5 @@ def test_plan_curve_full_actual_curve_cutoff_contract_is_explicit() -> None:
         "progress_studio/infrastructure/excel/live_dashboard_workbook.py"
     ).read_text(encoding="utf-8")
     assert "progress is the sole curve calculation contract" in source
-    assert "renderer-only selection. progress already owns cutoff" in source
+    assert "renderer-only cutoff mask" in source
+    assert "Actual history" in source

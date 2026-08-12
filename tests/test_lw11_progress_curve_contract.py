@@ -39,7 +39,7 @@ def _fixture(path: Path) -> Path:
     return path
 
 
-def test_lw11_progress_is_only_curve_cutoff_owner(tmp_path: Path) -> None:
+def test_lw11_progress_keeps_raw_actual_history(tmp_path: Path) -> None:
     path = _fixture(tmp_path / "p.xlsx")
     dataset = RebuildWorkbookReader().read_main_dataset(path)
     wb = load_workbook(path)
@@ -49,8 +49,8 @@ def test_lw11_progress_is_only_curve_cutoff_owner(tmp_path: Path) -> None:
     assert count == 5
     assert wb["progress"]["A1"].value == "Date"
     assert "Dashboard!$K$5" not in wb["main"]["J10"].value
-    assert "Dashboard!$K$5" in wb["progress"]["C2"].value
-    assert "Dashboard!$K$5" in wb["progress"]["C6"].value
+    assert "Dashboard!$K$5" not in wb["progress"]["C2"].value
+    assert "Dashboard!$K$5" not in wb["progress"]["C6"].value
     assert "Dashboard!$K$5" not in wb["progress"]["B6"].value
     wb.close()
 
@@ -67,8 +67,9 @@ def test_lw11_dashboard_data_is_progress_renderer(tmp_path: Path) -> None:
     # July monthly point is the final July progress row (31-Jul, progress row 5).
     assert data["E2"].value == "='progress'!B5"
     assert data["F2"].value == "='progress'!C5"
-    # Dashboard selector does not duplicate cutoff behavior.
-    assert "Dashboard!$K$5" not in data["I2"].value
+    # Dashboard selector owns the tiny chart-only Actual cutoff mask.
+    assert "Dashboard!$K$5" in data["I2"].value
+    assert "NA()" in data["I2"].value
     # Empty monthly slots must stay blank instead of becoming Excel serial date 0.
     assert 'IF(D6="","",D6)' in data["G6"].value
     assert data.sheet_state == "hidden"
