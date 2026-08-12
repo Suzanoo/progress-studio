@@ -413,3 +413,11 @@ The workbook contains live Excel formulas. Open and save the generated workbook 
 - Kept sheets protected while unlocking only the local cutoff input cells.
 - Monthly cutoff displays Month + Year (`mmm yyyy`).
 - Added a pale background/border to red cutoff labels and removed overlay legends.
+
+## LW-13 — Dashboard V1 Freeze
+
+- Added the immutable `dashboard-v1-stable` behavior contract.
+- Added a dedicated Dashboard regression gate in `tests/test_lw13_dashboard_freeze.py`.
+- Documented the frozen Dashboard/Weekly/Monthly cutoff and curve behavior in
+  `docs/DASHBOARD_V1_FREEZE.md`.
+- No user-visible Dashboard logic was changed from the accepted LW-12.4.2 baseline.

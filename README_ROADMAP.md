@@ -251,3 +251,10 @@ Tkinter presentation
 - [ ] MS-PAY8 - Edge cases, validation and audit.
 - [ ] MS-PAY9 - Rebuild / edited-workbook compatibility.
 - [ ] MS-PAY10 - Performance hardening for large projects.
+
+### LW-13 — Dashboard V1 Freeze ✅
+
+Dashboard V1 behavior is frozen behind regression tests and the
+`dashboard-v1-stable` Git tag. Future Rebuild Lite work may refactor internals,
+but must keep this contract passing unless a new Dashboard behavior version is
+explicitly introduced. See `docs/DASHBOARD_V1_FREEZE.md`.

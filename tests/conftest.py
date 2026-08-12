@@ -17,6 +17,7 @@ import pytest
 # SMOKE:
 # Small cross-section of high-value contracts intended for the fastest local gate.
 FROZEN_FILES = {
+    "test_lw13_dashboard_freeze.py",
     "test_boq_mapping_service.py",
     "test_desktop_phase2.py",
     "test_entrypoints.py",
