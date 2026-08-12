@@ -21,6 +21,7 @@ from progress_studio.infrastructure.excel.monthly_main_workbook import (
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
 from progress_studio.infrastructure.excel.live_dashboard_workbook import build_live_dashboard
 from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
+from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
 from progress_studio.infrastructure.excel.calculation_policy import (
     configure_incremental_excel_recalculation,
     configure_live_save_recalculation,
@@ -343,6 +344,10 @@ class WorkbookRebuildEngine:
                     dataset,
                     project_name=project_name or output.stem,
                 )
+                # LW-12.1/12.2: traditional CM presentation overlays.  These
+                # are renderer-only charts over the timescale and reuse the same
+                # Dashboard_Data cutoff contract; no S-Curve calculation is duplicated.
+                build_traditional_overlays(wb, dataset)
 
                 if "Dashboard_Data" in wb.sheetnames:
                     wb["Dashboard_Data"].sheet_state = "hidden"

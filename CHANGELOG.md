@@ -1,5 +1,14 @@
 ## LW-11.3.6 — Marker-Only Cutoff
 
+## LW-12.1 / LW-12.2 — Traditional Curve Overlay Prototype
+
+- Added Weekly S-Curve overlay on `main` and Monthly S-Curve overlay on `main_monthly`.
+- Reused `Dashboard_Data` Plan/Actual sources with the existing Dashboard cutoff contract.
+- Enabled circle markers on every Plan and Actual point; no data labels or axis titles.
+- Added transparent chart area and fixed prototype geometry anchored at the first timescale column.
+- Overlay Actual series follows Dashboard cutoff without adding a second S-Curve calculation engine.
+
+
 - Removed all data labels from the Plan/Actual cutoff marker series.
 - Kept one marker point per series at the selected cutoff date.
 - Kept marker helper series hidden from the legend; KPI cards remain the sole numeric summary.
