@@ -26,8 +26,11 @@ def test_create_progress_final_step_moves_proven_rebuild_features_to_create_boun
         # Proven pre-normalizer Snapshot recalc contract.
         assert wb.calculation.calcMode == "manual"
         assert wb.calculation.calcOnSave is True
-        assert wb.calculation.fullCalcOnLoad is False
-        assert wb.calculation.forceFullCalc is False
+        # Create Progress asks Excel for one full first-open calculation so
+        # Dashboard_Data/chart caches are complete before the user edits anything.
+        assert wb.calculation.fullCalcOnLoad is True
+        assert wb.calculation.forceFullCalc is True
+        assert wb.calculation.calcId == 0
 
         # Proven lightweight protection: sheets protected, structure left manageable.
         assert wb.security.lockStructure is False

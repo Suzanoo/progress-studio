@@ -40,6 +40,23 @@ def request_full_excel_recalculation(workbook: Workbook) -> None:
 
 
 
+
+def request_initial_manual_excel_recalculation(workbook: Workbook) -> None:
+    """Request one full Excel calculation on first open, then remain Manual.
+
+    Create Progress writes formula dependencies that openpyxl cannot evaluate.
+    Excel therefore needs one initial full calculation to establish formula/chart
+    caches.  The workbook still opens in Manual mode so subsequent editing stays
+    lightweight; F9 recalculates on demand and Save recalculates via calcOnSave.
+    """
+    calculation = workbook.calculation
+    calculation.calcMode = "manual"
+    calculation.fullCalcOnLoad = True
+    calculation.forceFullCalc = True
+    calculation.calcOnSave = True
+    # Zero tells Excel that cached results must be rebuilt by its own engine.
+    calculation.calcId = 0
+
 def configure_live_save_recalculation(workbook: Workbook) -> None:
     """LW-8: keep lightweight dashboard formulas dormant during editing.
 
