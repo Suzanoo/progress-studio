@@ -82,7 +82,7 @@ def test_final_policy_persists_f9_save_formula_contract_to_ooxml(tmp_path: Path)
     wb = load_workbook(path, data_only=False)
     try:
         calc = wb.calculation
-        assert calc.calcMode == "auto"
+        assert calc.calcMode == "manual"
         assert calc.calcOnSave is True
         assert calc.fullCalcOnLoad is False
         assert calc.forceFullCalc is False
@@ -94,7 +94,7 @@ def test_final_policy_persists_f9_save_formula_contract_to_ooxml(tmp_path: Path)
         root = ET.fromstring(package.read("xl/workbook.xml"))
         calc = root.find("x:calcPr", NS)
         assert calc is not None
-        assert calc.attrib["calcMode"] == "auto"
+        assert calc.attrib["calcMode"] == "manual"
         assert calc.attrib["calcOnSave"] == "1"
         assert calc.attrib["fullCalcOnLoad"] == "0"
         assert calc.attrib["forceFullCalc"] == "0"
@@ -134,7 +134,7 @@ def test_snapshot_payment_rebuild_finalizes_once_and_protects_new_payment(tmp_pa
     try:
         assert wb.security.lockStructure is False
         assert wb["Payment"].protection.sheet is True
-        assert wb.calculation.calcMode == "auto"
+        assert wb.calculation.calcMode == "manual"
         assert wb.calculation.calcOnSave is True
     finally:
         wb.close()
@@ -166,8 +166,10 @@ def test_live_payment_finalizes_after_render_so_new_payment_is_protected(tmp_pat
     start = source_text.index("    def rebuild_live_payment(")
     end = source_text.index("    def rebuild_payment(", start)
     block = source_text[start:end]
-    assert "finalize_workbook(" not in block
-    assert 'finalize_mode="live"' in block
+    assert block.count("finalize_workbook(") == 1
+    assert block.count(".save(") == 1
+    assert "finalize_mode" not in block
+    assert "save_path" not in block
 
 
 def test_readme_states_exact_f9_save_vs_rebuild_ownership(tmp_path: Path) -> None:

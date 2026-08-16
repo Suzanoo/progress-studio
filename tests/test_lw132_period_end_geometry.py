@@ -9,13 +9,13 @@ from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
 )
 
 
-def test_overlay_renders_preproject_blank_plan_anchor_as_zero_without_new_columns():
+def test_overlay_uses_explicit_zero_anchor_without_new_columns():
     wb = Workbook()
     ws = wb.active
     ws.title = "Dashboard_Data"
     ws["A2"] = date(2026, 2, 20)
     ws["A3"] = date(2026, 2, 27)
-    ws["B2"] = None  # existing pre-project reporting point
+    ws["B2"] = 0.0  # explicit Plan (0,0) chart anchor
     ws["B3"] = 0.0
     ws["P2"] = 0.0  # existing Actual Visible column, not a new helper
     ws["P3"] = 0.0
@@ -29,7 +29,7 @@ def test_overlay_renders_preproject_blank_plan_anchor_as_zero_without_new_column
         last_row=3,
     )
 
-    assert chart.display_blanks == "zero"
+    assert chart.display_blanks == "gap"
     assert chart.series[0].val.numRef.f.endswith("$B$2:$B$3")
     assert chart.series[1].val.numRef.f.endswith("$P$2:$P$3")
     assert ws.max_column == 16

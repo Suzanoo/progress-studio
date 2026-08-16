@@ -104,13 +104,15 @@ def test_lw9_live_payment_writer_has_one_open_and_one_save() -> None:
     end = source.index("    def rebuild_payment(", start)
     block = source[start:end]
     assert block.count("load_workbook(") == 1
-    assert block.count(".save(") == 0
+    assert block.count(".save(") == 1
+    assert block.count("finalize_workbook(") == 1
     assert "data_only=True" not in block
     assert "render_periods_into_workbook" in block
-    assert "save_path=temp_path" in block
+    assert "save_path=temp_path" not in block
+    assert "finalize_mode" not in block
 
 
-def test_lw9_in_memory_payment_renderer_has_no_load_and_owns_single_save() -> None:
+def test_lw9_in_memory_payment_renderer_is_render_only() -> None:
     source = Path(
         "progress_studio/infrastructure/excel/payment_line_renderer.py"
     ).read_text(encoding="utf-8")
@@ -118,7 +120,8 @@ def test_lw9_in_memory_payment_renderer_has_no_load_and_owns_single_save() -> No
     end = source.index("    def render_single_period(", start)
     block = source[start:end]
     assert "load_workbook" not in block
-    assert block.count(".save(") == 1
+    assert block.count(".save(") == 0
+    assert "finalize_workbook(" not in block
 
 
 def test_lw9_ui_routes_live_payment_to_live_engine() -> None:

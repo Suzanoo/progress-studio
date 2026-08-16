@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.series import SeriesLabel
@@ -214,6 +214,87 @@ def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, in
     )
 
 
+
+def _build_explicit_overlay_series_sources(
+    data_ws,
+    *,
+    weekly_first: int,
+    weekly_last: int,
+    monthly_first: int,
+    monthly_last: int,
+) -> tuple[tuple[int, int, int, int, int, int], tuple[int, int, int, int, int, int]]:
+    """Build small chart-only helper series with an explicit leading (0, 0).
+
+    Physical chart geometry uses N schedule cells, while a right-edge marker
+    layout needs N+1 data points. Dashboard_Data's project-only source can begin
+    at row 2, so relying on a pre-project source row is not robust. These helper
+    columns always create one synthetic zero point followed by live formulas back
+    to the canonical Plan/Actual/Cutoff helpers. No business data is duplicated.
+    """
+    # Weekly: T:W. Monthly: X:AA. These columns are internal Dashboard_Data only.
+    weekly_cols = (20, 21, 22, 23)
+    monthly_cols = (24, 25, 26, 27)
+    headers = (
+        (20, "Weekly Overlay Date"),
+        (21, "Weekly Overlay Plan"),
+        (22, "Weekly Overlay Actual"),
+        (23, "Weekly Overlay Cutoff"),
+        (24, "Monthly Overlay Date"),
+        (25, "Monthly Overlay Plan"),
+        (26, "Monthly Overlay Actual"),
+        (27, "Monthly Overlay Cutoff"),
+    )
+    for col, label in headers:
+        data_ws.cell(1, col, label)
+
+    # Clear stale helper values from a previous rebuild before writing the new set.
+    clear_to = max(data_ws.max_row, 3 + (weekly_last - weekly_first + 1), 3 + (monthly_last - monthly_first + 1))
+    for row in range(2, clear_to + 1):
+        for col in range(20, 28):
+            data_ws.cell(row, col).value = None
+
+    weekly_first_date = _as_date(data_ws.cell(weekly_first, 1).value)
+    weekly_anchor_date = (weekly_first_date - timedelta(days=7)) if weekly_first_date else None
+    data_ws.cell(2, 20, weekly_anchor_date)
+    data_ws.cell(2, 21, 0)
+    data_ws.cell(2, 22, 0)
+    data_ws.cell(2, 23, "=NA()")
+    data_ws.cell(2, 21).number_format = data_ws.cell(2, 22).number_format = "0.00%"
+    weekly_row = 3
+    for source_row in range(weekly_first, weekly_last + 1):
+        data_ws.cell(weekly_row, 20, data_ws.cell(source_row, 1).value)
+        data_ws.cell(weekly_row, 20).number_format = data_ws.cell(source_row, 1).number_format
+        data_ws.cell(weekly_row, 21, f"=B{source_row}")
+        data_ws.cell(weekly_row, 22, f"=P{source_row}")
+        data_ws.cell(weekly_row, 23, f"=R{source_row}")
+        for col in (21, 22, 23):
+            data_ws.cell(weekly_row, col).number_format = "0.00%"
+        weekly_row += 1
+    weekly_bounds = (2, weekly_row - 1, *weekly_cols)
+
+    monthly_first_date = _as_date(data_ws.cell(monthly_first, 4).value)
+    monthly_anchor_date = None
+    if monthly_first_date:
+        monthly_anchor_date = monthly_first_date.replace(day=1) - timedelta(days=1)
+    data_ws.cell(2, 24, monthly_anchor_date)
+    data_ws.cell(2, 24).number_format = "mmmm yyyy"
+    data_ws.cell(2, 25, 0)
+    data_ws.cell(2, 26, 0)
+    data_ws.cell(2, 27, "=NA()")
+    data_ws.cell(2, 25).number_format = data_ws.cell(2, 26).number_format = "0.00%"
+    monthly_row = 3
+    for source_row in range(monthly_first, monthly_last + 1):
+        data_ws.cell(monthly_row, 24, data_ws.cell(source_row, 4).value)
+        data_ws.cell(monthly_row, 24).number_format = "mmmm yyyy"
+        data_ws.cell(monthly_row, 25, f"=E{source_row}")
+        data_ws.cell(monthly_row, 26, f"=Q{source_row}")
+        data_ws.cell(monthly_row, 27, f"=S{source_row}")
+        for col in (25, 26, 27):
+            data_ws.cell(monthly_row, col).number_format = "0.00%"
+        monthly_row += 1
+    monthly_bounds = (2, monthly_row - 1, *monthly_cols)
+    return weekly_bounds, monthly_bounds
+
 def _scurve_plan_row(dataset: MainDataset) -> int:
     candidates = [
         row.row_number for row in dataset.rows
@@ -367,7 +448,7 @@ def _overlay_chart(
     # that pre-project cell, so Excel must render that one blank as zero.
     # Cutoff-masked Actual remains #N/A outside its visible window and therefore
     # still renders as a gap.
-    chart.display_blanks = "zero"
+    chart.display_blanks = "gap"
     chart.y_axis.majorGridlines = None
 
     # Both chart and plot areas must be transparent so the underlying
@@ -529,36 +610,29 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
     weekly_first, weekly_last, weekly_first_col, weekly_last_col = _weekly_project_window(data_ws, dataset)
     monthly_first, monthly_last, monthly_first_col, monthly_last_col = _monthly_project_window(data_ws, dataset)
 
-    # LW-13.2 period-end geometry: the overlay chart spans exactly the visible
-    # schedule cells, while its series includes one already-existing reporting
-    # point immediately before the project window.  With N schedule cells and
-    # N+1 chart points, Excel places the first point on the left boundary and
-    # every reporting marker on the right boundary of its period.  No new
-    # helper table/columns or source-of-truth path is introduced.
-    weekly_chart_first = max(2, weekly_first - 1)
-    monthly_chart_first = max(2, monthly_first - 1)
-
-    # Actual Visible (P/Q) is part of the existing frozen overlay contract.
-    # Seed only the pre-project chart anchor as 0 so Actual can originate at
-    # (start, 0) without creating helper architecture.  All later cutoff masking
-    # formulas remain unchanged.
-    if weekly_chart_first < weekly_first:
-        data_ws.cell(weekly_chart_first, 16, 0)
-        data_ws.cell(weekly_chart_first, 16).number_format = "0.00%"
-    if monthly_chart_first < monthly_first:
-        data_ws.cell(monthly_chart_first, 17, 0)
-        data_ws.cell(monthly_chart_first, 17).number_format = "0.00%"
+    # Build chart-only sources with an explicit leading (0, 0). This keeps
+    # right-edge marker geometry correct even when Dashboard_Data starts exactly
+    # at the first project reporting period and has no pre-project source row.
+    weekly_series, monthly_series = _build_explicit_overlay_series_sources(
+        data_ws,
+        weekly_first=weekly_first,
+        weekly_last=weekly_last,
+        monthly_first=monthly_first,
+        monthly_last=monthly_last,
+    )
+    weekly_chart_first, weekly_chart_last, weekly_date_col, weekly_plan_col, weekly_actual_col, weekly_cutoff_col = weekly_series
+    monthly_chart_first, monthly_chart_last, monthly_date_col, monthly_plan_col, monthly_actual_col, monthly_cutoff_col = monthly_series
 
     weekly_added = False
     if "main" in workbook.sheetnames:
         chart = _overlay_chart(
             data_ws=data_ws,
-            date_col=1,
-            plan_col=2,
-            actual_col=16,
-            cutoff_col=18,
+            date_col=weekly_date_col,
+            plan_col=weekly_plan_col,
+            actual_col=weekly_actual_col,
+            cutoff_col=weekly_cutoff_col,
             first_row=weekly_chart_first,
-            last_row=weekly_last,
+            last_row=weekly_chart_last,
             cutoff_label_format="dd/mm/yyyy",
         )
         chart.anchor = _responsive_anchor(
@@ -572,21 +646,14 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
 
     monthly_added = False
     if "main_monthly" in workbook.sheetnames:
-        # Excel builds a category-name data label from the source category cell.
-        # DataLabelList.numFmt alone does not control the displayed category date,
-        # so format the existing monthly category cells themselves as Month Year.
-        # This changes display only; values/formulas/source columns stay untouched.
-        for row in range(monthly_chart_first, monthly_last + 1):
-            data_ws.cell(row, 4).number_format = "mmmm yyyy"
-
         chart = _overlay_chart(
             data_ws=data_ws,
-            date_col=4,
-            plan_col=5,
-            actual_col=17,
-            cutoff_col=19,
+            date_col=monthly_date_col,
+            plan_col=monthly_plan_col,
+            actual_col=monthly_actual_col,
+            cutoff_col=monthly_cutoff_col,
             first_row=monthly_chart_first,
-            last_row=monthly_last,
+            last_row=monthly_chart_last,
             cutoff_label_format="mmmm yyyy",
         )
         chart.anchor = _responsive_anchor(

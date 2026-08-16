@@ -34,8 +34,10 @@ def test_overlay_uses_all_markers_and_cutoff_helpers():
     assert 'chart.x_axis.tickLblPos = "none"' in text
     assert 'weekly_cutoff_ref: str' in text
     assert 'monthly_cutoff_ref: str' in text
-    assert 'date_col=1' in text and 'plan_col=2' in text and 'actual_col=16' in text
-    assert 'date_col=4' in text and 'plan_col=5' in text and 'actual_col=17' in text
+    assert 'Weekly Overlay Date' in text and 'Weekly Overlay Plan' in text and 'Weekly Overlay Actual' in text
+    assert 'Monthly Overlay Date' in text and 'Monthly Overlay Plan' in text and 'Monthly Overlay Actual' in text
+    assert 'weekly_date_col' in text and 'weekly_plan_col' in text and 'weekly_actual_col' in text
+    assert 'monthly_date_col' in text and 'monthly_plan_col' in text and 'monthly_actual_col' in text
 
 
 def test_overlay_lw1231_responsive_geometry_and_transparency_contract():
@@ -99,12 +101,15 @@ def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     assert '_project_dates(dataset)' in text
     assert 'value >= start' in text
     assert 'value >= finish' in text
-    assert 'weekly_chart_first = max(2, weekly_first - 1)' in text
+    assert '_build_explicit_overlay_series_sources' in text
+    assert 'data_ws.cell(2, 21, 0)' in text
+    assert 'data_ws.cell(2, 22, 0)' in text
+    assert 'data_ws.cell(2, 25, 0)' in text
+    assert 'data_ws.cell(2, 26, 0)' in text
     assert 'first_row=weekly_chart_first' in text
-    assert 'last_row=weekly_last' in text
-    assert 'monthly_chart_first = max(2, monthly_first - 1)' in text
+    assert 'last_row=weekly_chart_last' in text
     assert 'first_row=monthly_chart_first' in text
-    assert 'last_row=monthly_last' in text
+    assert 'last_row=monthly_chart_last' in text
     assert 'label.value = "Cutoff Date"' in text
     assert 'value.value = initial_value' in text
     assert 'This cutoff belongs to this sheet only' in text
@@ -122,8 +127,10 @@ def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
 def test_lw124_cutoff_red_line_has_date_label_contract():
     text = Path('progress_studio/infrastructure/excel/traditional_overlay_workbook.py').read_text()
     assert 'CUTOFF_RED = "C00000"' in text
-    assert 'cutoff_col=18' in text
-    assert 'cutoff_col=19' in text
+    assert 'weekly_cutoff_col' in text
+    assert 'monthly_cutoff_col' in text
+    assert 'Weekly Overlay Cutoff' in text
+    assert 'Monthly Overlay Cutoff' in text
     assert 'ErrorBars(' in text
     assert 'prstDash="dash"' in text
     assert 'showCatName=True' in text

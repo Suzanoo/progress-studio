@@ -406,16 +406,16 @@ class WorkbookRebuildEngine:
                 keep_vba=keep_vba,
             )
             try:
-                # Render first, then apply the shared final policy exactly once so
-                # the newly-created Payment sheet is included in protection/visibility.
+                # Renderer mutates only. Rebuild owns one final policy pass and one
+                # save at the workflow boundary so Payment cannot finalize twice.
                 rendered = self.payment_service.line_renderer.render_periods_into_workbook(
                     wb,
                     selected,
                     source_workbook=source,
                     output_workbook=output,
-                    save_path=temp_path,
-                    finalize_mode="live",
                 )
+                finalize_workbook(wb, mode="live", include_guide=True)
+                wb.save(temp_path)
             finally:
                 wb.close()
 

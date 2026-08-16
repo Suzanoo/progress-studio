@@ -24,7 +24,7 @@ def test_create_progress_final_step_moves_proven_rebuild_features_to_create_boun
     wb = load_workbook(output, data_only=False)
     try:
         # Proven pre-normalizer Snapshot recalc contract.
-        assert wb.calculation.calcMode == "auto"
+        assert wb.calculation.calcMode == "manual"
         assert wb.calculation.calcOnSave is True
         assert wb.calculation.fullCalcOnLoad is False
         assert wb.calculation.forceFullCalc is False

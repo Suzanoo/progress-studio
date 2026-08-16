@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 from copy import copy
+from io import BytesIO
 from datetime import date, datetime
 from pathlib import Path
 
@@ -46,6 +47,7 @@ class PaymentLineRenderer:
         output_workbook: Path,
         periods: tuple[PaymentResolvedPeriod, ...],
     ) -> PaymentMultiLineRenderResult:
+        """Standalone Payment boundary: load once, render, finalize once, save once."""
         source = Path(source_workbook)
         output = Path(output_workbook)
         active = tuple(period for period in periods if period.points)
@@ -59,88 +61,27 @@ class PaymentLineRenderer:
         ) as handle:
             temp_path = Path(handle.name)
 
-        colors: list[tuple[str, str]] = []
-        rendered_points = 0
         try:
-            with tempfile.TemporaryDirectory(prefix="payment_labels_") as label_dir:
-                wb = load_workbook(source, keep_vba=keep_vba)
-                try:
-                    if self.MAIN_SHEET not in wb.sheetnames:
-                        raise PaymentWorkbookError("Worksheet 'main' was not found.")
-                    if self.PAYMENT_SHEET in wb.sheetnames:
-                        wb.remove(wb[self.PAYMENT_SHEET])
-
-                    main = wb[self.MAIN_SHEET]
-                    payment = wb.copy_worksheet(main)
-                    payment.title = self.PAYMENT_SHEET
-                    # Keep the user-facing Payment pair together: main -> Payment Input -> Payment.
-                    if "Payment Input" in wb.sheetnames:
-                        wb._sheets.remove(payment)
-                        input_index = wb.sheetnames.index("Payment Input")
-                        wb._sheets.insert(input_index + 1, payment)
-                    payment.freeze_panes = main.freeze_panes
-                    payment.sheet_view.showGridLines = main.sheet_view.showGridLines
-                    payment.auto_filter.ref = main.auto_filter.ref
-                    self._paint_timescale_like_activity_data(payment)
-
-                    timeline = self._timescale_boundaries(payment)
-                    if not timeline:
-                        raise PaymentWorkbookError("Weekly timescale dates were not found on the main sheet.")
-
-                    lane_plan = self._allocate_visual_lanes(active, timeline)
-                    for period in active:
-                        color = self.theme.colors.get(period.period_id, self.theme.fallback_color)
-                        line = Side(style=self.theme.line_style, color=color)
-                        endpoint = Side(style=self.theme.endpoint_style, color=color)
-                        true_boundary, visual_boundary, collision_index = lane_plan[period.period_id]
-                        self._paint_header_marker(
-                            payment,
-                            period,
-                            visual_boundary,
-                            line,
-                            true_boundary=true_boundary,
-                        )
-                        self._paint_vertical_backbone(
-                            payment,
-                            period,
-                            visual_boundary,
-                            line,
-                            endpoint,
-                        )
-                        self._add_payment_label(
-                            payment,
-                            period,
-                            visual_boundary,
-                            color,
-                            Path(label_dir),
-                            collision_index=collision_index,
-                        )
-                        colors.append((period.period_id, color))
-                        rendered_points += len(period.points)
-
-                    # Standalone rendering owns one final policy pass at its output boundary.
-                    finalize_workbook(wb, mode="snapshot", include_guide=True)
-                    wb.save(temp_path)
-                finally:
-                    wb.close()
+            wb = load_workbook(source, keep_vba=keep_vba)
+            try:
+                result = self.render_periods_into_workbook(
+                    wb,
+                    active,
+                    source_workbook=source,
+                    output_workbook=output,
+                )
+                finalize_workbook(wb, mode="snapshot", include_guide=True)
+                wb.save(temp_path)
+            finally:
+                wb.close()
             shutil.move(str(temp_path), str(output))
+            return result
         except PaymentWorkbookError:
             raise
         except Exception as exc:
             raise PaymentWorkbookError(f"Payment lines could not be rendered: {exc}") from exc
         finally:
             temp_path.unlink(missing_ok=True)
-
-        return PaymentMultiLineRenderResult(
-            source_workbook=source,
-            output_workbook=output,
-            payment_sheet=self.PAYMENT_SHEET,
-            period_ids=tuple(period.period_id for period in active),
-            rendered_points=rendered_points,
-            rendered_periods=len(active),
-            colors=tuple(colors),
-        )
-
 
     def render_periods_into_workbook(
         self,
@@ -149,13 +90,13 @@ class PaymentLineRenderer:
         *,
         source_workbook: Path,
         output_workbook: Path,
-        save_path: Path | None = None,
-        finalize_mode: str | None = None,
     ) -> PaymentMultiLineRenderResult:
-        """LW-9 render into an already-open workbook; never loads another workbook.
+        """Render into an already-open workbook without finalizing or saving.
 
-        When save_path is supplied, the single workbook save occurs while temporary
-        label assets are still alive.
+        The caller owns the workflow boundary: renderers only mutate the workbook;
+        visibility/protection/recalculation and the single final save belong to the
+        service/rebuild pipeline. Payment badge images are held in RAM so saving can
+        safely happen after this method returns.
         """
         active = tuple(period for period in periods if period.points)
         if not active:
@@ -184,33 +125,26 @@ class PaymentLineRenderer:
         colors: list[tuple[str, str]] = []
         rendered_points = 0
         lane_plan = self._allocate_visual_lanes(active, timeline)
-        with tempfile.TemporaryDirectory(prefix="payment_labels_") as label_dir:
-            for period in active:
-                color = self.theme.colors.get(period.period_id, self.theme.fallback_color)
-                line = Side(style=self.theme.line_style, color=color)
-                endpoint = Side(style=self.theme.endpoint_style, color=color)
-                true_boundary, visual_boundary, collision_index = lane_plan[period.period_id]
-                self._paint_header_marker(
-                    payment, period, visual_boundary, line, true_boundary=true_boundary
-                )
-                self._paint_vertical_backbone(
-                    payment, period, visual_boundary, line, endpoint
-                )
-                self._add_payment_label(
-                    payment,
-                    period,
-                    visual_boundary,
-                    color,
-                    Path(label_dir),
-                    collision_index=collision_index,
-                )
-                colors.append((period.period_id, color))
-                rendered_points += len(period.points)
-
-            if finalize_mode is not None:
-                finalize_workbook(workbook, mode=finalize_mode, include_guide=True)
-            if save_path is not None:
-                workbook.save(Path(save_path))
+        for period in active:
+            color = self.theme.colors.get(period.period_id, self.theme.fallback_color)
+            line = Side(style=self.theme.line_style, color=color)
+            endpoint = Side(style=self.theme.endpoint_style, color=color)
+            true_boundary, visual_boundary, collision_index = lane_plan[period.period_id]
+            self._paint_header_marker(
+                payment, period, visual_boundary, line, true_boundary=true_boundary
+            )
+            self._paint_vertical_backbone(
+                payment, period, visual_boundary, line, endpoint
+            )
+            self._add_payment_label(
+                payment,
+                period,
+                visual_boundary,
+                color,
+                collision_index=collision_index,
+            )
+            colors.append((period.period_id, color))
+            rendered_points += len(period.points)
 
         return PaymentMultiLineRenderResult(
             source_workbook=Path(source_workbook),
@@ -221,6 +155,7 @@ class PaymentLineRenderer:
             rendered_periods=len(active),
             colors=tuple(colors),
         )
+
     def render_single_period(
         self,
         source_workbook: Path,
@@ -303,7 +238,6 @@ class PaymentLineRenderer:
         period: PaymentResolvedPeriod,
         boundary: int,
         color: str,
-        label_dir: Path,
         *,
         collision_index: int = 0,
     ) -> None:
@@ -341,10 +275,15 @@ class PaymentLineRenderer:
             font=font,
         )
 
-        label_path = label_dir / f"{period.period_id}_label.png"
-        image.save(label_path, optimize=True)
+        # Keep label bytes in RAM. openpyxl reads the image only when the workbook
+        # is saved, so a temporary-file path would force the renderer to own the
+        # save boundary. BytesIO lets the renderer remain render-only and lets the
+        # caller finalize/save exactly once.
+        label_buffer = BytesIO()
+        image.save(label_buffer, format="PNG", optimize=True)
+        label_buffer.seek(0)
 
-        badge = XLImage(str(label_path))
+        badge = XLImage(label_buffer)
         badge.width = width
         badge.height = height
         marker_col = min(max(boundary, 1), ws.max_column)

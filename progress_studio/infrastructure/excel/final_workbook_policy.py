@@ -6,8 +6,7 @@ from enum import Enum
 from openpyxl.workbook.workbook import Workbook
 
 from progress_studio.infrastructure.excel.calculation_policy import (
-    configure_incremental_excel_recalculation,
-    configure_live_save_recalculation,
+    configure_user_driven_save_recalculation,
 )
 from progress_studio.infrastructure.excel.workbook_guide import build_workbook_guide
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
@@ -64,13 +63,12 @@ def finalize_workbook(
     visible, hidden, very_hidden = apply_final_sheet_visibility(workbook)
     protected = apply_final_sheet_protection(workbook)
 
-    # Preserve the proven pre-normalizer calculation contracts. Snapshot
-    # workbooks stay Automatic/incremental; Live workbooks stay Manual and
-    # calculate on Save. Python-generated caches remain owned by Rebuild.
-    if resolved_mode is FinalWorkbookMode.LIVE:
-        configure_live_save_recalculation(workbook)
-    else:
-        configure_incremental_excel_recalculation(workbook)
+    # Final user-facing workbooks are intentionally Manual. This prevents
+    # Excel from continuously recalculating the large progress workbook while
+    # the user edits it. F9 recalculates formulas on demand and calcOnSave asks
+    # Excel to calculate formulas before Save. Python-owned generated snapshots
+    # remain the responsibility of Progress Studio Rebuild.
+    configure_user_driven_save_recalculation(workbook)
 
     return FinalWorkbookPolicyResult(
         mode=resolved_mode,
