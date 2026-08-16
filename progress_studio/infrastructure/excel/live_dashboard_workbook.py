@@ -22,6 +22,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
+from progress_studio.services.reporting_period_selector import select_reporting_periods
 from progress_studio.infrastructure.excel.live_scurve_workbook import build_live_progress_contract
 
 
@@ -31,15 +32,22 @@ def _as_date(value: date | datetime | None) -> date | None:
     return value
 
 
-def _default_cutoff(cache: ProgressCache) -> date | None:
+def _default_cutoff(
+    cache: ProgressCache,
+    *,
+    allowed_dates: set[date] | None = None,
+) -> date | None:
     latest_actual = None
     latest_any = None
     for point in cache.points:
         point_date = _as_date(point.reporting_date)
-        if point_date is not None:
-            latest_any = point_date
-            if point.actual_cumulative is not None:
-                latest_actual = point_date
+        if point_date is None:
+            continue
+        if allowed_dates is not None and point_date not in allowed_dates:
+            continue
+        latest_any = point_date
+        if point.actual_cumulative is not None:
+            latest_actual = point_date
     return latest_actual or latest_any
 
 
@@ -105,20 +113,27 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
         build_live_progress_contract(workbook, dataset)
     progress = workbook["progress"]
 
-    weekly_count = max(0, progress.max_row - 1)
+    reporting_periods = select_reporting_periods(dataset)
+    weekly_points: list[tuple[int, date]] = []
     month_last_rows: OrderedDict[tuple[int, int], tuple[int, date]] = OrderedDict()
-    for idx, period in enumerate(dataset.periods, start=2):
-        reporting = _as_date(period.reporting_date)
-        if reporting is not None:
-            month_last_rows[(reporting.year, reporting.month)] = (idx, reporting)
+    for ref in reporting_periods:
+        reporting = _as_date(ref.period.reporting_date)
+        if reporting is None:
+            continue
+        # ``progress`` retains the complete visible timescale including margin,
+        # so keep the original dataset index when linking back to its row.
+        progress_row = ref.index + 2
+        weekly_points.append((progress_row, reporting))
+        month_last_rows[(reporting.year, reporting.month)] = (progress_row, reporting)
     monthly_points = list(month_last_rows.values())
 
+    weekly_count = len(weekly_points)
     max_rows = max(weekly_count, len(monthly_points), 1)
     for idx in range(max_rows):
         row = idx + 2
 
         if idx < weekly_count:
-            progress_row = idx + 2
+            progress_row, _reporting = weekly_points[idx]
             ws.cell(row, 1, f"='progress'!A{progress_row}")
             ws.cell(row, 2, f"='progress'!B{progress_row}")
             ws.cell(row, 3, f"='progress'!C{progress_row}")
@@ -338,7 +353,15 @@ def build_live_dashboard(
 ) -> None:
     """LW-8 interactive Live dashboard with tiny formulas only."""
     cache = ProgressCacheDeriver().derive(dataset)
-    cutoff_date = _as_date(cutoff) or _default_cutoff(cache)
+    reporting_dates = {
+        value
+        for ref in select_reporting_periods(dataset)
+        if (value := _as_date(ref.period.reporting_date)) is not None
+    }
+    cutoff_date = _as_date(cutoff) or _default_cutoff(
+        cache,
+        allowed_dates=reporting_dates,
+    )
     activity_model = ActivityTableDeriver().derive(dataset, cutoff=cutoff_date)
     # LW-11.1: progress is the sole curve calculation contract.
     build_live_progress_contract(workbook, dataset)
