@@ -98,9 +98,8 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
 
 def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     text = Path('progress_studio/infrastructure/excel/traditional_overlay_workbook.py').read_text()
-    assert '_project_dates(dataset)' in text
-    assert 'value >= start' in text
-    assert 'value >= finish' in text
+    assert 'data_ws.cell(row, 2).value not in (None, "")' in text
+    assert 'data_ws.cell(row, 5).value not in (None, "")' in text
     assert '_build_explicit_overlay_series_sources' in text
     assert 'data_ws.cell(2, 21, 0)' in text
     assert 'data_ws.cell(2, 22, 0)' in text

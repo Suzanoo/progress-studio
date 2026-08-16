@@ -214,3 +214,43 @@ def test_rebuild_2x2_finalization_ownership_has_no_duplicate_policy_pass() -> No
     assert "finalize_workbook(" not in snapshot_payment
     assert standalone_payment.count("finalize_workbook(") == 1
     assert standalone_payment.count("wb.save(") == 1
+
+
+def test_rebuild_live_dashboard_masks_margin_plan_as_na_instead_of_zero(tmp_path: Path) -> None:
+    source = _matrix_source(tmp_path / "source.xlsx")
+    output = tmp_path / "live_progress_margin.xlsx"
+    WorkbookRebuildEngine().rebuild_live_progress(source, output, project_name="2x2 Matrix")
+
+    wb = load_workbook(output, data_only=False)
+    try:
+        data = wb["Dashboard_Data"]
+        # Selected Plan must explicitly mask blank Weekly/Monthly source cells.
+        formula = str(data["H2"].value)
+        assert 'IF(B2="",NA(),B2)' in formula
+        assert 'IF(E2="",NA(),E2)' in formula
+        assert wb["Dashboard"]._charts[0].x_axis.tagname == "dateAx"
+    finally:
+        wb.close()
+
+
+def test_rebuild_progress_monthly_overlay_finishes_on_last_nonblank_monthly_plan(tmp_path: Path) -> None:
+    source = _matrix_source(tmp_path / "source.xlsx")
+    for mode in ("snapshot", "live"):
+        output = tmp_path / f"monthly_end_{mode}.xlsx"
+        engine = WorkbookRebuildEngine()
+        if mode == "snapshot":
+            engine.rebuild_progress(source, output, project_name="2x2 Matrix")
+        else:
+            engine.rebuild_live_progress(source, output, project_name="2x2 Matrix")
+        wb = load_workbook(output, data_only=False)
+        try:
+            data = wb["Dashboard_Data"]
+            chart = wb["main_monthly"]._charts[0]
+            rows = [int(v) for v in re.findall(r"\$(\d+)", chart.series[0].val.numRef.f)]
+            last_row = rows[-1]
+            # Explicit anchor is row 2; the last chart point must be a real source
+            # formula, never a synthetic/trailing zero.
+            assert data.cell(last_row, 25).value not in (0, "=0", None)
+            assert data.cell(last_row + 1, 25).value is None
+        finally:
+            wb.close()

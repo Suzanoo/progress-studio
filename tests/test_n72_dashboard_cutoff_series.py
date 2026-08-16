@@ -69,3 +69,16 @@ def test_n72_dashboard_plan_does_not_fall_to_zero_and_actual_stops_at_cutoff() -
     assert "NA()" in actual_formula
     assert '"",0' in actual_formula
     wb.close()
+
+
+def test_dashboard_chart_uses_date_axis_so_monthly_points_are_not_squeezed_left() -> None:
+    from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+
+    wb, ws = _progress_fixture()
+    table = wb.create_sheet("progress_table")
+    table.append(["WBS", "Activity", "Total", "Type", "Status", date(2027, 5, 7), "_Kind"])
+    # Build the production dashboard, which also creates Dashboard_Data.
+    build_dashboard(wb, project_name="Date Axis")
+    chart = wb["Dashboard"]._charts[0]
+    assert chart.x_axis.tagname == "dateAx"
+    wb.close()

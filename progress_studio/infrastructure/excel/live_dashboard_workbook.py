@@ -5,7 +5,9 @@ from collections import OrderedDict
 from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.axis import DateAxis
 from openpyxl.chart.legend import LegendEntry
+from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -141,7 +143,11 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             f'IF(A{row}="","",A{row}),'
             f'IF(D{row}="","",D{row}))',
         )
-        ws.cell(row, 8, f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",B{row},E{row}))')
+        ws.cell(
+            row, 8,
+            f'=IF(G{row}="",NA(),IF(Dashboard!$G$5="Weekly",'
+            f'IF(B{row}="",NA(),B{row}),IF(E{row}="",NA(),E{row})))',
+        )
         # Raw selected Actual is deliberately separate from the chart mask.
         # KPI formulas read this error-free helper; only column I contains #N/A.
         ws.cell(
@@ -439,10 +445,27 @@ def build_live_dashboard(
     chart.height = float(_LAYOUT["chart_height"])
     chart.width = float(_LAYOUT["chart_width"])
     chart.y_axis.scaling.min = 0
-    chart.y_axis.scaling.max = 1
+    chart.y_axis.scaling.max = float(_LAYOUT.get("chart_y_max", 1.10))
     chart.y_axis.numFmt = "0%"
     chart.legend.position = "t"
     chart.display_blanks = "gap"
+
+    # Match the normal Dashboard renderer. Live rebuild is a data-ownership mode,
+    # not a second visual theme.
+    grid = GraphicalProperties()
+    grid.line.solidFill = "E5E7EB"
+    grid.line.width = 9000
+    chart.y_axis.majorGridlines.graphicalProperties = grid
+    axis_line = GraphicalProperties()
+    axis_line.line.solidFill = "B8C2CC"
+    axis_line.line.width = 9000
+    chart.y_axis.spPr = axis_line
+    date_axis = DateAxis()
+    date_axis.number_format = "mmm-yy"
+    date_axis.majorTimeUnit = "days"
+    date_axis.title = "Date"
+    date_axis.spPr = axis_line
+    chart.x_axis = date_axis
     data = Reference(data_ws, min_col=8, max_col=9, min_row=1, max_row=last_data_row)
     cats = Reference(data_ws, min_col=7, min_row=2, max_row=last_data_row)
     chart.add_data(data, titles_from_data=True)
@@ -488,9 +511,6 @@ def build_live_dashboard(
     # horizontal context. Excel will thin date labels automatically as needed.
     chart.y_axis.majorUnit = 0.25
     chart.y_axis.title = "Progress (%)"
-    chart.x_axis.title = "Date"
-    chart.x_axis.number_format = "mmm-yy"
-    chart.x_axis.majorTimeUnit = "days"
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")

@@ -118,77 +118,74 @@ def _project_dates(dataset: MainDataset):
 
 
 def _weekly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int, int]:
-    """Return helper-row bounds plus physical weekly columns for the project.
+    """Return project-only helper rows and their physical weekly columns.
 
-    Dashboard_Data has display margins removed, while ``dataset.periods`` still
-    contains the full visible timescale. Row indexes therefore must come from
-    Dashboard_Data itself; using period indexes against the helper sheet skips the
-    first margin-count rows and truncates the beginning of the overlay.
+    ``Dashboard_Data`` already owns the authoritative reporting/calculation
+    window.  Use its nonblank Plan rows as the source of truth instead of
+    recomputing inclusion from Project Start/Finish.  This preserves the final
+    reporting week that overlaps Project Finish while excluding display-only
+    margins on both sides.
     """
-    start, finish = _project_dates(dataset)
-
-    helper_dates = []
-    for row in range(2, data_ws.max_row + 1):
-        value = _as_date(data_ws.cell(row, 1).value)
-        if value is not None:
-            helper_dates.append((row, value))
-
-    period_dates = [
-        (idx, _as_date(period.reporting_date))
-        for idx, period in enumerate(dataset.periods)
-        if _as_date(period.reporting_date) is not None
+    helper_rows = [
+        row for row in range(2, data_ws.max_row + 1)
+        if _as_date(data_ws.cell(row, 1).value) is not None
+        and data_ws.cell(row, 2).value not in (None, "")
     ]
-    if not period_dates or not helper_dates or start is None or finish is None:
+    if not helper_rows:
         first_col = dataset.periods[0].column if dataset.periods else 1
         last_col = dataset.periods[-1].column if dataset.periods else first_col
         return 2, max(2, data_ws.max_row), first_col, last_col
 
-    first_helper = next((row for row, value in helper_dates if value >= start), helper_dates[0][0])
-    last_helper = next((row for row, value in helper_dates if value >= finish), helper_dates[-1][0])
-    if last_helper < first_helper:
-        last_helper = first_helper
+    first_helper, last_helper = helper_rows[0], helper_rows[-1]
+    first_date = _as_date(data_ws.cell(first_helper, 1).value)
+    last_date = _as_date(data_ws.cell(last_helper, 1).value)
 
-    first_idx = next((idx for idx, value in period_dates if value >= start), period_dates[0][0])
-    last_idx = next((idx for idx, value in period_dates if value >= finish), period_dates[-1][0])
-    if last_idx < first_idx:
-        last_idx = first_idx
-    return (
-        first_helper,
-        last_helper,
-        dataset.periods[first_idx].column,
-        dataset.periods[last_idx].column,
-    )
+    date_to_col = {
+        _as_date(period.reporting_date): period.column
+        for period in dataset.periods
+        if _as_date(period.reporting_date) is not None
+    }
+    first_col = date_to_col.get(first_date)
+    last_col = date_to_col.get(last_date)
+    if first_col is None or last_col is None:
+        # Fall back to the closest physical reporting columns without changing
+        # the helper source window.
+        period_dates = [
+            (_as_date(period.reporting_date), period.column)
+            for period in dataset.periods
+            if _as_date(period.reporting_date) is not None
+        ]
+        if first_col is None and first_date is not None:
+            first_col = next((col for value, col in period_dates if value >= first_date), period_dates[0][1])
+        if last_col is None and last_date is not None:
+            last_col = next((col for value, col in period_dates if value >= last_date), period_dates[-1][1])
+    return first_helper, last_helper, int(first_col), int(last_col)
 
 
 def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int, int]:
-    """Return monthly helper row bounds and physical monthly columns for project duration."""
-    start, finish = _project_dates(dataset)
-    months = []
-    for row in range(2, data_ws.max_row + 1):
-        value = data_ws.cell(row, 4).value
-        if value in (None, ""):
-            continue
-        months.append((row, value))
-    first_timescale_col = dataset.periods[0].column
-    if not months or start is None or finish is None:
-        last = months[-1][0] if months else 2
-        return 2, last, first_timescale_col, first_timescale_col + max(0, len(months) - 1)
+    """Return project-only monthly helper rows and physical month columns.
 
-    start_key = (start.year, start.month)
-    finish_key = (finish.year, finish.month)
+    Monthly reporting can legitimately finish in the month *after* the raw
+    Project Finish date because the final weekly reporting period overlaps the
+    finish.  Therefore the last nonblank Monthly Plan helper, not the calendar
+    month of Project Finish, owns the chart boundary.
+    """
+    helper_rows = [
+        row for row in range(2, data_ws.max_row + 1)
+        if _as_date(data_ws.cell(row, 4).value) is not None
+        and data_ws.cell(row, 5).value not in (None, "")
+    ]
+    first_timescale_col = dataset.periods[0].column if dataset.periods else 1
+    if not helper_rows:
+        return 2, 2, first_timescale_col, first_timescale_col
 
-    # Helper rows come from project-only Dashboard_Data. Physical monthly columns
-    # come from the full visible timescale (which can include margin months). Keep
-    # those two coordinate systems separate just like the weekly overlay.
-    helper_first_pos = next((i for i, (_, d) in enumerate(months) if (d.year, d.month) >= start_key), 0)
-    helper_last_pos = max(
-        (i for i, (_, d) in enumerate(months) if (d.year, d.month) <= finish_key),
-        default=len(months) - 1,
-    )
-    if helper_last_pos < helper_first_pos:
-        helper_last_pos = helper_first_pos
+    first_helper, last_helper = helper_rows[0], helper_rows[-1]
+    first_date = _as_date(data_ws.cell(first_helper, 4).value)
+    last_date = _as_date(data_ws.cell(last_helper, 4).value)
+    first_key = (first_date.year, first_date.month)
+    last_key = (last_date.year, last_date.month)
 
-    full_month_keys = []
+    full_month_keys: list[tuple[int, int]] = []
     for period in dataset.periods:
         value = _as_date(period.reporting_date)
         if value is None:
@@ -196,24 +193,17 @@ def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, in
         key = (value.year, value.month)
         if not full_month_keys or full_month_keys[-1] != key:
             full_month_keys.append(key)
-    if not full_month_keys:
-        full_month_keys = [(d.year, d.month) for _, d in months]
 
-    physical_first_pos = next((i for i, key in enumerate(full_month_keys) if key >= start_key), 0)
-    physical_last_pos = max(
-        (i for i, key in enumerate(full_month_keys) if key <= finish_key),
-        default=len(full_month_keys) - 1,
-    )
-    if physical_last_pos < physical_first_pos:
-        physical_last_pos = physical_first_pos
-
+    first_pos = next((i for i, key in enumerate(full_month_keys) if key == first_key), 0)
+    last_pos = next((i for i, key in enumerate(full_month_keys) if key == last_key), len(full_month_keys) - 1)
+    if last_pos < first_pos:
+        last_pos = first_pos
     return (
-        months[helper_first_pos][0],
-        months[helper_last_pos][0],
-        first_timescale_col + physical_first_pos,
-        first_timescale_col + physical_last_pos,
+        first_helper,
+        last_helper,
+        first_timescale_col + first_pos,
+        first_timescale_col + last_pos,
     )
-
 
 
 def _build_explicit_overlay_series_sources(

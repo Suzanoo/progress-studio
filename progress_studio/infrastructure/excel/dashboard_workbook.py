@@ -7,6 +7,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.axis import DateAxis
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.formatting.rule import DataBarRule, FormulaRule
@@ -554,7 +555,14 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     chart.y_axis.majorUnit = float(_LAYOUT.get("chart_major_unit", 0.2))
     chart.y_axis.numFmt = "0%"
     chart.y_axis.title = "Progress"
-    chart.x_axis.title = "Period"
+    # A date axis is essential because the selector helper has Weekly capacity
+    # even when Monthly is selected. Blank trailing Monthly helper rows must not
+    # consume equal-width text categories and squeeze the curve to the left.
+    date_axis = DateAxis()
+    date_axis.number_format = "mmm-yy"
+    date_axis.majorTimeUnit = "days"
+    date_axis.title = "Period"
+    chart.x_axis = date_axis
     chart.legend.position = "t"
     chart.display_blanks = "gap"
 

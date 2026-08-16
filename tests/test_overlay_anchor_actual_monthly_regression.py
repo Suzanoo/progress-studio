@@ -70,10 +70,10 @@ def test_weekly_overlay_separates_filtered_helper_rows_from_margin_period_column
     wb = Workbook()
     ws = wb.active
     ws.title = "Dashboard_Data"
-    ws.append(["Weekly Date"])
-    ws.append([date(2026, 4, 17)])
-    ws.append([date(2026, 4, 24)])
-    ws.append([date(2026, 5, 1)])
+    ws.append(["Weekly Date", "Weekly Plan"])
+    ws.append([date(2026, 4, 17), 0.01])
+    ws.append([date(2026, 4, 24), 0.50])
+    ws.append([date(2026, 5, 1), 1.00])
 
     first_row, last_row, first_col, last_col = _weekly_project_window(ws, _dataset_with_margin())
 
@@ -88,8 +88,9 @@ def test_monthly_overlay_uses_full_timescale_month_offset_for_physical_anchor():
     ws = wb.active
     ws.title = "Dashboard_Data"
     ws["D1"] = "Monthly Date"
-    ws["D2"] = date(2026, 4, 24)
-    ws["D3"] = date(2026, 5, 1)
+    ws["E1"] = "Monthly Plan"
+    ws["D2"], ws["E2"] = date(2026, 4, 24), 0.50
+    ws["D3"], ws["E3"] = date(2026, 5, 1), 1.00
 
     first_row, last_row, first_col, last_col = _monthly_project_window(ws, _dataset_with_margin())
 
@@ -158,3 +159,39 @@ def test_monthly_repaints_all_four_scurve_timescale_bands():
     for row, fill in zip(range(5, 9), expected):
         assert _fill_rgb(monthly.cell(row, 9).fill) == _fill_rgb(fill)
         assert _fill_rgb(monthly.cell(row, 10).fill) == _fill_rgb(fill)
+
+
+def test_monthly_overlay_keeps_final_reporting_month_after_calendar_project_finish():
+    """009 regression: Project Finish in May can still report 100% in June."""
+    periods = (
+        MainPeriod(18, "2027-04-30", datetime(2027, 4, 30)),
+        MainPeriod(19, "2027-05-07", datetime(2027, 5, 7)),
+        MainPeriod(20, "2027-05-28", datetime(2027, 5, 28)),
+        MainPeriod(21, "2027-06-04", datetime(2027, 6, 4)),  # overlaps 31-May finish
+        MainPeriod(22, "2027-06-11", datetime(2027, 6, 11)),  # display-only margin
+        MainPeriod(23, "2027-07-02", datetime(2027, 7, 2)),   # display-only margin
+    )
+    summary = MainRow(
+        row_number=5, row_type="Project Summary", pa="P", wbs="", description="009",
+        activity_id="", outline_level=0,
+        plan_start=datetime(2026, 4, 17), plan_finish=datetime(2027, 5, 31),
+        amount=100.0, percent_complete=0.0, period_values=(),
+    )
+    dataset = MainDataset(
+        workbook_name="009.xlsx", header_row=4, headers=(), periods=periods, rows=(summary,),
+    )
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Dashboard_Data"
+    ws["D1"] = "Monthly Date"
+    ws["E1"] = "Monthly Plan"
+    ws["D2"], ws["E2"] = date(2027, 4, 30), 0.80
+    ws["D3"], ws["E3"] = date(2027, 5, 28), 0.99
+    ws["D4"], ws["E4"] = date(2027, 6, 4), 1.00
+
+    first_row, last_row, first_col, last_col = _monthly_project_window(ws, dataset)
+
+    assert (first_row, last_row) == (2, 4)
+    # April/May/June physical months are the first three month columns here.
+    assert (first_col, last_col) == (18, 20)
+    assert ws.cell(last_row, 5).value == 1.00
