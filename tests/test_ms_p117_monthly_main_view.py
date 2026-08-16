@@ -73,12 +73,41 @@ def test_monthly_main_freezes_static_activity_plan_and_keeps_live_summary_rows()
     assert isinstance(ws.cell(10, 18).value, str) and ws.cell(10, 18).value.startswith('=')
 
 
-def test_monthly_cumulative_scurve_uses_last_reporting_value() -> None:
+def test_monthly_cumulative_scurve_uses_last_nonblank_reporting_value() -> None:
     wb = _workbook()
     build_monthly_main_view(wb)
     ws = wb["main_monthly"]
-    assert ws.cell(12, 18).value == "='main'!R12"
-    assert ws.cell(12, 19).value == "='main'!U12"
+    assert ws.cell(12, 18).value == '=IFERROR(LOOKUP(2,1/(\'main\'!R12:R12<>""),\'main\'!R12:R12),"")'
+    assert ws.cell(12, 19).value == '=IFERROR(LOOKUP(2,1/(\'main\'!S12:U12<>""),\'main\'!S12:U12),"")'
+
+
+def test_monthly_acc_plan_keeps_final_100_when_later_weeks_in_same_month_are_blank() -> None:
+    wb = _workbook()
+    ws = wb["main"]
+    # February's real Plan finishes on 13-Feb; the later 27-Feb weekly column is
+    # display margin.  Acc.Plan must therefore retain 100% for the February
+    # monthly bucket instead of inheriting the trailing blank.
+    ws.cell(12, 19).value = 0.60
+    ws.cell(12, 20).value = 1.00
+    ws.cell(12, 21).value = ""
+
+    build_monthly_main_view(wb)
+    monthly = wb["main_monthly"]
+
+    assert monthly.cell(12, 19).value == '=IFERROR(LOOKUP(2,1/(\'main\'!S12:U12<>""),\'main\'!S12:U12),"")'
+
+
+def test_monthly_snapshot_acc_plan_uses_last_numeric_value_before_margin_blank() -> None:
+    wb = _workbook()
+    value_source = _workbook()["main"]
+    value_source.cell(12, 19).value = 0.60
+    value_source.cell(12, 20).value = 1.00
+    value_source.cell(12, 21).value = None
+
+    build_monthly_main_view(wb, snapshot=True, value_source=value_source)
+    monthly = wb["main_monthly"]
+
+    assert monthly.cell(12, 19).value == 1.00
 
 
 def test_monthly_view_preserves_outline_and_only_rowtype_pa_filter_buttons() -> None:

@@ -220,12 +220,33 @@ def build_monthly_main_view(
                     if isinstance(value, (int, float)) and not isinstance(value, bool)
                 ]
                 if row_type == "s-curve" and pa in {"AP", "AA"}:
-                    last_value = value_source.cell(row, weekly_cols[-1]).value
-                    cell.value = last_value if isinstance(last_value, (int, float)) else ""
+                    # Cumulative rows can legitimately turn blank again after
+                    # their last real reporting point because the weekly view
+                    # retains display-margin columns.  A monthly bucket must use
+                    # the last numeric cumulative value *inside the bucket*, not
+                    # blindly read the bucket's final weekly column.
+                    last_value = next(
+                        (
+                            value_source.cell(row, col).value
+                            for col in reversed(weekly_cols)
+                            if isinstance(value_source.cell(row, col).value, (int, float))
+                            and not isinstance(value_source.cell(row, col).value, bool)
+                        ),
+                        None,
+                    )
+                    cell.value = last_value if last_value is not None else ""
                 else:
                     cell.value = sum(numeric_values) if numeric_values else ""
             elif row_type == "s-curve" and pa in {"AP", "AA"}:
-                cell.value = f"={source_ref}!{last_week_col}{row}"
+                # Keep monthly cumulative rows live to ``main`` while ignoring
+                # trailing weekly display-margin blanks.  LOOKUP returns the last
+                # nonblank cumulative value in this month, so a final 100% point
+                # is preserved even when later weeks in the same month are blank.
+                cell.value = (
+                    f'=IFERROR(LOOKUP(2,1/({source_ref}!{first_week_col}{row}:'
+                    f'{last_week_col}{row}<>""),{source_ref}!{first_week_col}{row}:'
+                    f'{last_week_col}{row}),"")'
+                )
             elif row_type == "activity" and pa == "P":
                 weekly_values = [source.cell(row, col).value for col in weekly_cols]
                 if all(value in (None, "") or isinstance(value, (int, float)) for value in weekly_values):
