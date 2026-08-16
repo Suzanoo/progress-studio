@@ -11,6 +11,7 @@ from progress_studio.infrastructure.excel.calculation_policy import (
 from progress_studio.infrastructure.excel.workbook_guide import build_workbook_guide
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
+from progress_studio.infrastructure.excel.traditional_overlay_workbook import reassert_traditional_overlay_transparency
 
 
 class FinalWorkbookMode(str, Enum):
@@ -59,6 +60,11 @@ def finalize_workbook(
     if include_guide:
         build_workbook_guide(workbook)
         guide_sheet = "README"
+
+    # Preserve renderer-owned transparent overlay appearance across openpyxl
+    # load/save round-trips. This changes presentation only; it does not rebuild
+    # series, cutoff logic, or any business data.
+    reassert_traditional_overlay_transparency(workbook)
 
     visible, hidden, very_hidden = apply_final_sheet_visibility(workbook)
     protected = apply_final_sheet_protection(workbook)

@@ -15,6 +15,7 @@ from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
+from openpyxl.workbook.defined_name import DefinedName
 
 from progress_studio.domain.main_dataset import MainDataset
 from progress_studio.infrastructure.excel.dashboard_workbook import BLUE, GREEN, DATA_SHEET
@@ -401,6 +402,22 @@ def _add_cutoff_control(
     return f"'{ws.title}'!${get_column_letter(value_col)}${row}"
 
 
+def _cutoff_proxy_ref(workbook, source_ref: str, *, column: int, label: str) -> str:
+    """Return a lightweight workbook-name proxy for a local cutoff control.
+
+    Dashboard_Data must not build a large direct dependency on ``main``. A
+    workbook defined name keeps the helper formulas source-neutral without adding
+    extra live formulas to the tiny ``progress`` adapter. ``column`` is retained
+    in the signature for backward test/readability compatibility.
+    """
+    del column
+    name = "PS_WEEKLY_OVERLAY_CUTOFF" if "weekly" in label.lower() else "PS_MONTHLY_OVERLAY_CUTOFF"
+    if name in workbook.defined_names:
+        del workbook.defined_names[name]
+    workbook.defined_names.add(DefinedName(name, attr_text=source_ref))
+    return name
+
+
 def _cutoff_label_text_properties() -> RichText:
     """Use a larger bold red font for the cutoff tag than curve values."""
     run = CharacterProperties(sz=CUTOFF_LABEL_FONT_SIZE, b=True, solidFill=CUTOFF_RED)
@@ -547,6 +564,27 @@ def _responsive_anchor(*, first_col: int, last_col: int, top_row: int, bottom_ro
     return TwoCellAnchor(editAs="twoCell", _from=start, to=end)
 
 
+
+def reassert_traditional_overlay_transparency(workbook) -> None:
+    """Restore transparent chart/plot areas after an openpyxl round-trip.
+
+    openpyxl preserves the outer chart-space noFill when loading an existing
+    workbook, but drops ``plotArea/spPr`` from traditional overlays on the next
+    save. Payment-only rebuilds intentionally preserve Progress views, so the
+    shared final policy reasserts this renderer-owned presentation property
+    without rebuilding the chart or its series.
+    """
+    for sheet_name in ("main", "main_monthly"):
+        if sheet_name not in workbook.sheetnames:
+            continue
+        for chart in workbook[sheet_name]._charts:
+            chart.graphical_properties = GraphicalProperties(
+                noFill=True, ln=LineProperties(noFill=True)
+            )
+            chart.plot_area.graphicalProperties = GraphicalProperties(
+                noFill=True, ln=LineProperties(noFill=True)
+            )
+
 def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bool]:
     """LW-12.4: independent-cutoff, project-bounded responsive overlays."""
     if not dataset.periods:
@@ -596,6 +634,13 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
         weekly_cutoff_ref = "Dashboard!$K$5"
     if monthly_cutoff_ref is None:
         monthly_cutoff_ref = "Dashboard!$K$5"
+
+    weekly_cutoff_ref = _cutoff_proxy_ref(
+        workbook, weekly_cutoff_ref, column=6, label="weekly_overlay_cutoff"
+    )
+    monthly_cutoff_ref = _cutoff_proxy_ref(
+        workbook, monthly_cutoff_ref, column=7, label="monthly_overlay_cutoff"
+    )
     ensure_overlay_visible_actual_columns(
         workbook,
         weekly_cutoff_ref=weekly_cutoff_ref,

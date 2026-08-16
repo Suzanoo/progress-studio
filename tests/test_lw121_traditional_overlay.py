@@ -236,12 +236,17 @@ def test_lw124_three_cutoffs_are_independent_and_overlay_helpers_are_local():
     assert monthly['M19'].number_format == 'mmm yyyy'
     assert dash['K5'].value == datetime(2026, 7, 17)
 
-    assert "'main'!$M$19" in data['P2'].value
-    assert "'main_monthly'!$M$19" in data['Q2'].value
+    # Cutoff helpers use workbook defined-name proxies. This preserves the
+    # independent main/monthly controls while keeping Dashboard_Data detached
+    # from direct main-sheet formulas for snapshot performance.
+    assert 'PS_WEEKLY_OVERLAY_CUTOFF' in data['P2'].value
+    assert 'PS_MONTHLY_OVERLAY_CUTOFF' in data['Q2'].value
+    assert wb.defined_names['PS_WEEKLY_OVERLAY_CUTOFF'].attr_text == "'main'!$M$19"
+    assert wb.defined_names['PS_MONTHLY_OVERLAY_CUTOFF'].attr_text == "'main_monthly'!$M$19"
     assert 'Dashboard!$K$5' not in data['P2'].value
     assert 'Dashboard!$K$5' not in data['Q2'].value
-    assert "'main'!$M$19" in data['R2'].value
-    assert "'main_monthly'!$M$19" in data['S2'].value
+    assert 'PS_WEEKLY_OVERLAY_CUTOFF' in data['R2'].value
+    assert 'PS_MONTHLY_OVERLAY_CUTOFF' in data['S2'].value
     assert 'AND(A2<=' in data['R2'].value
     assert 'OR(A3="",A3>' in data['R2'].value
 

@@ -22,6 +22,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import build_dashbo
 from progress_studio.infrastructure.excel.live_dashboard_workbook import build_live_dashboard
 from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
+from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
 from progress_studio.services.payment_service import PaymentService
@@ -234,6 +235,14 @@ class WorkbookRebuildEngine:
                     wb,
                     project_name=project_name or output.stem,
                 )
+
+                # Snapshot Progress recreates main_monthly/dashboard, so it also
+                # recreates the traditional overlays using the same renderer as
+                # Live Progress. Keep the already-open workbook in RAM.
+                snapshot_dataset = main_dataset_from_workbook(
+                    wb, workbook_name=output.name
+                )
+                build_traditional_overlays(wb, snapshot_dataset)
 
                 # Re-assert visibility/support contract after builders.
                 if "progress_table" in wb.sheetnames:
