@@ -48,6 +48,7 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_chart_axis_ooxml_integrity.py",
     "test_rebuild_2x2_matrix.py",
     "test_architecture_recovery_contract.py",
     "test_overlay_anchor_actual_monthly_regression.py",

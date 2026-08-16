@@ -393,6 +393,29 @@ def _kpi(ws, title_range: str, value_range: str, title: str, formula: str, fill:
         _add_kpi_icon(ws, value_range.split(":")[0], icon)
 
 
+
+
+def _date_axis_for_line_chart(chart: LineChart, *, title: str) -> DateAxis:
+    """Return a DateAxis with reciprocal axis ids valid for Excel OOXML.
+
+    LineChart starts with horizontal axId=10 and value axId=100.  A fresh
+    openpyxl DateAxis uses axId=500 but the existing value axis still points
+    at 10, which serializes a dangling ``crossAx`` reference and makes Excel
+    repair the chart on open.  Keep the original LineChart axis ids and bind
+    both axes explicitly.
+    """
+    date_axis = DateAxis()
+    date_axis.axId = 10
+    date_axis.crossAx = 100
+    date_axis.number_format = "mmm-yy"
+    date_axis.majorTimeUnit = "days"
+    date_axis.title = title
+
+    chart.y_axis.axId = 100
+    chart.y_axis.crossAx = 10
+    chart.x_axis = date_axis
+    return date_axis
+
 def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     _remove(workbook, DASHBOARD_SHEET)
     ws = workbook.create_sheet(DASHBOARD_SHEET, 0)
@@ -558,11 +581,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     # A date axis is essential because the selector helper has Weekly capacity
     # even when Monthly is selected. Blank trailing Monthly helper rows must not
     # consume equal-width text categories and squeeze the curve to the left.
-    date_axis = DateAxis()
-    date_axis.number_format = "mmm-yy"
-    date_axis.majorTimeUnit = "days"
-    date_axis.title = "Period"
-    chart.x_axis = date_axis
+    _date_axis_for_line_chart(chart, title="Period")
     chart.legend.position = "t"
     chart.display_blanks = "gap"
 

@@ -5,7 +5,6 @@ from collections import OrderedDict
 from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
-from openpyxl.chart.axis import DateAxis
 from openpyxl.chart.legend import LegendEntry
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.styles import Alignment, Font
@@ -19,6 +18,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
     LIGHT_AMBER, LIGHT_BLUE, LIGHT_GRAY, LIGHT_GREEN, LIGHT_RED,
     MUTED, NAVY, RED, WHITE, _FONT, _LAYOUT,
     _merge_title, _remove, _solid, _style_box, _thin_border, _add_kpi_icon,
+    _date_axis_for_line_chart,
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
@@ -460,12 +460,8 @@ def build_live_dashboard(
     axis_line.line.solidFill = "B8C2CC"
     axis_line.line.width = 9000
     chart.y_axis.spPr = axis_line
-    date_axis = DateAxis()
-    date_axis.number_format = "mmm-yy"
-    date_axis.majorTimeUnit = "days"
-    date_axis.title = "Date"
+    date_axis = _date_axis_for_line_chart(chart, title="Date")
     date_axis.spPr = axis_line
-    chart.x_axis = date_axis
     data = Reference(data_ws, min_col=8, max_col=9, min_row=1, max_row=last_data_row)
     cats = Reference(data_ws, min_col=7, min_row=2, max_row=last_data_row)
     chart.add_data(data, titles_from_data=True)
