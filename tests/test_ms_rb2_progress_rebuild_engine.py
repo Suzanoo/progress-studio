@@ -110,7 +110,7 @@ def test_rb2_rebuild_progress_replaces_only_progress_owned_sheets(tmp_path: Path
         )
 
         calc = wb.calculation
-        assert calc.calcMode == "auto"
+        assert calc.calcMode == "manual"
         assert calc.fullCalcOnLoad is False
         assert calc.forceFullCalc is False
     finally:

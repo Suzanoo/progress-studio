@@ -20,8 +20,7 @@ from progress_studio.domain.payment_models import (
     PaymentResolvedPoint,
 )
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
-from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
-from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
+from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
 
 
 class PaymentLineRenderer:
@@ -119,8 +118,8 @@ class PaymentLineRenderer:
                         colors.append((period.period_id, color))
                         rendered_points += len(period.points)
 
-                    apply_final_sheet_visibility(wb)
-                    apply_final_sheet_protection(wb)
+                    # Standalone rendering owns one final policy pass at its output boundary.
+                    finalize_workbook(wb, mode="snapshot", include_guide=True)
                     wb.save(temp_path)
                 finally:
                     wb.close()
@@ -151,6 +150,7 @@ class PaymentLineRenderer:
         source_workbook: Path,
         output_workbook: Path,
         save_path: Path | None = None,
+        finalize_mode: str | None = None,
     ) -> PaymentMultiLineRenderResult:
         """LW-9 render into an already-open workbook; never loads another workbook.
 
@@ -207,6 +207,8 @@ class PaymentLineRenderer:
                 colors.append((period.period_id, color))
                 rendered_points += len(period.points)
 
+            if finalize_mode is not None:
+                finalize_workbook(workbook, mode=finalize_mode, include_guide=True)
             if save_path is not None:
                 workbook.save(Path(save_path))
 

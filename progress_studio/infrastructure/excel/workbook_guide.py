@@ -31,7 +31,7 @@ def build_workbook_guide(workbook) -> None:
     ws["B2"].font = Font(size=18, bold=True, color=NAVY)
 
     ws.merge_cells("B3:F3")
-    ws["B3"] = "Normal progress update:  main → edit Actual → F9 / Save → Dashboard / Monthly"
+    ws["B3"] = "Normal progress update:  main → edit Actual → F9 / Save for formulas • Rebuild for generated snapshots"
     ws["B3"].fill = PatternFill("solid", fgColor=GREEN)
     ws["B3"].font = Font(size=11, bold=True, color=NAVY)
     ws["B3"].alignment = Alignment(vertical="center")
@@ -40,12 +40,12 @@ def build_workbook_guide(workbook) -> None:
     sections = [
         ("1  UPDATE PROGRESS", "Open main. Update the Actual row in the correct weekly columns. "
          "For a normal progress update, do not edit the workbook structure."),
-        ("2  RECALCULATE", "After editing, press F9 or save the workbook. "
-         "Calculation is Manual during editing to keep the workbook responsive."),
+        ("2  RECALCULATE", "After editing, press F9 or save the workbook to recalculate Excel formulas. "
+         "Generated snapshots/caches are not rebuilt by Excel; use Progress Studio Rebuild for those."),
         ("3  DASHBOARD", "Open Dashboard. Select Weekly or Monthly, then select the Cutoff Date. "
          "KPI, S-Curve and Activity Progress follow the selected period."),
         ("4  MONTHLY", "main_monthly is linked to weekly data in main. "
-         "Do not type progress directly into main_monthly. Press F9 / Save after changing main."),
+         "Do not type progress directly into main_monthly. F9 / Save refreshes formulas; use Rebuild when a generated view must be regenerated."),
         ("5  PAYMENT", "Payment Input contains payment requirements. Payment shows payment lines. "
          "Use Progress Studio → Rebuild Payment when payment configuration changes."),
     ]
@@ -99,7 +99,7 @@ def build_workbook_guide(workbook) -> None:
 
     row += 3
     ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=6)
-    ws.cell(row, 2, "Performance note: Manual Calculation keeps editing fast. Press F9 or save after updating progress.")
+    ws.cell(row, 2, "Performance note: Manual Calculation keeps editing fast. F9 / Save recalculates Excel formulas; Rebuild regenerates Python-owned snapshots.")
     ws.cell(row, 2).font = Font(italic=True, color=MUTED)
     ws.cell(row, 2).alignment = Alignment(wrap_text=True)
     ws.row_dimensions[row].height = 26

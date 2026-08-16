@@ -6,8 +6,7 @@ from enum import Enum
 from openpyxl.workbook.workbook import Workbook
 
 from progress_studio.infrastructure.excel.calculation_policy import (
-    configure_incremental_excel_recalculation,
-    configure_live_save_recalculation,
+    configure_user_driven_save_recalculation,
 )
 from progress_studio.infrastructure.excel.workbook_guide import build_workbook_guide
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
@@ -17,10 +16,9 @@ from progress_studio.infrastructure.excel.workbook_visibility import apply_final
 class FinalWorkbookMode(str, Enum):
     """Final workbook policy modes.
 
-    SNAPSHOT keeps the existing dependency-based automatic recalculation policy
-    used by Create Progress, Mapping Export, Snapshot Rebuild and Payment.
-
-    LIVE keeps the lightweight/manual-until-save policy used by Live Rebuild.
+    Both modes share the same user-driven F9 / Save formula-calculation policy.
+    The mode remains explicit because Snapshot and Live still differ in who owns
+    generated caches/snapshots outside Excel formula calculation.
     """
 
     SNAPSHOT = "snapshot"
@@ -53,7 +51,7 @@ def finalize_workbook(
       1. Guide is created first so visibility/protection include it.
       2. Visibility establishes the final sheet-state contract.
       3. Protection locks formulas/support data and re-opens intended inputs.
-      4. Recalculation is selected by workbook mode, never XML source type.
+      4. Final files use one explicit F9 / Save formula-calculation contract.
     """
     resolved_mode = FinalWorkbookMode(mode)
 
@@ -65,10 +63,10 @@ def finalize_workbook(
     visible, hidden, very_hidden = apply_final_sheet_visibility(workbook)
     protected = apply_final_sheet_protection(workbook)
 
-    if resolved_mode is FinalWorkbookMode.LIVE:
-        configure_live_save_recalculation(workbook)
-    else:
-        configure_incremental_excel_recalculation(workbook)
+    # Final portable workbooks use one explicit low-payload contract: Excel
+    # formulas recalculate on F9 or Save. Rebuild remains the sole owner of
+    # Python-generated snapshots/caches.
+    configure_user_driven_save_recalculation(workbook)
 
     return FinalWorkbookPolicyResult(
         mode=resolved_mode,

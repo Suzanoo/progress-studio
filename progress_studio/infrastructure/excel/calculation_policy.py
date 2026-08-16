@@ -55,3 +55,20 @@ def configure_live_save_recalculation(workbook: Workbook) -> None:
     calculation.calcOnSave = True
     if not calculation.calcId:
         calculation.calcId = CURRENT_EXCEL_CALC_ID
+
+
+def configure_user_driven_save_recalculation(workbook: Workbook) -> None:
+    """Use the explicit F9 / Save formula-calculation contract for final files.
+
+    Final Progress Studio workbooks stay in Manual calculation mode while the
+    user edits them. F9 recalculates Excel formulas and Excel is instructed to
+    calculate formulas again before Save. Python-generated snapshots/caches are
+    intentionally outside this contract and remain owned by Rebuild.
+    """
+    calculation = workbook.calculation
+    calculation.calcMode = "manual"
+    calculation.fullCalcOnLoad = False
+    calculation.forceFullCalc = False
+    calculation.calcOnSave = True
+    if not calculation.calcId:
+        calculation.calcId = CURRENT_EXCEL_CALC_ID

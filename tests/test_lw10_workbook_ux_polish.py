@@ -8,8 +8,8 @@ from progress_studio.infrastructure.excel.workbook_guide import build_workbook_g
 from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
 
 
-def test_internal_password_is_okmd() -> None:
-    assert WORKBOOK_SHEET_PASSWORD == "okmd"
+def test_internal_password_uses_progress_studio_internal_guard() -> None:
+    assert WORKBOOK_SHEET_PASSWORD == "sangjun"
 
 
 def test_readme_is_first_visible_sheet() -> None:

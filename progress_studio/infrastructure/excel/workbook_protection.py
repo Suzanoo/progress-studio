@@ -169,9 +169,12 @@ def _protect_payment_input(ws) -> None:
 
 
 def apply_final_sheet_protection(workbook) -> tuple[str, ...]:
-    """Apply lightweight, deterministic protection to the final workbook.
+    """Apply deterministic final workbook protection.
 
-    Workbook structure itself is intentionally NOT protected.
+    Sheet formulas/support cells remain protected while intended user inputs stay
+    unlocked. Workbook structure is also protected so base sheets cannot be
+    renamed/deleted accidentally in Excel. Progress Studio itself can still
+    rebuild/replace sheets because OOXML protection does not block openpyxl.
     """
     protected: list[str] = []
 
@@ -190,15 +193,13 @@ def apply_final_sheet_protection(workbook) -> tuple[str, ...]:
 
         protected.append(ws.title)
 
-    # Do not protect workbook structure; Rebuild can replace sheets freely and
-    # advanced Excel users can still manage normal hidden public data sheets.
+    # Protect the workbook structure in Excel so required base/helper sheets
+    # cannot be renamed, deleted, moved or inserted accidentally. This does not
+    # prevent Progress Studio/openpyxl from rebuilding the workbook.
     if workbook.security is None:
-        workbook.security = WorkbookProtection(
-            lockStructure=False,
-            lockWindows=False,
-        )
-    else:
-        workbook.security.lockStructure = False
-        workbook.security.lockWindows = False
+        workbook.security = WorkbookProtection()
+    workbook.security.lockStructure = True
+    workbook.security.lockWindows = False
+    workbook.security.set_workbook_password(WORKBOOK_SHEET_PASSWORD)
 
     return tuple(protected)

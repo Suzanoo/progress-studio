@@ -406,13 +406,15 @@ class WorkbookRebuildEngine:
                 keep_vba=keep_vba,
             )
             try:
-                finalize_workbook(wb, mode="live", include_guide=True)
+                # Render first, then apply the shared final policy exactly once so
+                # the newly-created Payment sheet is included in protection/visibility.
                 rendered = self.payment_service.line_renderer.render_periods_into_workbook(
                     wb,
                     selected,
                     source_workbook=source,
                     output_workbook=output,
                     save_path=temp_path,
+                    finalize_mode="live",
                 )
             finally:
                 wb.close()
@@ -474,13 +476,8 @@ class WorkbookRebuildEngine:
                 temp_path,
             )
 
-            visibility_wb = load_workbook(temp_path, read_only=False, data_only=False)
-            try:
-                finalize_workbook(visibility_wb, mode="snapshot", include_guide=True)
-                visibility_wb.save(temp_path)
-            finally:
-                visibility_wb.close()
-
+            # PaymentService/renderer owns the single final policy pass for this
+            # output. Rebuild does not repeat visibility/protection/recalc work.
             validate_xlsx_tables(temp_path)
             os.replace(temp_path, output)
 

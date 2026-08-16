@@ -118,7 +118,8 @@ class PaymentService:
             # used by the line renderer.
             if "Payment" in wb.sheetnames:
                 del wb["Payment"]
-            finalize_workbook(wb, mode="snapshot", include_guide=True)
+            # Save the intermediate workbook without finalizing it. The Payment
+            # renderer owns the one final policy pass once Payment has been added.
             wb.save(output)
         finally:
             wb.close()
@@ -128,6 +129,14 @@ class PaymentService:
         except PaymentWorkbookError as exc:
             if "no resolved requirements" not in str(exc).lower():
                 raise
+            # No Payment sheet will be generated, so finalize the intermediate
+            # workbook here exactly once before returning it to the user.
+            final_wb = load_workbook(output)
+            try:
+                finalize_workbook(final_wb, mode="snapshot", include_guide=True)
+                final_wb.save(output)
+            finally:
+                final_wb.close()
             return None
 
     def validate_workbook(self, workbook: Path) -> PaymentWorkbookValidation:
