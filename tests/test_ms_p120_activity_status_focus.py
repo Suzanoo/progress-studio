@@ -41,7 +41,7 @@ def test_activity_progress_keeps_two_rows_and_adds_variance_status() -> None:
     assert ws["F39"].value == "Plan"
     assert ws["F40"].value == "Actual"
     assert ws["N39"].value == ""
-    assert ws["P39"].value == ""
+    assert '"Behind"' in ws["P39"].value
     assert ws["N40"].value == "=IFERROR(L40-L39,0)"
     assert '"Behind"' in ws["P40"].value
     assert '"Complete"' in ws["P40"].value
@@ -50,37 +50,29 @@ def test_activity_progress_keeps_two_rows_and_adds_variance_status() -> None:
     assert ws.row_dimensions[39].outlineLevel == ws.row_dimensions[40].outlineLevel
 
 
-def test_status_focus_dropdown_exists_without_column_filter_arrows() -> None:
+def test_status_uses_native_excel_filter_and_keeps_plan_actual_pairs() -> None:
     wb = _workbook()
     build_dashboard(wb)
     ws = wb[DASHBOARD_SHEET]
 
-    assert ws["N37"].value == "Status"
-    assert ws["P37"].value == "All"
+    assert ws["N37"].value is None
+    assert ws["P37"].value is None
+    assert ws.auto_filter.ref == "P38:P42"
 
-    validations = list(ws.data_validations.dataValidation)
+    # Plan and Actual rows carry the same Status logic so native filtering keeps
+    # a pair together.  Plan-row status is visually hidden, not blank.
+    assert isinstance(ws["P39"].value, str) and ws["P39"].value.startswith("=IF(")
+    assert isinstance(ws["P40"].value, str) and ws["P40"].value.startswith("=IF(")
+    assert 'L40<L39' in ws["P39"].value
+    assert 'L40<L39' in ws["P40"].value
+    assert ws["P39"].font.color.type == "rgb"
+
+    # The old Status Focus dropdown/conditional-format layer is gone.
     status_validations = [
-        v for v in validations
+        v for v in ws.data_validations.dataValidation
         if v.formula1 == '"All,Behind,On Track,Complete,Not Started"'
     ]
-    assert len(status_validations) == 1
-
-    # No AutoFilter dropdowns anywhere on Activity Progress.
-    assert ws.auto_filter.ref is None
-
-    # Macro-free focus rule dims whole Plan/Actual pairs based on Actual-row Status.
-    rules = []
-    for sqref in ws.conditional_formatting:
-        if "B39:Q" in str(sqref):
-            rules.extend(ws.conditional_formatting[sqref])
-    assert rules
-    formula_text = " ".join(
-        formula
-        for rule in rules
-        for formula in (rule.formula or [])
-    )
-    assert "$P$37" in formula_text
-    assert "INDEX($P:$P" in formula_text
+    assert status_validations == []
 
 
 def test_variance_status_columns_do_not_change_okd_progress_table_contract() -> None:

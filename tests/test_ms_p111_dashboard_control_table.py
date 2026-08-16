@@ -76,14 +76,14 @@ def test_monthly_cutoff_uses_last_real_reporting_date_and_dynamic_dropdown():
     assert "Dashboard_Data!$K$2:$K$3" in cutoff_validations[0].formula1
 
 
-def test_activity_progress_has_no_column_filter_buttons_and_keeps_status_focus():
+def test_activity_progress_uses_native_status_filter_only():
     wb = _workbook()
     build_dashboard(wb)
     ws = wb["Dashboard"]
 
-    assert ws.auto_filter.ref is None
-    assert ws["N37"].value == "Status"
-    assert ws["P37"].value == "All"
+    assert ws.auto_filter.ref == "P38:P40"
+    assert ws["N37"].value is None
+    assert ws["P37"].value is None
 
 
 def test_activity_progress_is_not_capped_at_eight_pairs():
@@ -105,7 +105,7 @@ def test_activity_progress_is_not_capped_at_eight_pairs():
     assert ws["F61"].value == "Plan"
     assert ws["F62"].value == "Actual"
     assert ws["N62"].value == "=IFERROR(L62-L61,0)"
-    assert ws.auto_filter.ref is None
+    assert ws.auto_filter.ref == "P38:P62"
 
 
 def test_activity_progress_uses_native_outline_levels_like_main_sheet():

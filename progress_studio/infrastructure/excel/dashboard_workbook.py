@@ -592,30 +592,10 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws["B35"].alignment = Alignment(horizontal="left", vertical="center")
 
     # Activity Progress keeps the OKD 2-row Plan/Actual contract.
-    # The status selector is intentionally outside the table header so column
-    # filter arrows are unnecessary and the outline hierarchy remains clean.
-    _merge_title(ws, "B37:M37", "ACTIVITY PROGRESS", 11)
-    ws.merge_cells("N37:O37")
-    ws["N37"] = "Status"
-    ws["N37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
-    ws["N37"].alignment = Alignment(horizontal="right", vertical="center")
-
-    ws.merge_cells("P37:Q37")
-    ws["P37"] = "All"
-    ws["P37"].fill = _solid(LIGHT_BLUE)
-    ws["P37"].font = Font(name=_FONT, bold=True, color=NAVY, size=9)
-    ws["P37"].alignment = Alignment(horizontal="center", vertical="center")
-    status_validation = DataValidation(
-        type="list",
-        formula1='"All,Behind,On Track,Complete,Not Started"',
-        allow_blank=False,
-    )
-    status_validation.prompt = "Focus Activity Progress by status."
-    status_validation.promptTitle = "Activity Status"
-    status_validation.showInputMessage = True
-    status_validation.showErrorMessage = True
-    ws.add_data_validation(status_validation)
-    status_validation.add(ws["P37"])
+    # Status filtering is native Excel AutoFilter on the Status column only.
+    # Both Plan and Actual rows carry the same filter value so a pair never
+    # splits when the user filters Behind / On Track / Complete / Not Started.
+    _merge_title(ws, "B37:Q37", "ACTIVITY PROGRESS", 11)
 
     headers = [
         "WBS", "Activity", "Type", "Total",
@@ -695,13 +675,21 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             ws.merge_cells(f"P{row}:Q{row}")
             if is_plan:
                 ws[f"N{row}"] = ""
-                ws[f"P{row}"] = ""
+                # Native Excel filter needs the same status value on both rows
+                # of a Plan/Actual pair.  Keep the Plan-row status visually
+                # hidden below while preserving the filter value.
+                actual_output_row = row + 1
+                ws[f"P{row}"] = (
+                    f'=IF(L{row}<=0,"Not Started",'
+                    f'IF(L{row}>=1,"Complete",'
+                    f'IF(L{actual_output_row}<L{row},"Behind","On Track")))'
+                )
             else:
                 plan_output_row = row - 1
                 ws[f"N{row}"] = f'=IFERROR(L{row}-L{plan_output_row},0)'
                 ws[f"P{row}"] = (
-                    f'=IF(L{row}<=0,"Not Started",'
-                    f'IF(L{row}>=1,"Complete",'
+                    f'=IF(L{plan_output_row}<=0,"Not Started",'
+                    f'IF(L{plan_output_row}>=1,"Complete",'
                     f'IF(L{row}<L{plan_output_row},"Behind","On Track")))'
                 )
 
@@ -729,7 +717,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             ws[f"F{row}"].alignment = Alignment(horizontal="center", vertical="center")
             ws[f"L{row}"].fill = _solid(pa_fill)
             ws[f"L{row}"].font = Font(name=_FONT, bold=True, color=pa_color, size=9)
-            if not is_plan:
+            if is_plan:
+                # Keep the native-filter value without displaying duplicate
+                # status text on the Plan row.
+                ws[f"P{row}"].font = Font(name=_FONT, color=base_fill, size=9)
+            else:
                 ws[f"N{row}"].fill = _solid(LIGHT_GREEN)
                 ws[f"P{row}"].fill = _solid(LIGHT_GREEN)
                 ws[f"N{row}"].font = Font(name=_FONT, bold=True, color=GREEN, size=9)
@@ -757,22 +749,11 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     ws.sheet_properties.outlinePr.applyStyles = True
     ws.sheet_properties.outlinePr.showOutlineSymbols = True
 
-    # No column AutoFilter arrows. Status Focus is a macro-free selector:
-    # nonmatching Plan/Actual pairs are visually dimmed together while Outline
-    # grouping remains fully native and usable.
-    last_activity_row = max(39, output_row - 1)
-    focus_range = f"B39:Q{last_activity_row}"
-    ws.conditional_formatting.add(
-        focus_range,
-        FormulaRule(
-            formula=[
-                '=AND($P$37<>"All",'
-                'INDEX($P:$P,ROW()+IF(MOD(ROW()-39,2)=0,1,0))<>$P$37)'
-            ],
-            fill=_solid("F2F2F2"),
-            font=Font(name=_FONT, color="A6A6A6"),
-        ),
-    )
+    # Native Excel filter on Status only.  P38:P... is intentional: the
+    # Activity Table remains visually clean and the Plan/Actual pair values
+    # match, so filtering never separates the pair.
+    last_activity_row = max(38, output_row - 1)
+    ws.auto_filter.ref = f"P38:P{last_activity_row}"
 
     ws.print_area = f"B2:Q{max(56, output_row - 1)}"
 

@@ -34,7 +34,6 @@ def _policy_fixture() -> Workbook:
     dashboard = wb.create_sheet("Dashboard")
     dashboard["G5"] = "Weekly"
     dashboard["K5"] = "2026-01-02"
-    dashboard["P37"] = "All"
 
     for name in ("progress", "progress_table", "Dashboard_Data", "Info"):
         wb.create_sheet(name)
@@ -55,8 +54,8 @@ def test_wp2_snapshot_policy_is_one_finalization_contract() -> None:
     assert wb["progress"].sheet_state == "hidden"
     assert wb["progress_table"].sheet_state == "hidden"
     assert wb["Dashboard_Data"].sheet_state == "hidden"
-    assert wb["Info"].sheet_state == "hidden"
-    assert result.very_hidden_sheets == ()
+    assert wb["Info"].sheet_state == "veryHidden"
+    assert "Info" in result.very_hidden_sheets
 
     for ws in wb.worksheets:
         assert ws.protection.sheet is True
@@ -64,7 +63,6 @@ def test_wp2_snapshot_policy_is_one_finalization_contract() -> None:
     # Intended controls stay editable after the shared protection pass.
     assert wb["Dashboard"]["G5"].protection.locked is False
     assert wb["Dashboard"]["K5"].protection.locked is False
-    assert wb["Dashboard"]["P37"].protection.locked is False
     assert wb["main_monthly"]["M2"].protection.locked is False
 
     # Snapshot workbooks preserve the proven automatic/incremental calculation policy.

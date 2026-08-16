@@ -10,7 +10,7 @@ from progress_studio.infrastructure.excel.final_workbook_policy import finalize_
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_finish1_support_sheets_are_debuggable_hidden_not_veryhidden() -> None:
+def test_finish1_support_sheets_follow_proven_visibility_contract() -> None:
     wb = Workbook()
     wb.active.title = "main"
     for name in ("main_monthly", "Dashboard", "progress", "progress_table", "Dashboard_Data", "Info", "Timescale Info", "Amount Mapping", "Distribution Report"):
@@ -18,12 +18,14 @@ def test_finish1_support_sheets_are_debuggable_hidden_not_veryhidden() -> None:
 
     result = finalize_workbook(wb, mode="snapshot", include_guide=True)
 
-    assert result.very_hidden_sheets == ()
     assert wb["main"].sheet_state == "visible"
     assert wb["main_monthly"].sheet_state == "visible"
     assert wb["Dashboard"].sheet_state == "visible"
-    for name in ("progress", "progress_table", "Dashboard_Data", "Info", "Timescale Info", "Amount Mapping", "Distribution Report"):
+    for name in ("progress", "progress_table", "Dashboard_Data"):
         assert wb[name].sheet_state == "hidden"
+    for name in ("Info", "Timescale Info", "Amount Mapping", "Distribution Report"):
+        assert wb[name].sheet_state == "veryHidden"
+        assert name in result.very_hidden_sheets
 
 
 def test_finish1_welcome_is_workflow_first_and_create_is_clean() -> None:

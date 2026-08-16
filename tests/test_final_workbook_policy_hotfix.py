@@ -40,7 +40,6 @@ def _minimal_final_workbook(path: Path) -> Path:
     dashboard = wb.create_sheet("Dashboard")
     dashboard["G5"] = "Weekly"
     dashboard["K5"] = "2026-01-02"
-    dashboard["P37"] = "All"
     wb.create_sheet("Dashboard_Data")
 
     finalize_workbook(wb, mode="snapshot", include_guide=True)
@@ -64,7 +63,6 @@ def test_final_policy_persists_structure_and_sheet_protection_to_ooxml(tmp_path:
         # User controls remain editable while formulas stay protected.
         assert wb["Dashboard"]["G5"].protection.locked is False
         assert wb["Dashboard"]["K5"].protection.locked is False
-        assert wb["Dashboard"]["P37"].protection.locked is False
         assert wb["main_monthly"]["M2"].protection.locked is False
         assert wb["main"]["O5"].protection.locked is True
     finally:
