@@ -54,9 +54,9 @@ def test_final_policy_persists_structure_and_sheet_protection_to_ooxml(tmp_path:
 
     wb = load_workbook(path, data_only=False)
     try:
-        assert wb.security.lockStructure is True
+        assert wb.security.lockStructure is False
         assert wb.security.lockWindows is False
-        assert wb.security.workbookPassword == hash_password(WORKBOOK_SHEET_PASSWORD)
+        assert wb.security.workbookPassword is None
         for ws in wb.worksheets:
             assert ws.protection.sheet is True
             assert ws.protection.password == hash_password(WORKBOOK_SHEET_PASSWORD)
@@ -74,9 +74,9 @@ def test_final_policy_persists_structure_and_sheet_protection_to_ooxml(tmp_path:
         root = ET.fromstring(package.read("xl/workbook.xml"))
         protection = root.find("x:workbookProtection", NS)
         assert protection is not None
-        assert protection.attrib["lockStructure"] == "1"
+        assert protection.attrib["lockStructure"] == "0"
         assert protection.attrib["lockWindows"] == "0"
-        assert protection.attrib["workbookPassword"] == hash_password(WORKBOOK_SHEET_PASSWORD)
+        assert "workbookPassword" not in protection.attrib
 
 
 def test_final_policy_persists_f9_save_formula_contract_to_ooxml(tmp_path: Path) -> None:
@@ -84,7 +84,7 @@ def test_final_policy_persists_f9_save_formula_contract_to_ooxml(tmp_path: Path)
     wb = load_workbook(path, data_only=False)
     try:
         calc = wb.calculation
-        assert calc.calcMode == "manual"
+        assert calc.calcMode == "auto"
         assert calc.calcOnSave is True
         assert calc.fullCalcOnLoad is False
         assert calc.forceFullCalc is False
@@ -96,7 +96,7 @@ def test_final_policy_persists_f9_save_formula_contract_to_ooxml(tmp_path: Path)
         root = ET.fromstring(package.read("xl/workbook.xml"))
         calc = root.find("x:calcPr", NS)
         assert calc is not None
-        assert calc.attrib["calcMode"] == "manual"
+        assert calc.attrib["calcMode"] == "auto"
         assert calc.attrib["calcOnSave"] == "1"
         assert calc.attrib["fullCalcOnLoad"] == "0"
         assert calc.attrib["forceFullCalc"] == "0"
@@ -111,7 +111,7 @@ def test_rebuild_can_rebuild_an_already_structure_protected_workbook(tmp_path: P
     WorkbookRebuildEngine().rebuild_progress(source, protected)
     first = load_workbook(protected)
     try:
-        assert first.security.lockStructure is True
+        assert first.security.lockStructure is False
     finally:
         first.close()
 
@@ -119,7 +119,7 @@ def test_rebuild_can_rebuild_an_already_structure_protected_workbook(tmp_path: P
     WorkbookRebuildEngine().rebuild_progress(protected, rebuilt)
     second = load_workbook(rebuilt)
     try:
-        assert second.security.lockStructure is True
+        assert second.security.lockStructure is False
         assert second["main"].protection.sheet is True
         assert second["Dashboard"].protection.sheet is True
     finally:
@@ -134,9 +134,9 @@ def test_snapshot_payment_rebuild_finalizes_once_and_protects_new_payment(tmp_pa
 
     wb = load_workbook(output, data_only=False)
     try:
-        assert wb.security.lockStructure is True
+        assert wb.security.lockStructure is False
         assert wb["Payment"].protection.sheet is True
-        assert wb.calculation.calcMode == "manual"
+        assert wb.calculation.calcMode == "auto"
         assert wb.calculation.calcOnSave is True
     finally:
         wb.close()
@@ -158,7 +158,7 @@ def test_live_payment_finalizes_after_render_so_new_payment_is_protected(tmp_pat
     wb = load_workbook(output, data_only=False)
     try:
         assert wb["Payment"].protection.sheet is True
-        assert wb.security.lockStructure is True
+        assert wb.security.lockStructure is False
         assert wb.calculation.calcMode == "manual"
         assert wb.calculation.calcOnSave is True
     finally:

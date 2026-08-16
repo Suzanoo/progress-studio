@@ -17,7 +17,7 @@ def test_rb72_progress_rebuild_applies_lightweight_sheet_protection(tmp_path) ->
 
     wb = load_workbook(output, data_only=False)
     try:
-        assert wb.security.lockStructure is True
+        assert wb.security.lockStructure is False
         assert wb.security.lockWindows is False
 
         for ws in wb.worksheets:

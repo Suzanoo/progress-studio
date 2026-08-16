@@ -48,6 +48,7 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_create_progress_baseline_finalization.py",
     "test_final_workbook_policy_hotfix.py",
     "test_finish1_workbook_workspace_consolidation.py",
     "test_wp2_shared_workbook_policy.py",

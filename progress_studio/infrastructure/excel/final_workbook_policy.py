@@ -6,7 +6,8 @@ from enum import Enum
 from openpyxl.workbook.workbook import Workbook
 
 from progress_studio.infrastructure.excel.calculation_policy import (
-    configure_user_driven_save_recalculation,
+    configure_incremental_excel_recalculation,
+    configure_live_save_recalculation,
 )
 from progress_studio.infrastructure.excel.workbook_guide import build_workbook_guide
 from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
@@ -63,10 +64,13 @@ def finalize_workbook(
     visible, hidden, very_hidden = apply_final_sheet_visibility(workbook)
     protected = apply_final_sheet_protection(workbook)
 
-    # Final portable workbooks use one explicit low-payload contract: Excel
-    # formulas recalculate on F9 or Save. Rebuild remains the sole owner of
-    # Python-generated snapshots/caches.
-    configure_user_driven_save_recalculation(workbook)
+    # Preserve the proven pre-normalizer calculation contracts. Snapshot
+    # workbooks stay Automatic/incremental; Live workbooks stay Manual and
+    # calculate on Save. Python-generated caches remain owned by Rebuild.
+    if resolved_mode is FinalWorkbookMode.LIVE:
+        configure_live_save_recalculation(workbook)
+    else:
+        configure_incremental_excel_recalculation(workbook)
 
     return FinalWorkbookPolicyResult(
         mode=resolved_mode,

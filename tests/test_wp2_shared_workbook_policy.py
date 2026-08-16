@@ -67,8 +67,8 @@ def test_wp2_snapshot_policy_is_one_finalization_contract() -> None:
     assert wb["Dashboard"]["P37"].protection.locked is False
     assert wb["main_monthly"]["M2"].protection.locked is False
 
-    # Final workbooks use the explicit user-driven F9 / Save formula policy.
-    assert wb.calculation.calcMode == "manual"
+    # Snapshot workbooks preserve the proven automatic/incremental calculation policy.
+    assert wb.calculation.calcMode == "auto"
     assert wb.calculation.fullCalcOnLoad is False
     assert wb.calculation.forceFullCalc is False
     assert wb.calculation.calcOnSave is True

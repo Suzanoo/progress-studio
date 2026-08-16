@@ -268,7 +268,7 @@ def test_export_uses_user_driven_f9_save_calculation_policy(tmp_path: Path) -> N
 
     wb = load_workbook(output, data_only=False)
     try:
-        assert wb.calculation.calcMode == "manual"
+        assert wb.calculation.calcMode == "auto"
         assert wb.calculation.fullCalcOnLoad is False
         assert wb.calculation.forceFullCalc is False
         assert wb.calculation.calcOnSave is True
@@ -282,7 +282,7 @@ def test_export_uses_user_driven_f9_save_calculation_policy(tmp_path: Path) -> N
         namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
         calc = root.find("x:calcPr", namespace)
         assert calc is not None
-        assert calc.attrib["calcMode"] == "manual"
+        assert calc.attrib["calcMode"] == "auto"
         assert calc.attrib["fullCalcOnLoad"] == "0"
         assert calc.attrib["forceFullCalc"] == "0"
         assert calc.attrib["calcOnSave"] == "1"
