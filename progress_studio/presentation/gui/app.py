@@ -68,7 +68,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.worker: threading.Thread | None = None
         self.output_file: Path | None = None
         self.project_folder: Path | None = None
-        self.current_workspace = "mapping"
+        self.current_workspace = "home"
 
         self.title(f"{SETTINGS.title} Desktop {SETTINGS.version}")
         self.geometry("1180x760")
@@ -139,7 +139,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         ttk.Label(self.status_bar, text="●  Ready", style="StatusReady.TLabel").pack(side="left")
         ttk.Label(self.status_bar, text=f"Progress Studio {SETTINGS.version}  |  Local database", style="Status.TLabel").pack(side="right")
 
-        self._show_workspace("mapping")
+        self._show_workspace("home")
 
     def _build_menu(self) -> None:
         menu = tk.Menu(self)
@@ -220,15 +220,54 @@ class ProgressStudioDesktopApp(tk.Tk):
 
     def _build_home_workspace(self) -> None:
         frame = self._new_workspace("home")
-        hero = ttk.Frame(frame, style="Surface.TFrame", padding=28)
+
+        hero = ttk.Frame(frame, style="Surface.TFrame", padding=(28, 24))
         hero.pack(fill="x")
         ttk.Label(hero, text="Progress Studio", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(hero, text="Open a recent project or start by loading your Progress and BOQ workbooks.", style="Muted.TLabel").pack(anchor="w", pady=(8, 18))
-        actions = ttk.Frame(hero, style="Surface.TFrame")
-        actions.pack(anchor="w")
-        ttk.Button(actions, text="Open Project", style="Accent.TButton", command=self._defer_mapping("open_project")).pack(side="left")
-        ttk.Button(actions, text="Recent Projects", command=self._defer_mapping("open_recent_project")).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Go to Mapping", command=lambda: self._show_workspace("mapping")).pack(side="left", padx=(8, 0))
+        ttk.Label(
+            hero,
+            text="Create the progress workbook first, then use only the workspaces your project needs.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(8, 4))
+        ttk.Label(
+            hero,
+            text="Mapping and Payment are optional. Rebuild refreshes an edited workbook.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(0, 16))
+
+        workflow = ttk.Frame(frame, style="Card.TFrame", padding=(18, 18))
+        workflow.pack(fill="x", pady=(12, 0))
+        for column in range(4):
+            workflow.columnconfigure(column, weight=1, uniform="workflow")
+
+        steps = (
+            ("1", "Create Progress", "MSP / P6 XML → Progress Workbook", "import"),
+            ("2", "Mapping", "BOQ → Activity Amount", "mapping"),
+            ("3", "Payment", "Prepare and render payment stages", "payment"),
+            ("4", "Rebuild", "Edited Workbook → Updated Workbook", "rebuild"),
+        )
+        for col, (number, title, description, workspace) in enumerate(steps):
+            card = ttk.Frame(workflow, style="Surface.TFrame", padding=(16, 14))
+            card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 6, 0 if col == 3 else 6))
+            ttk.Label(card, text=number, style="Section.TLabel").pack(anchor="w")
+            ttk.Label(card, text=title, style="WorkspaceTitle.TLabel").pack(anchor="w", pady=(6, 4))
+            ttk.Label(card, text=description, style="Muted.TLabel", wraplength=210).pack(anchor="w")
+            ttk.Button(
+                card,
+                text=f"Open {title}",
+                style="Accent.TButton" if workspace == "import" else "TButton",
+                command=lambda key=workspace: self._show_workspace(key),
+            ).pack(anchor="w", pady=(14, 0))
+
+        note = ttk.Frame(frame, style="Surface.TFrame", padding=(18, 14))
+        note.pack(fill="x", pady=(12, 0))
+        ttk.Label(note, text="Typical flow", style="Section.TLabel").pack(anchor="w")
+        ttk.Label(
+            note,
+            text="Create Progress → Mapping and/or Payment → edit the workbook → Rebuild when you need refreshed derived views.",
+            style="Muted.TLabel",
+            wraplength=900,
+        ).pack(anchor="w", pady=(6, 0))
 
     def _build_import_workspace(self) -> None:
         frame = self._new_workspace("import")
@@ -237,12 +276,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         heading = ttk.Frame(frame, style="Surface.TFrame")
         heading.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         ttk.Label(heading, text="Create Progress Workbook", style="WorkspaceTitle.TLabel").pack(side="left")
-        ttk.Button(
-            heading,
-            text="Export Mapped Workbook",
-            style="Accent.TButton",
-            command=self._defer_mapping("export_workbook"),
-        ).pack(side="right")
         ttk.Button(heading, text="Go to Mapping", command=lambda: self._show_workspace("mapping")).pack(side="right", padx=(0, 8))
 
         body = ttk.Panedwindow(frame, orient="horizontal")
@@ -303,9 +336,8 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.workspace_title_var.set(f"{title} Workspace" if key not in {"home", "settings"} else title)
         for name, button in self.sidebar_buttons.items():
             button.configure(style="SidebarActive.TButton" if name == key else "Sidebar.TButton")
-        self.command_bar.grid_remove() if key in {
-            "home", "payment", "ai", "rebuild", "settings"
-        } else self.command_bar.grid()
+        # Mapping commands belong only to the Mapping workspace.
+        self.command_bar.grid() if key == "mapping" else self.command_bar.grid_remove()
 
     def _defer_mapping(self, method_name: str):
         def command() -> None:
@@ -411,7 +443,7 @@ class ProgressStudioDesktopApp(tk.Tk):
             self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
 
     def _browse_xml(self) -> None:
-        selected = filedialog.askopenfilename(title="Select Primavera XML", filetypes=[("Primavera XML", "*.xml"), ("All files", "*.*")])
+        selected = filedialog.askopenfilename(title="Select Schedule XML", filetypes=[("Schedule XML", "*.xml"), ("All files", "*.*")])
         if selected:
             self.xml_var.set(selected)
             self.step_var.set("Input selected. Review options and create the workbook.")

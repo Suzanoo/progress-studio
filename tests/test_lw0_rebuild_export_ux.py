@@ -15,21 +15,25 @@ def test_lw0_sidebar_removes_standalone_export_workspace() -> None:
     assert '("rebuild", "↻", "Rebuild")' in source
 
 
-def test_lw0_initial_export_lives_in_create_mapping_flow() -> None:
+def test_lw0_mapping_export_is_owned_by_mapping_workspace_only() -> None:
     source = (ROOT / "progress_studio/presentation/gui/app.py").read_text(encoding="utf-8")
 
     start = source.index("    def _build_import_workspace")
     end = source.index("    def _build_mapping_workspace", start)
     create_block = source[start:end]
-
-    assert "Export Mapped Workbook" in create_block
-    assert 'self._defer_mapping("export_workbook")' in create_block
+    assert "Export Mapped Workbook" not in create_block
+    assert 'text="Go to Mapping"' in create_block
 
     command_start = source.index("    def _build_command_bar")
     command_end = source.index("    def _new_workspace", command_start)
     command_block = source[command_start:command_end]
     assert "Export Mapped Workbook" in command_block
     assert 'self._defer_mapping("export_workbook")' in command_block
+
+    show_start = source.index("    def _show_workspace")
+    show_end = source.index("    def _defer_mapping", show_start)
+    show_block = source[show_start:show_end]
+    assert 'key == "mapping"' in show_block
 
 
 def test_lw0_rebuild_ui_separates_output_mode_from_scope() -> None:

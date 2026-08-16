@@ -39,7 +39,7 @@ def test_rb71_visibility_policy_exposes_only_final_user_sheets() -> None:
     for name in ("progress", "progress_table", "Dashboard_Data"):
         assert wb[name].sheet_state == "hidden"
     for name in ("Info", "User Notes"):
-        assert wb[name].sheet_state == "veryHidden"
+        assert wb[name].sheet_state == "hidden"
     assert "progress" in hidden
 
 
@@ -56,7 +56,7 @@ def test_rb71_progress_rebuild_applies_final_visibility(tmp_path: Path) -> None:
         for name in ("progress", "progress_table", "Dashboard_Data"):
             assert wb[name].sheet_state == "hidden"
         for name in ("User Notes",):
-            assert wb[name].sheet_state == "veryHidden"
+            assert wb[name].sheet_state == "hidden"
     finally:
         wb.close()
 

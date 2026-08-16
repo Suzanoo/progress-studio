@@ -55,7 +55,8 @@ def test_wp2_snapshot_policy_is_one_finalization_contract() -> None:
     assert wb["progress"].sheet_state == "hidden"
     assert wb["progress_table"].sheet_state == "hidden"
     assert wb["Dashboard_Data"].sheet_state == "hidden"
-    assert wb["Info"].sheet_state == "veryHidden"
+    assert wb["Info"].sheet_state == "hidden"
+    assert result.very_hidden_sheets == ()
 
     for ws in wb.worksheets:
         assert ws.protection.sheet is True
