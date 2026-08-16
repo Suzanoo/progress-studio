@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import json
 import re
 from pathlib import Path
@@ -16,6 +16,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
+from progress_studio.services.reporting_period_selector import weekly_period_overlaps_project
 
 DASHBOARD_SHEET = "Dashboard"
 DATA_SHEET = "Dashboard_Data"
@@ -201,10 +202,8 @@ def _progress_rows(workbook, progress_ws) -> list[tuple[int, date]]:
         week_date = _as_date(raw_date)
         if week_date is None:
             continue
-        if project_start is not None and project_finish is not None:
-            period_start = week_date - timedelta(days=6)
-            if week_date < project_start or period_start > project_finish:
-                continue
+        if not weekly_period_overlaps_project(week_date, project_start, project_finish):
+            continue
         result.append((row, week_date))
     if not result:
         raise RuntimeError(
