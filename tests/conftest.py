@@ -48,6 +48,7 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_wp2_shared_workbook_policy.py",
     "test_n1_xml_format_detector.py",
     "test_n2_normalized_schedule_model.py",
     "test_n3_msp_xml_adapter.py",

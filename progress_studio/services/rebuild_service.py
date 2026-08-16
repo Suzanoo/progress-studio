@@ -22,14 +22,8 @@ from progress_studio.infrastructure.excel.dashboard_workbook import build_dashbo
 from progress_studio.infrastructure.excel.live_dashboard_workbook import build_live_dashboard
 from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
-from progress_studio.infrastructure.excel.calculation_policy import (
-    configure_incremental_excel_recalculation,
-    configure_live_save_recalculation,
-)
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
-from progress_studio.infrastructure.excel.workbook_visibility import apply_final_sheet_visibility
-from progress_studio.infrastructure.excel.workbook_protection import apply_final_sheet_protection
-from progress_studio.infrastructure.excel.workbook_guide import build_workbook_guide
+from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
 from progress_studio.services.payment_service import PaymentService
 from progress_studio.services.monthly_cache_deriver import MonthlyCacheDeriver
 from progress_studio.services.payment_progress_adapter import MainDatasetPaymentProgressAdapter
@@ -247,9 +241,7 @@ class WorkbookRebuildEngine:
                 if "Dashboard_Data" in wb.sheetnames:
                     wb["Dashboard_Data"].sheet_state = "hidden"
 
-                configure_incremental_excel_recalculation(wb)
-                apply_final_sheet_visibility(wb)
-                apply_final_sheet_protection(wb)
+                finalize_workbook(wb, mode="snapshot", include_guide=True)
                 wb.save(temp_path)
             finally:
                 wb.close()
@@ -352,10 +344,7 @@ class WorkbookRebuildEngine:
                 if "Dashboard_Data" in wb.sheetnames:
                     wb["Dashboard_Data"].sheet_state = "hidden"
 
-                build_workbook_guide(wb)
-                apply_final_sheet_visibility(wb)
-                apply_final_sheet_protection(wb)
-                configure_live_save_recalculation(wb)
+                finalize_workbook(wb, mode="live", include_guide=True)
                 wb.save(temp_path)
             finally:
                 wb.close()
@@ -417,10 +406,7 @@ class WorkbookRebuildEngine:
                 keep_vba=keep_vba,
             )
             try:
-                build_workbook_guide(wb)
-                apply_final_sheet_visibility(wb)
-                apply_final_sheet_protection(wb)
-                configure_live_save_recalculation(wb)
+                finalize_workbook(wb, mode="live", include_guide=True)
                 rendered = self.payment_service.line_renderer.render_periods_into_workbook(
                     wb,
                     selected,
@@ -490,8 +476,7 @@ class WorkbookRebuildEngine:
 
             visibility_wb = load_workbook(temp_path, read_only=False, data_only=False)
             try:
-                apply_final_sheet_visibility(visibility_wb)
-                apply_final_sheet_protection(visibility_wb)
+                finalize_workbook(visibility_wb, mode="snapshot", include_guide=True)
                 visibility_wb.save(temp_path)
             finally:
                 visibility_wb.close()

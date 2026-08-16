@@ -19,6 +19,7 @@ from progress_studio.services.monthly_main_service import MonthlyMainService
 from progress_studio.services.progress_service import ProgressService
 from progress_studio.services.schedule_workbook_service import ScheduleWorkbookService
 from progress_studio.services.timescale_service import TimescaleService
+from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,9 +137,16 @@ class WorkbookGenerationService:
             self.monthly_main.build(distributed, monthly)
             report("monthly", "Monthly main view built.", True)
 
-            report("finalize", "Writing final workbook...")
+            report("finalize", "Finalizing workbook policy...")
             output_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(monthly, output_file)
+            final_wb = load_workbook(output_file, read_only=False, data_only=False)
+            try:
+                finalize_workbook(final_wb, mode="snapshot", include_guide=True)
+                final_wb.save(output_file)
+            finally:
+                final_wb.close()
+            report("finalize", "Final workbook written.", True)
 
         return WorkbookGenerationResult(
             output_file=output_file,
