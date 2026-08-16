@@ -43,7 +43,7 @@ def test_overlay_lw1231_responsive_geometry_and_transparency_contract():
     assert 'OVERLAY_TOP_ROW = 5' in text
     assert 'TwoCellAnchor' in text
     assert 'editAs="twoCell"' in text
-    assert '_weekly_project_window(dataset)' in text
+    assert '_weekly_project_window(data_ws, dataset)' in text
     assert '_scurve_plan_row(dataset)' in text
     assert 'scurve_plan_row - 1' in text
     assert 'chart.plot_area.graphicalProperties' in text
@@ -97,8 +97,8 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
 def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     text = Path('progress_studio/infrastructure/excel/traditional_overlay_workbook.py').read_text()
     assert '_project_dates(dataset)' in text
-    assert 'p.reporting_date >= start' in text
-    assert 'p.reporting_date >= finish' in text
+    assert 'value >= start' in text
+    assert 'value >= finish' in text
     assert 'weekly_chart_first = max(2, weekly_first - 1)' in text
     assert 'first_row=weekly_chart_first' in text
     assert 'last_row=weekly_last' in text

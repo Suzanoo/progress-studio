@@ -9,6 +9,10 @@ from openpyxl.utils import get_column_letter
 
 from progress_studio.infrastructure.excel.calculation_policy import configure_incremental_excel_recalculation
 from progress_studio.infrastructure.excel.progress_workbook import (
+    SCURVE_ACTUAL_FILL,
+    SCURVE_PLAN_FILL,
+    WBS_ACTUAL_FILL,
+    WBS_PLAN_FILL,
     add_progress_conditional_formatting,
     clear_progress_conditional_formatting,
     clear_timescale_direct_fills,
@@ -274,6 +278,26 @@ def build_monthly_main_view(
         required["outline level"],
         last_progress_row,
     )
+
+    # S-Curve rows are outside the Project/WBS/Activity conditional-formatting
+    # grammar. ``clear_timescale_direct_fills`` intentionally clears inherited
+    # weekly fills, so repaint these four summary rows explicitly with the same
+    # palette as main (the live-monthly renderer already follows this contract).
+    scurve_fills = {
+        "P": SCURVE_PLAN_FILL,
+        "AP": WBS_PLAN_FILL,
+        "A": SCURVE_ACTUAL_FILL,
+        "AA": WBS_ACTUAL_FILL,
+    }
+    for row in range(FIRST_DATA_ROW, monthly.max_row + 1):
+        if _normalize(monthly.cell(row, required["row type"]).value) != "s-curve":
+            continue
+        pa = str(monthly.cell(row, required["p/a"]).value or "").strip().upper()
+        fill = scurve_fills.get(pa)
+        if fill is None:
+            continue
+        for col in monthly_timescale_cols:
+            monthly.cell(row, col).fill = copy(fill)
 
     monthly.freeze_panes = monthly.cell(FIRST_DATA_ROW, first_timescale_col)
     configure_filter_buttons(

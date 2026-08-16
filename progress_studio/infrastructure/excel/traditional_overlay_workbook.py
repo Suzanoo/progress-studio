@@ -61,8 +61,19 @@ def ensure_overlay_visible_actual_columns(
     ws["S1"] = "Monthly Cutoff Line"
     for row in range(2, ws.max_row + 1):
         next_row = row + 1
-        ws.cell(row, 16, f'=IF(A{row}="",NA(),IF(A{row}>{weekly_cutoff_ref},NA(),IF(C{row}="",NA(),C{row})))')
-        ws.cell(row, 17, f'=IF(D{row}="",NA(),IF(D{row}>{monthly_cutoff_ref},NA(),IF(F{row}="",NA(),F{row})))')
+        # Actual is cumulative. Keep a visible 0% baseline before the first
+        # reported Actual, carry the latest cumulative value through blank source
+        # cells, then mask everything after this sheet's cutoff.
+        ws.cell(
+            row, 16,
+            f'=IF(A{row}="",NA(),IF(A{row}>{weekly_cutoff_ref},NA(),'
+            f'IF(C{row}<>"",C{row},IFERROR(LOOKUP(2,1/($C$2:C{row}<>""),$C$2:C{row}),0))))'
+        )
+        ws.cell(
+            row, 17,
+            f'=IF(D{row}="",NA(),IF(D{row}>{monthly_cutoff_ref},NA(),'
+            f'IF(F{row}<>"",F{row},IFERROR(LOOKUP(2,1/($F$2:F{row}<>""),$F$2:F{row}),0))))'
+        )
         # A single 1.0 point plus a full-height negative Y error bar produces
         # a vertical cutoff line without VBA or movable worksheet shapes.
         ws.cell(row, 18, f'=IF(A{row}="",NA(),IF(AND(A{row}<={weekly_cutoff_ref},OR(A{next_row}="",A{next_row}>{weekly_cutoff_ref})),1,NA()))')
@@ -85,28 +96,64 @@ def _as_date(value):
     return None
 
 def _project_dates(dataset: MainDataset):
-    rows = dataset.activities or tuple(
+    """Return the authoritative project window as date-only values.
+
+    Prefer the Project Summary plan row when it exists. Activity timestamps often
+    carry an 08:00 time component while reporting cutoffs are midnight. Comparing
+    those raw datetimes shifts a same-day project start into the following period.
+    """
+    summary_rows = tuple(
+        row for row in dataset.rows
+        if row.row_type.strip().lower() == "project summary" and row.pa.strip().upper() == "P"
+    )
+    rows = summary_rows or dataset.activities or tuple(
         row for row in dataset.rows if row.plan_start is not None or row.plan_finish is not None
     )
-    starts = [row.plan_start for row in rows if row.plan_start is not None]
-    finishes = [row.plan_finish for row in rows if row.plan_finish is not None]
+    starts = [_as_date(row.plan_start) for row in rows if row.plan_start is not None]
+    finishes = [_as_date(row.plan_finish) for row in rows if row.plan_finish is not None]
+    starts = [value for value in starts if value is not None]
+    finishes = [value for value in finishes if value is not None]
     return (min(starts) if starts else None, max(finishes) if finishes else None)
 
 
-def _weekly_project_window(dataset: MainDataset) -> tuple[int, int, int, int]:
-    """Return Dashboard_Data row bounds and physical timescale columns for project duration."""
-    start, finish = _project_dates(dataset)
-    dated = [(idx, p) for idx, p in enumerate(dataset.periods) if p.reporting_date is not None]
-    if not dated or start is None or finish is None:
-        return 2, max(2, len(dataset.periods) + 1), dataset.periods[0].column, dataset.periods[-1].column
+def _weekly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int, int]:
+    """Return helper-row bounds plus physical weekly columns for the project.
 
-    first_idx = next((idx for idx, p in dated if p.reporting_date >= start), dated[0][0])
-    last_idx = next((idx for idx, p in dated if p.reporting_date >= finish), dated[-1][0])
+    Dashboard_Data has display margins removed, while ``dataset.periods`` still
+    contains the full visible timescale. Row indexes therefore must come from
+    Dashboard_Data itself; using period indexes against the helper sheet skips the
+    first margin-count rows and truncates the beginning of the overlay.
+    """
+    start, finish = _project_dates(dataset)
+
+    helper_dates = []
+    for row in range(2, data_ws.max_row + 1):
+        value = _as_date(data_ws.cell(row, 1).value)
+        if value is not None:
+            helper_dates.append((row, value))
+
+    period_dates = [
+        (idx, _as_date(period.reporting_date))
+        for idx, period in enumerate(dataset.periods)
+        if _as_date(period.reporting_date) is not None
+    ]
+    if not period_dates or not helper_dates or start is None or finish is None:
+        first_col = dataset.periods[0].column if dataset.periods else 1
+        last_col = dataset.periods[-1].column if dataset.periods else first_col
+        return 2, max(2, data_ws.max_row), first_col, last_col
+
+    first_helper = next((row for row, value in helper_dates if value >= start), helper_dates[0][0])
+    last_helper = next((row for row, value in helper_dates if value >= finish), helper_dates[-1][0])
+    if last_helper < first_helper:
+        last_helper = first_helper
+
+    first_idx = next((idx for idx, value in period_dates if value >= start), period_dates[0][0])
+    last_idx = next((idx for idx, value in period_dates if value >= finish), period_dates[-1][0])
     if last_idx < first_idx:
         last_idx = first_idx
     return (
-        first_idx + 2,
-        last_idx + 2,
+        first_helper,
+        last_helper,
         dataset.periods[first_idx].column,
         dataset.periods[last_idx].column,
     )
@@ -128,18 +175,42 @@ def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, in
 
     start_key = (start.year, start.month)
     finish_key = (finish.year, finish.month)
-    first_pos = next((i for i, (_, d) in enumerate(months) if (d.year, d.month) >= start_key), 0)
-    last_pos = max(
+
+    # Helper rows come from project-only Dashboard_Data. Physical monthly columns
+    # come from the full visible timescale (which can include margin months). Keep
+    # those two coordinate systems separate just like the weekly overlay.
+    helper_first_pos = next((i for i, (_, d) in enumerate(months) if (d.year, d.month) >= start_key), 0)
+    helper_last_pos = max(
         (i for i, (_, d) in enumerate(months) if (d.year, d.month) <= finish_key),
         default=len(months) - 1,
     )
-    if last_pos < first_pos:
-        last_pos = first_pos
+    if helper_last_pos < helper_first_pos:
+        helper_last_pos = helper_first_pos
+
+    full_month_keys = []
+    for period in dataset.periods:
+        value = _as_date(period.reporting_date)
+        if value is None:
+            continue
+        key = (value.year, value.month)
+        if not full_month_keys or full_month_keys[-1] != key:
+            full_month_keys.append(key)
+    if not full_month_keys:
+        full_month_keys = [(d.year, d.month) for _, d in months]
+
+    physical_first_pos = next((i for i, key in enumerate(full_month_keys) if key >= start_key), 0)
+    physical_last_pos = max(
+        (i for i, key in enumerate(full_month_keys) if key <= finish_key),
+        default=len(full_month_keys) - 1,
+    )
+    if physical_last_pos < physical_first_pos:
+        physical_last_pos = physical_first_pos
+
     return (
-        months[first_pos][0],
-        months[last_pos][0],
-        first_timescale_col + first_pos,
-        first_timescale_col + last_pos,
+        months[helper_first_pos][0],
+        months[helper_last_pos][0],
+        first_timescale_col + physical_first_pos,
+        first_timescale_col + physical_last_pos,
     )
 
 
@@ -455,7 +526,7 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
         if sheet_name in workbook.sheetnames:
             workbook[sheet_name]._charts = []
 
-    weekly_first, weekly_last, weekly_first_col, weekly_last_col = _weekly_project_window(dataset)
+    weekly_first, weekly_last, weekly_first_col, weekly_last_col = _weekly_project_window(data_ws, dataset)
     monthly_first, monthly_last, monthly_first_col, monthly_last_col = _monthly_project_window(data_ws, dataset)
 
     # LW-13.2 period-end geometry: the overlay chart spans exactly the visible
