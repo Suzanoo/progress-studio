@@ -57,6 +57,7 @@ ACTIVE_FILES = {
     "test_n7_engine_integration.py",
     "test_n71_margin_dashboard_hotfix.py",
     "test_n72_dashboard_cutoff_series.py",
+    "test_n8_msp_p6_equivalence_gate.py",
     # Live Workbook refactor ownership begins here.
     "test_lw0_rebuild_export_ux.py",
     "test_lw1_rebuild_reader_contract.py",
