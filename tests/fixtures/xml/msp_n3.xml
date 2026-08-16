@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Name><![CDATA[N3 MSP Fixture]]></Name>
+  <Tasks>
+    <Task>
+      <UID>0</UID><ID>0</ID><OutlineLevel>0</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>1</UID><ID>1</ID><Name>Structure</Name><WBS>2</WBS><OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>2</UID><ID>2</ID><Name>Soil Protection Work</Name><WBS>2.1</WBS><OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>3</UID><ID>3</ID><Name>Pile Wall</Name><WBS>2.1.1</WBS><OutlineLevel>3</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>4</UID><ID>4</ID>
+      <Name>Mobilization</Name>
+      <WBS>2.1.1</WBS><OutlineLevel>4</OutlineLevel><Summary>0</Summary>
+      <Start>2026-10-01T08:00:00</Start><Finish>2026-10-07T17:00:00</Finish>
+      <ActualStart>2026-10-01T08:00:00</ActualStart>
+      <PercentComplete>25</PercentComplete><PhysicalPercentComplete>20</PhysicalPercentComplete>
+      <ExtendedAttribute><FieldID>188743731</FieldID><Value>A1290</Value></ExtendedAttribute>
+    </Task>
+    <Task>
+      <UID>5</UID><ID>5</ID><Name>Pile Wall Installation</Name><WBS>2.1.1.1</WBS><OutlineLevel>4</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>6</UID><ID>6</ID>
+      <Name>Pile Wall Zone A</Name>
+      <WBS>2.1.1.1</WBS><OutlineLevel>5</OutlineLevel><Summary>0</Summary>
+      <Start>2026-10-08T08:00:00</Start><Finish>2026-11-16T17:00:00</Finish>
+      <ExtendedAttribute><FieldID>188743731</FieldID><Value>A1310</Value></ExtendedAttribute>
+    </Task>
+  </Tasks>
+</Project>

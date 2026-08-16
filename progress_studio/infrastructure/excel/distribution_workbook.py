@@ -95,6 +95,26 @@ def cell_value(ws, row: int, col: int | None) -> object:
     return ws.cell(row, col).value if col else ""
 
 
+def calculation_week_columns(
+    weeks: list[tuple[int, date]],
+    schedule_start: date,
+    schedule_finish: date,
+) -> list[tuple[int, date]]:
+    """Return only weekly periods that overlap the real schedule window.
+
+    Timescale margin columns remain visible in the workbook, but are display-only
+    and must never participate in Plan distribution/progress calculations.
+    """
+    result: list[tuple[int, date]] = []
+    for index, item in enumerate(weeks):
+        col, cutoff = item
+        period_start = cutoff - timedelta(days=6)
+        if cutoff < schedule_start or period_start > schedule_finish:
+            continue
+        result.append((col, cutoff))
+    return result
+
+
 def find_week_columns(ws, week_row: int, header_row: int, epoch) -> list[tuple[int, date]]:
     weeks: list[tuple[int, date]] = []
     for col in range(1, ws.max_column + 1):
@@ -303,8 +323,28 @@ def generate_plan_distribution(
         ("WBS", "WBS Name", "WBS Path", "WBS-1", "WBS 1"),
     )
 
-    weeks = find_week_columns(ws, week_row, header_row, wb.epoch)
-    week_columns = [col for col, _ in weeks]
+    display_weeks = find_week_columns(ws, week_row, header_row, wb.epoch)
+    week_columns = [col for col, _ in display_weeks]
+
+    activity_windows: list[tuple[date, date]] = []
+    for row in range(header_row + 1, ws.max_row + 1):
+        if normalize(cell_value(ws, row, row_type_col)) != "activity":
+            continue
+        if normalize(cell_value(ws, row, pa_col)) != "p":
+            continue
+        start = parse_date(cell_value(ws, row, plan_start_col), wb.epoch)
+        finish = parse_date(cell_value(ws, row, plan_finish_col), wb.epoch)
+        if start is not None and finish is not None:
+            activity_windows.append((start, finish))
+    if not activity_windows:
+        raise PlanDistributionError("No valid activity Plan Start / Plan Finish values were found.")
+
+    schedule_start = min(start for start, _ in activity_windows)
+    schedule_finish = max(finish for _, finish in activity_windows)
+    weeks = calculation_week_columns(display_weeks, schedule_start, schedule_finish)
+    if not weeks:
+        raise PlanDistributionError("No calculation weeks overlap the schedule window.")
+
     rules = load_rules(rules_file) if method == "auto" else None
 
     generated = 0

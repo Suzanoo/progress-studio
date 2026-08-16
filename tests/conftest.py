@@ -48,6 +48,15 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_n1_xml_format_detector.py",
+    "test_n2_normalized_schedule_model.py",
+    "test_n3_msp_xml_adapter.py",
+    "test_n4_msp_regression_gate.py",
+    "test_n5_p6_xml_adapter.py",
+    "test_n6_normalized_schedule_validation.py",
+    "test_n7_engine_integration.py",
+    "test_n71_margin_dashboard_hotfix.py",
+    "test_n72_dashboard_cutoff_series.py",
     # Live Workbook refactor ownership begins here.
     "test_lw0_rebuild_export_ux.py",
     "test_lw1_rebuild_reader_contract.py",

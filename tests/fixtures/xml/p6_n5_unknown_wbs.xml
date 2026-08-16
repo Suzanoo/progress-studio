@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<APIBusinessObjects xmlns="http://xmlns.oracle.com/Primavera/P6Professional/V24.12/API/BusinessObjects">
+  <Project>
+    <Id>007</Id><Name>Broken P6</Name><WBSCodeSeparator>.</WBSCodeSeparator>
+    <Activity>
+      <Id>A9999</Id><Name>Broken Activity</Name><WBSObjectId>999999</WBSObjectId>
+      <PlannedStartDate>2026-10-01T08:00:00</PlannedStartDate>
+      <PlannedFinishDate>2026-10-02T17:00:00</PlannedFinishDate>
+    </Activity>
+  </Project>
+</APIBusinessObjects>

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import json
 import re
 from pathlib import Path
@@ -48,7 +48,7 @@ def _load_dashboard_theme() -> dict:
             "light_gray": LIGHT_GRAY, "border": BORDER, "text": TEXT,
             "muted": MUTED, "white": WHITE,
         },
-        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "default_view": "Monthly", "chart_height": 8.0, "chart_width": 20.5},
+        "layout": {"title": "PROGRESS STUDIO DASHBOARD", "default_view": "Monthly", "chart_height": 8.0, "chart_width": 20.5, "chart_y_max": 1.10},
         "icons": {"enabled": True, "size": 32, "planned": "planned.png", "actual": "actual.png", "schedule": "schedule.png", "time_impact": "time_impact.png"},
     }
     try:
@@ -127,6 +127,8 @@ def _normalise_header(value) -> str:
 
 def _progress_columns(progress_ws) -> dict[str, int]:
     aliases = {
+        "project_start": {"projectstart"},
+        "project_finish": {"projectfinish"},
         "date": {"weekstart", "weeklydate", "date", "period", "week"},
         "plan": {"plan", "weeklyplan", "planned", "plannedprogress"},
         "actual": {"actual", "weeklyactual", "actualprogress"},
@@ -166,17 +168,46 @@ def _resolve_reference(workbook, value):
 
 
 def _progress_rows(workbook, progress_ws) -> list[tuple[int, date]]:
+    """Return reporting periods that overlap the real project window only.
+
+    ``progress`` intentionally keeps the visible +/- timescale margin from ``main``.
+    Dashboard reporting must not treat those display-only rows as calculation or
+    chart periods.  A weekly cutoff is retained when its seven-day reporting
+    interval overlaps Project Start..Project Finish; this also preserves the final
+    reporting week when Project Finish falls before that week's cutoff date.
+    """
     columns = _progress_columns(progress_ws)
+
+    project_start = project_finish = None
+    project_start_col = columns.get("project_start")
+    project_finish_col = columns.get("project_finish")
+    if project_start_col is not None and project_finish_col is not None:
+        for row in range(2, progress_ws.max_row + 1):
+            if project_start is None:
+                project_start = _as_date(
+                    _resolve_reference(workbook, progress_ws.cell(row, project_start_col).value)
+                )
+            if project_finish is None:
+                project_finish = _as_date(
+                    _resolve_reference(workbook, progress_ws.cell(row, project_finish_col).value)
+                )
+            if project_start is not None and project_finish is not None:
+                break
+
     result: list[tuple[int, date]] = []
     for row in range(2, progress_ws.max_row + 1):
         raw_date = _resolve_reference(workbook, progress_ws.cell(row, columns["date"]).value)
         week_date = _as_date(raw_date)
         if week_date is None:
             continue
+        if project_start is not None and project_finish is not None:
+            period_start = week_date - timedelta(days=6)
+            if week_date < project_start or period_start > project_finish:
+                continue
         result.append((row, week_date))
     if not result:
         raise RuntimeError(
-            "Dashboard generation failed: progress sheet contains no usable weekly dates."
+            "Dashboard generation failed: progress sheet contains no usable project reporting dates."
         )
     return result
 
@@ -272,10 +303,24 @@ def _build_data_sheet(workbook, progress_ws) -> None:
         monthly_plan = f"E{monthly_row}" if monthly_row else '""'
         monthly_actual = f"F{monthly_row}" if monthly_row else '""'
         ws.cell(output_row, 7, f'=IF(Dashboard!$G$5="Weekly",{weekly_date},{monthly_date})')
-        # Baseline plan is always rendered for the full project duration. Cutoff only
-        # affects KPI calculation and the Actual curve.
-        ws.cell(output_row, 8, f'=IF(G{output_row}="","",IF(Dashboard!$G$5="Weekly",{weekly_plan},{monthly_plan}))')
-        ws.cell(output_row, 9, f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$K$5),"",IF(Dashboard!$G$5="Weekly",{weekly_actual},{monthly_actual}))')
+        # Chart helpers use #N/A outside their valid series range.  Excel treats
+        # formula-empty strings as zero in some chart modes, which previously made
+        # Plan plunge from 100% to 0% at the first display-margin period.
+        ws.cell(
+            output_row,
+            8,
+            f'=IF(G{output_row}="",NA(),IF(Dashboard!$G$5="Weekly",'
+            f'IF({weekly_plan}="",NA(),{weekly_plan}),IF({monthly_plan}="",NA(),{monthly_plan})))',
+        )
+        # Actual is a renderer-only cutoff series: show the cumulative value (or
+        # zero before progress starts) through the selected cutoff, then stop.
+        ws.cell(
+            output_row,
+            9,
+            f'=IF(OR(G{output_row}="",G{output_row}>Dashboard!$K$5),NA(),'
+            f'IF(Dashboard!$G$5="Weekly",IF({weekly_actual}="",0,{weekly_actual}),'
+            f'IF({monthly_actual}="",0,{monthly_actual})))',
+        )
         ws.cell(output_row, 7).number_format = "dd/mm/yyyy"
         ws.cell(output_row, 8).number_format = "0.00%"
         ws.cell(output_row, 9).number_format = "0.00%"
@@ -505,12 +550,13 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
     chart.height = float(_LAYOUT["chart_height"])
     chart.width = float(_LAYOUT["chart_width"])
     chart.y_axis.scaling.min = 0
-    chart.y_axis.scaling.max = 1
+    chart.y_axis.scaling.max = float(_LAYOUT.get("chart_y_max", 1.10))
     chart.y_axis.majorUnit = float(_LAYOUT.get("chart_major_unit", 0.2))
     chart.y_axis.numFmt = "0%"
     chart.y_axis.title = "Progress"
     chart.x_axis.title = "Period"
     chart.legend.position = "t"
+    chart.display_blanks = "gap"
 
     # Make the plotting area lighter and cleaner than the default Excel chart.
     grid = GraphicalProperties()

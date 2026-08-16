@@ -25,6 +25,7 @@
     "chart_width": 25.0,
     "chart_style": 2,
     "chart_major_unit": 0.2,
+    "chart_y_max": 1.1,
     "chart_markers": false,
     "marker_size": 4,
     "plan_line_width": 26000,

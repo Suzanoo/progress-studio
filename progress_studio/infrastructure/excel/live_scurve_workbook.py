@@ -60,7 +60,9 @@ def normalize_weekly_scurve_source_contract(
         return False
 
     first_col = dataset.periods[0].column
+    last_col = dataset.periods[-1].column
     first_letter = get_column_letter(first_col)
+    last_letter = get_column_letter(last_col)
 
     for period in dataset.periods:
         col = period.column
@@ -68,7 +70,8 @@ def normalize_weekly_scurve_source_contract(
         ws.cell(rows["plan"], col).value = f"={letter}{rows['project_plan']}"
         ws.cell(rows["acc_plan"], col).value = (
             f'=IF(COUNT(${first_letter}{rows["plan"]}:{letter}{rows["plan"]})=0,"",'
-            f'SUM(${first_letter}{rows["plan"]}:{letter}{rows["plan"]}))'
+            f'IF(COUNT({letter}{rows["plan"]}:${last_letter}{rows["plan"]})=0,"",'
+            f'SUM(${first_letter}{rows["plan"]}:{letter}{rows["plan"]})))'
         )
         ws.cell(rows["actual"], col).value = (
             f'=IF(COUNT({letter}{rows["project_actual"]})=0,"",'
@@ -76,7 +79,8 @@ def normalize_weekly_scurve_source_contract(
         )
         ws.cell(rows["acc_actual"], col).value = (
             f'=IF(COUNT(${first_letter}{rows["actual"]}:{letter}{rows["actual"]})=0,"",'
-            f'SUM(${first_letter}{rows["actual"]}:{letter}{rows["actual"]}))'
+            f'IF(COUNT({letter}{rows["actual"]}:${last_letter}{rows["actual"]})=0,"",'
+            f'SUM(${first_letter}{rows["actual"]}:{letter}{rows["actual"]})))'
         )
     return True
 

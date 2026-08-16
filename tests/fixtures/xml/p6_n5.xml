@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<APIBusinessObjects xmlns="http://xmlns.oracle.com/Primavera/P6Professional/V24.12/API/BusinessObjects">
+  <Project>
+    <Id>007</Id>
+    <Name>N5 P6 Fixture</Name>
+    <WBSCodeSeparator>.</WBSCodeSeparator>
+    <WBS>
+      <Code>1</Code><Name>Pile Wall Installation</Name><ObjectId>30337</ObjectId>
+      <ParentObjectId>30308</ParentObjectId><SequenceNumber>120000</SequenceNumber>
+    </WBS>
+    <WBS>
+      <Code>2</Code><Name>งานโครงสร้าง</Name><ObjectId>30287</ObjectId>
+      <ParentObjectId xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+      <SequenceNumber>2</SequenceNumber>
+    </WBS>
+    <WBS>
+      <Code>1</Code><Name>Soil Protection Work</Name><ObjectId>30295</ObjectId>
+      <ParentObjectId>30287</ParentObjectId><SequenceNumber>100000</SequenceNumber>
+    </WBS>
+    <WBS>
+      <Code>1</Code><Name>Pile Wall</Name><ObjectId>30308</ObjectId>
+      <ParentObjectId>30295</ParentObjectId><SequenceNumber>110000</SequenceNumber>
+    </WBS>
+    <Activity>
+      <Id>A1290</Id><Name>Mobilization</Name><WBSObjectId>30308</WBSObjectId>
+      <PlannedStartDate>2026-10-01T08:00:00</PlannedStartDate>
+      <PlannedFinishDate>2026-10-07T17:00:00</PlannedFinishDate>
+      <PercentComplete>25</PercentComplete><PhysicalPercentComplete>20</PhysicalPercentComplete>
+      <TotalCost>999999</TotalCost>
+    </Activity>
+    <Activity>
+      <Id>A1310</Id><Name>Pile Wall Zone A</Name><WBSObjectId>30337</WBSObjectId>
+      <PlannedStartDate>2026-10-08T08:00:00</PlannedStartDate>
+      <PlannedFinishDate>2026-11-16T17:00:00</PlannedFinishDate>
+      <ActualStartDate>2026-10-08T08:00:00</ActualStartDate>
+      <PercentComplete>10</PercentComplete><PhysicalPercentComplete>8</PhysicalPercentComplete>
+      <TotalCost>123456</TotalCost>
+    </Activity>
+  </Project>
+</APIBusinessObjects>

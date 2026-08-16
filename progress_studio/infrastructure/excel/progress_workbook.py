@@ -866,11 +866,14 @@ def add_scurve_rows(
         # This avoids #VALUE! even when the first Actual week is blank.
         first_letter = get_column_letter(first_week_col)
 
-        ws.cell(acc_plan_row, col).value = (
-            f'=IF(COUNT(${first_letter}{plan_row}:{col_letter}{plan_row})=0,"",'
-            f'SUM(${first_letter}{plan_row}:{col_letter}{plan_row}))'
-        )
         last_letter = get_column_letter(timescale_cols[-1])
+        ws.cell(acc_plan_row, col).value = (
+            # Display-margin columns must stay blank. Acc. Plan is visible only
+            # from the first Plan value through the latest Plan value.
+            f'=IF(COUNT(${first_letter}{plan_row}:{col_letter}{plan_row})=0,"",'
+            f'IF(COUNT({col_letter}{plan_row}:${last_letter}{plan_row})=0,"",'
+            f'SUM(${first_letter}{plan_row}:{col_letter}{plan_row})))'
+        )
 
         ws.cell(acc_actual_row, col).value = (
             # 1) Before the first Actual value: blank.

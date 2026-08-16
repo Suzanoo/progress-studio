@@ -1,6 +1,6 @@
 from progress_studio.config import SETTINGS
 from progress_studio.infrastructure.excel import ImportWorkbookWriter
-from progress_studio.infrastructure.schedule_xml import ScheduleXmlReader
+from progress_studio.infrastructure.schedule_xml import NormalizedScheduleXmlReader
 from progress_studio.pipeline.import_step import ImportStep
 from progress_studio.pipeline.amount_step import AmountStep
 from progress_studio.pipeline.progress_step import ProgressStep
@@ -27,7 +27,7 @@ from .pipeline import Pipeline
 
 def build_application() -> ProgressStudioApplication:
     schedule_service = ScheduleService()
-    import_service = ImportService(ScheduleXmlReader(), schedule_service, ImportWorkbookWriter())
+    import_service = ImportService(NormalizedScheduleXmlReader(), schedule_service, ImportWorkbookWriter())
     pipeline = Pipeline([
         ImportStep(import_service),
         ScheduleStep(ScheduleWorkbookService()),

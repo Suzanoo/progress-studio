@@ -8,7 +8,7 @@ from progress_studio.app.context import PipelineContext
 from progress_studio.app.pipeline import Pipeline, PipelineEvent
 from progress_studio.config import SETTINGS
 from progress_studio.infrastructure.excel import ImportWorkbookWriter
-from progress_studio.infrastructure.schedule_xml import ScheduleXmlReader
+from progress_studio.infrastructure.schedule_xml import NormalizedScheduleXmlReader
 from progress_studio.pipeline.amount_step import AmountStep
 from progress_studio.pipeline.distribution_step import DistributionStep
 from progress_studio.pipeline.import_step import ImportStep
@@ -69,7 +69,7 @@ class DesktopRunner:
 def build_desktop_pipeline(distribution_method: str = "auto") -> Pipeline:
     schedule_service = ScheduleService()
     import_service = ImportService(
-        ScheduleXmlReader(), schedule_service, ImportWorkbookWriter()
+        NormalizedScheduleXmlReader(), schedule_service, ImportWorkbookWriter()
     )
     return Pipeline(
         [
