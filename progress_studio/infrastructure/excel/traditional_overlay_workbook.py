@@ -126,9 +126,16 @@ def _weekly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int
     reporting week that overlaps Project Finish while excluding display-only
     margins on both sides.
     """
+    def _weekly_date(row: int):
+        # Dashboard_Data!A can be a lightweight formula link to ``progress`` in
+        # rebuilt workbooks.  Column J is the literal weekly reporting/cutoff
+        # list owned by the Dashboard contract, so prefer it whenever present.
+        # This keeps overlay geometry independent from Excel formula caches.
+        return _as_date(data_ws.cell(row, 10).value) or _as_date(data_ws.cell(row, 1).value)
+
     helper_rows = [
         row for row in range(2, data_ws.max_row + 1)
-        if _as_date(data_ws.cell(row, 1).value) is not None
+        if _weekly_date(row) is not None
         and data_ws.cell(row, 2).value not in (None, "")
     ]
     if not helper_rows:
@@ -137,8 +144,8 @@ def _weekly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int
         return 2, max(2, data_ws.max_row), first_col, last_col
 
     first_helper, last_helper = helper_rows[0], helper_rows[-1]
-    first_date = _as_date(data_ws.cell(first_helper, 1).value)
-    last_date = _as_date(data_ws.cell(last_helper, 1).value)
+    first_date = _weekly_date(first_helper)
+    last_date = _weekly_date(last_helper)
 
     date_to_col = {
         _as_date(period.reporting_date): period.column
@@ -244,7 +251,14 @@ def _build_explicit_overlay_series_sources(
         for col in range(20, 28):
             data_ws.cell(row, col).value = None
 
-    weekly_first_date = _as_date(data_ws.cell(weekly_first, 1).value)
+    # In Live/Snapshot rebuilds column A may be a formula (``=progress!A...``),
+    # while column J intentionally stores the same reporting dates as literal
+    # values for validation.  Use that literal date for the synthetic (0, 0)
+    # anchor so the first point always exists before the first real period.
+    weekly_first_date = (
+        _as_date(data_ws.cell(weekly_first, 10).value)
+        or _as_date(data_ws.cell(weekly_first, 1).value)
+    )
     weekly_anchor_date = (weekly_first_date - timedelta(days=7)) if weekly_first_date else None
     data_ws.cell(2, 20, weekly_anchor_date)
     data_ws.cell(2, 21, 0)
@@ -253,8 +267,12 @@ def _build_explicit_overlay_series_sources(
     data_ws.cell(2, 21).number_format = data_ws.cell(2, 22).number_format = "0.00%"
     weekly_row = 3
     for source_row in range(weekly_first, weekly_last + 1):
-        data_ws.cell(weekly_row, 20, data_ws.cell(source_row, 1).value)
-        data_ws.cell(weekly_row, 20).number_format = data_ws.cell(source_row, 1).number_format
+        weekly_date = (
+            _as_date(data_ws.cell(source_row, 10).value)
+            or data_ws.cell(source_row, 1).value
+        )
+        data_ws.cell(weekly_row, 20, weekly_date)
+        data_ws.cell(weekly_row, 20).number_format = "dd/mm/yyyy"
         data_ws.cell(weekly_row, 21, f"=B{source_row}")
         data_ws.cell(weekly_row, 22, f"=P{source_row}")
         data_ws.cell(weekly_row, 23, f"=R{source_row}")

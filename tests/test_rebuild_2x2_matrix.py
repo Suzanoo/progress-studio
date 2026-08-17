@@ -108,6 +108,26 @@ def _assert_overlay_series_contract(path: Path) -> None:
             assert data.cell(last_row + 1, plan_col).value is None
             assert data.cell(last_row + 1, actual_col).value is None
             assert data.cell(last_row, plan_col).value not in (0, "=0")
+
+            # The chart's physical right anchor must be the boundary immediately
+            # after its last real reporting column. TwoCellAnchor stores that
+            # boundary as a zero-based column index, numerically equal to the
+            # matching Excel 1-based column number.
+            date_col = 20 if sheet_name == "main" else 24
+            last_date = data.cell(last_row, date_col).value
+            ws = wb[sheet_name]
+            if sheet_name == "main":
+                expected_col = next(
+                    col for col in range(1, ws.max_column + 1)
+                    if ws.cell(4, col).value == last_date
+                )
+            else:
+                expected_col = next(
+                    col for col in range(1, ws.max_column + 1)
+                    if getattr(ws.cell(4, col).value, "year", None) == getattr(last_date, "year", None)
+                    and getattr(ws.cell(4, col).value, "month", None) == getattr(last_date, "month", None)
+                )
+            assert chart.anchor.to.col == expected_col
     finally:
         wb.close()
 

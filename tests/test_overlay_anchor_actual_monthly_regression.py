@@ -11,6 +11,7 @@ from progress_studio.infrastructure.excel.progress_workbook import (
     WBS_PLAN_FILL,
 )
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
+    _build_explicit_overlay_series_sources,
     _monthly_project_window,
     _weekly_project_window,
     ensure_overlay_visible_actual_columns,
@@ -121,6 +122,57 @@ def test_overlay_actual_helpers_show_zero_then_carry_last_value_until_cutoff():
     assert "IF(C3<>\"\",C3" in ws["P3"].value
     assert "IF(F3<>\"\",F3" in ws["Q3"].value
 
+
+
+def test_weekly_overlay_uses_literal_cutoff_dates_when_dashboard_weekly_dates_are_formulas():
+    """Rebuild regression: weekly Dashboard_Data dates can be formula links."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Dashboard_Data"
+    ws["A1"] = "Weekly Date"
+    ws["B1"] = "Weekly Plan"
+    ws["J1"] = "Weekly Cutoff"
+    ws["A2"], ws["B2"], ws["J2"] = "=progress!A7", "=progress!B7", date(2026, 4, 17)
+    ws["A3"], ws["B3"], ws["J3"] = "=progress!A8", "=progress!B8", date(2026, 4, 24)
+    ws["A4"], ws["B4"], ws["J4"] = "=progress!A9", "=progress!B9", date(2026, 5, 1)
+
+    first_row, last_row, first_col, last_col = _weekly_project_window(ws, _dataset_with_margin())
+
+    assert (first_row, last_row) == (2, 4)
+    assert (first_col, last_col) == (22, 24)
+
+
+def test_explicit_weekly_zero_anchor_is_dated_before_first_real_formula_linked_period():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Dashboard_Data"
+    for cell, value in (("A1", "Weekly Date"), ("B1", "Weekly Plan"), ("J1", "Weekly Cutoff")):
+        ws[cell] = value
+    for row, cutoff, plan in (
+        (2, date(2026, 4, 17), 0.10),
+        (3, date(2026, 4, 24), 0.50),
+        (4, date(2026, 5, 1), 1.00),
+    ):
+        ws.cell(row, 1, f"=progress!A{row + 5}")
+        ws.cell(row, 2, plan)
+        ws.cell(row, 10, cutoff)
+        ws.cell(row, 16, 0)
+        ws.cell(row, 18, "=NA()")
+    ws["D2"], ws["E2"], ws["K2"] = date(2026, 4, 24), 0.5, date(2026, 4, 24)
+    ws["D3"], ws["E3"], ws["K3"] = date(2026, 5, 1), 1.0, date(2026, 5, 1)
+    ws["Q2"], ws["S2"], ws["Q3"], ws["S3"] = 0, "=NA()", 0, "=NA()"
+
+    weekly, _monthly = _build_explicit_overlay_series_sources(
+        ws, weekly_first=2, weekly_last=4, monthly_first=2, monthly_last=3
+    )
+
+    assert weekly[:2] == (2, 5)
+    # Synthetic 0,0 point is one reporting interval before the first real point.
+    assert ws["T2"].value == date(2026, 4, 10)
+    assert ws["U2"].value == 0
+    assert ws["T3"].value == date(2026, 4, 17)
+    assert ws["T5"].value == date(2026, 5, 1)
+    assert ws["T6"].value is None
 
 def _fill_rgb(fill) -> str:
     return (fill.fgColor.rgb or fill.fgColor.indexed or "")

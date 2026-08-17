@@ -137,7 +137,12 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             ws.cell(row, 1, f"='progress'!A{progress_row}")
             ws.cell(row, 2, f"='progress'!B{progress_row}")
             ws.cell(row, 3, f"='progress'!C{progress_row}")
-            ws.cell(row, 10, f"='progress'!A{progress_row}")
+            # Keep the validation/reporting list as a literal date.  Column A is
+            # intentionally a lightweight live link to ``progress`` and therefore
+            # cannot be resolved by openpyxl while rebuilding overlay geometry.
+            # The literal J value is the shared reporting-calendar authority for
+            # dropdowns and traditional overlay anchoring.
+            ws.cell(row, 10, _reporting)
 
         if idx < len(monthly_points):
             progress_row, reporting = monthly_points[idx]
