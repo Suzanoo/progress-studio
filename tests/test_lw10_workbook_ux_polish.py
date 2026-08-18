@@ -9,7 +9,7 @@ from progress_studio.infrastructure.excel.workbook_visibility import apply_final
 
 
 def test_internal_password_uses_progress_studio_internal_guard() -> None:
-    assert WORKBOOK_SHEET_PASSWORD == "sangjun"
+    assert WORKBOOK_SHEET_PASSWORD == "okmd"
 
 
 def test_readme_is_first_visible_sheet() -> None:
