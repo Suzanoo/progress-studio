@@ -226,3 +226,90 @@ def test_monthly_overlay_geometry_maps_to_monthly_sheet_after_x_margin() -> None
     assert (first_row, last_row) == (2, 4)
     assert (first_col, last_col) == (19, 21)  # M1 through M3, not shifted to U/W.
     wb.close()
+
+
+def test_live_rebuild_monthly_collapses_weekly_x_margin_into_month_buckets(tmp_path: Path) -> None:
+    from progress_studio.services.rebuild_service import WorkbookRebuildEngine
+
+    source = tmp_path / "live-x-source.xlsx"
+    output = tmp_path / "live-x-output.xlsx"
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "main"
+    headers = [
+        "Row Type", "WBS", "Description", "P/A", "Activity ID", "Task ID", "UID",
+        "Outline Level", "Plan Start", "Plan Finish", "Actual Start", "Actual Finish",
+        "% Complete", "Physical %", "Amount", "Total Float (hr)", "XML Amount",
+    ]
+    for col, value in enumerate(headers, start=1):
+        ws.cell(4, col).value = value
+
+    # Physical weekly display range: March margin, early-April margin, then W1/W2.
+    # Rebuild's MainDataset intentionally reads W periods only, but main_monthly
+    # must still regenerate one monthly X bucket for March instead of preserving
+    # the copied weekly X columns one-by-one.
+    weekly = [
+        ("X", datetime(2026, 3, 20)),
+        ("X", datetime(2026, 3, 27)),
+        ("X", datetime(2026, 4, 3)),
+        ("X", datetime(2026, 4, 10)),
+        ("W1", datetime(2026, 4, 24)),
+        ("W2", datetime(2026, 5, 29)),
+    ]
+    for col, (label, reporting_date) in enumerate(weekly, start=18):
+        ws.cell(3, col).value = label
+        ws.cell(4, col).value = reporting_date
+
+    rows = [
+        ["Project Summary", "", "Project", "P", "", "", "", 0, date(2026, 4, 17), date(2026, 5, 29), None, None, 1.0, 0.0, 1000],
+        ["", "", "", "A", "", "", "", 0, None, None, None, None, 0.0, 0.0, 0],
+        ["Activity", "1.1", "Task", "P", "A1000", "", "", 1, date(2026, 4, 17), date(2026, 5, 29), None, None, 1.0, 0.0, 1000],
+        ["", "", "", "A", "A1000", "", "", 1, None, None, None, None, 0.0, 0.0, 0],
+        ["S-Curve", "", "Plan", "P", "", "", "", 0],
+        ["S-Curve", "", "Acc. Plan", "AP", "", "", "", 0],
+        ["S-Curve", "", "Actual", "A", "", "", "", 0],
+        ["S-Curve", "", "Acc. Actual", "AA", "", "", "", 0],
+    ]
+    for row_idx, values in enumerate(rows, start=5):
+        for col_idx, value in enumerate(values, start=1):
+            ws.cell(row_idx, col_idx).value = value
+
+    # Reporting values under W1/W2 only.
+    for row in (5, 7, 9):
+        ws.cell(row, 22).value = 0.4
+        ws.cell(row, 23).value = 0.6
+        ws.cell(row, 22).number_format = "0.00%"
+        ws.cell(row, 23).number_format = "0.00%"
+    for row in (10,):
+        ws.cell(row, 22).value = 0.4
+        ws.cell(row, 23).value = 1.0
+        ws.cell(row, 22).number_format = "0.00%"
+        ws.cell(row, 23).number_format = "0.00%"
+
+    wb.save(source)
+    wb.close()
+
+    WorkbookRebuildEngine().rebuild_live_progress(source, output)
+
+    wb = load_workbook(output, data_only=False)
+    try:
+        monthly = wb["main_monthly"]
+        # One month = one physical column. March is X-only; April contains W1
+        # and therefore becomes M1 even though early-April weekly cells were X.
+        assert [monthly.cell(2, col).value for col in range(18, 21)] == [
+            "March", "April", "May"
+        ]
+        assert [monthly.cell(3, col).value for col in range(18, 21)] == [
+            "X", "M1", "M2"
+        ]
+        assert [monthly.cell(4, col).value for col in range(18, 21)] == [
+            datetime(2026, 3, 27), datetime(2026, 4, 24), datetime(2026, 5, 29)
+        ]
+        # No copied weekly X columns survive to the right of the rebuilt monthly range.
+        assert monthly.max_column == 20
+        assert monthly.cell(5, 18).value in (None, "")
+        assert "'main'!V5:V5" in str(monthly.cell(5, 19).value)
+        assert "'main'!W5:W5" in str(monthly.cell(5, 20).value)
+    finally:
+        wb.close()

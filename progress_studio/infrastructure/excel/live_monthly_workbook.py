@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from copy import copy
-from datetime import date
+from collections import OrderedDict
+from datetime import date, datetime
 
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
@@ -25,6 +26,39 @@ from progress_studio.infrastructure.excel.progress_workbook import (
     WBS_PLAN_FILL,
     WBS_ACTUAL_FILL,
 )
+
+
+def _as_date(value: object) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+def _is_weekly_display_label(value: object) -> bool:
+    text = str(value or "").strip().upper()
+    return text == "X" or (len(text) > 1 and text.startswith("W") and text[1:].isdigit())
+
+
+def _display_month_buckets(source) -> list[tuple[tuple[int, int], list[int]]]:
+    """Return physical monthly buckets from the copied weekly display timescale.
+
+    Live Rebuild's MainDataset intentionally contains reporting Wn periods only.
+    The worksheet still owns display-only X margin columns, so the live monthly
+    writer must discover the physical display range from the worksheet rather
+    than treating dataset.periods[0] as the left edge.
+    """
+
+    grouped: OrderedDict[tuple[int, int], list[int]] = OrderedDict()
+    for col in range(1, source.max_column + 1):
+        label = source.cell(3, col).value
+        reporting_date = _as_date(source.cell(4, col).value)
+        if reporting_date is None or not _is_weekly_display_label(label):
+            continue
+        grouped.setdefault((reporting_date.year, reporting_date.month), []).append(col)
+    return list(grouped.items())
+
 
 
 def build_live_monthly_view(
@@ -57,18 +91,28 @@ def build_live_monthly_view(
     workbook._sheets.insert(source_index + 1, monthly)
     monthly.cell(1, 1).value = "Activity Data — Monthly View"
 
-    first_timescale_col = dataset.periods[0].column
+    display_buckets = _display_month_buckets(source)
+    if not display_buckets:
+        raise ValueError("Weekly display timescale was not found on the main worksheet.")
+
+    first_timescale_col = display_buckets[0][1][0]
+    reporting_by_month = {
+        (period.reporting_date.year, period.reporting_date.month): period
+        for period in cache.periods
+        if period.reporting_date is not None
+    }
 
     for merged in list(monthly.merged_cells.ranges):
         if merged.max_col >= first_timescale_col:
             monthly.unmerge_cells(str(merged))
 
+    reporting_template_col = dataset.periods[0].column
     template_styles = {
-        row: copy(monthly.cell(row, first_timescale_col)._style)
+        row: copy(monthly.cell(row, reporting_template_col)._style)
         for row in range(5, monthly.max_row + 1)
     }
     template_formats = {
-        row: monthly.cell(row, first_timescale_col).number_format
+        row: monthly.cell(row, reporting_template_col).number_format
         for row in range(5, monthly.max_row + 1)
     }
 
@@ -77,22 +121,33 @@ def build_live_monthly_view(
         monthly.max_column - first_timescale_col + 1,
     )
 
-    # Year/month/date grammar.
-    current_year = None
-    year_start = None
-    for index, period in enumerate(cache.periods, start=1):
+    # Year/month/date grammar.  One physical column per calendar month.
+    # Reporting months use the cache's M1..Mn identity/source columns; months
+    # containing display-only X weeks only remain a single X monthly margin.
+    rendered_periods: list[tuple[object | None, list[int]]] = []
+    for index, ((year, month), weekly_cols) in enumerate(display_buckets, start=1):
         col = first_timescale_col + index - 1
-        reporting = period.reporting_date
-        month_name = reporting.strftime("%B") if reporting else f"Month {index}"
-        year = reporting.year if reporting else None
+        reporting_period = reporting_by_month.get((year, month))
+        is_reporting = reporting_period is not None
+        reporting = (
+            reporting_period.reporting_date
+            if reporting_period is not None
+            else _as_date(source.cell(4, weekly_cols[-1]).value)
+        )
+        source_columns = (
+            list(reporting_period.source_columns)
+            if reporting_period is not None
+            else list(weekly_cols)
+        )
+        rendered_periods.append((reporting_period, source_columns))
 
-        monthly.cell(2, col).value = month_name
+        monthly.cell(2, col).value = date(year, month, 1).strftime("%B")
         monthly.cell(2, col).fill = MONTH_FILL
         monthly.cell(2, col).font = Font(color="000000", bold=True)
         monthly.cell(2, col).alignment = Alignment(horizontal="center", vertical="center")
         monthly.cell(2, col).border = HEADER_BORDER
 
-        monthly.cell(3, col).value = period.key
+        monthly.cell(3, col).value = reporting_period.key if is_reporting else "X"
         monthly.cell(3, col).fill = WEEK_FILL
         monthly.cell(3, col).font = Font(color="000000", bold=True)
         monthly.cell(3, col).alignment = Alignment(horizontal="center", vertical="center")
@@ -106,7 +161,7 @@ def build_live_monthly_view(
         monthly.cell(4, col).number_format = "dd/mm/yy"
         monthly.column_dimensions[get_column_letter(col)].width = 12
 
-        monthly.cell(1, col).value = str(year) if year is not None else ""
+        monthly.cell(1, col).value = str(year)
         monthly.cell(1, col).fill = YEAR_FILL
         monthly.cell(1, col).font = Font(color="FFFFFF", bold=True)
         monthly.cell(1, col).alignment = Alignment(horizontal="center", vertical="center")
@@ -117,22 +172,27 @@ def build_live_monthly_view(
     for source_row, cached in by_source_row.items():
         if source_row > monthly.max_row:
             continue
-        for index, period in enumerate(cache.periods, start=0):
+        for index, (period, source_columns) in enumerate(rendered_periods, start=0):
             col = first_timescale_col + index
             cell = monthly.cell(source_row, col)
             if source_row in template_styles:
                 cell._style = copy(template_styles[source_row])
                 cell.number_format = template_formats[source_row]
 
-            first_week = get_column_letter(period.source_columns[0])
-            last_week = get_column_letter(period.source_columns[-1])
+            # X-only months are display canvas.  They stay physically present in
+            # main_monthly but never acquire progress formulas or reporting data.
+            if period is None:
+                cell.value = ""
+                continue
+
+            first_week = get_column_letter(source_columns[0])
+            last_week = get_column_letter(source_columns[-1])
             source_range = (
                 f"{source_ref}!{first_week}{source_row}:{last_week}{source_row}"
             )
 
             row_type = cached.row_type.strip().lower()
             pa = cached.pa.strip().upper()
-            monthly_date_ref = f"{get_column_letter(col)}$4"
 
             if row_type == "s-curve":
                 # LW-11.2: main_monthly remains an Activity Data view only.
@@ -150,7 +210,7 @@ def build_live_monthly_view(
     # Match main exactly: blank timescale cells have no fill; populated cells
     # are colored by the same Project/WBS/Activity Plan/Actual CF rules.
     monthly_timescale_cols = list(
-        range(first_timescale_col, first_timescale_col + len(cache.periods))
+        range(first_timescale_col, first_timescale_col + len(display_buckets))
     )
     header_columns = {name: col for name, col in dataset.headers}
     required = ("row type", "activity id", "p/a", "outline level")
@@ -200,4 +260,4 @@ def build_live_monthly_view(
     monthly.sheet_properties.outlinePr.summaryBelow = False
     monthly.sheet_properties.outlinePr.applyStyles = True
     monthly.sheet_view.showGridLines = source.sheet_view.showGridLines
-    return len(cache.periods)
+    return len(display_buckets)
