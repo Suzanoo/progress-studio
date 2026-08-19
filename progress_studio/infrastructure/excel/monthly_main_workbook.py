@@ -194,8 +194,16 @@ def build_monthly_main_view(
         row: copy(monthly.cell(row, first_timescale_col)._style)
         for row in range(FIRST_DATA_ROW, monthly.max_row + 1)
     }
+    # X margin columns are intentionally display-only and therefore may retain
+    # General formatting.  Monthly reporting cells must inherit their number
+    # format from a real Wn reporting column, otherwise percentages can surface
+    # as raw Excel fractions (for example 0.0026 instead of 0.26%).
+    reporting_format_col = next(
+        (col for col in timescale_cols if _is_weekly_reporting_label(source.cell(3, col).value)),
+        first_timescale_col,
+    )
     row_number_formats = {
-        row: monthly.cell(row, first_timescale_col).number_format
+        row: monthly.cell(row, reporting_format_col).number_format
         for row in range(FIRST_DATA_ROW, monthly.max_row + 1)
     }
 

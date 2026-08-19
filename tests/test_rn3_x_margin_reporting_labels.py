@@ -155,3 +155,74 @@ def test_okd_consumer_builds_reporting_helpers_from_w_only(tmp_path: Path) -> No
     formulas = [str(progress.cell(row, 1).value or "") for row in range(2, progress.max_row + 1)]
     assert all("R4" not in formula and "U4" not in formula for formula in formulas)
     wb.close()
+
+
+def test_monthly_reporting_cells_inherit_percent_format_from_w_not_x_margin() -> None:
+    wb = _weekly_main_with_x_margins()
+    ws = wb["main"]
+
+    # X columns intentionally stay General while real reporting W columns carry
+    # the percentage presentation contract used by Create Progress.
+    for row in (7, 9, 10):
+        ws.cell(row, 18).number_format = "General"
+        ws.cell(row, 19).number_format = "0.00%"
+        ws.cell(row, 20).number_format = "0.00%"
+        ws.cell(row, 21).number_format = "General"
+
+    build_monthly_main_view(wb)
+    monthly = wb["main_monthly"]
+
+    # February/March are reporting M1/M2 and must display as percentages rather
+    # than raw Excel fractions inherited from the leading X margin column.
+    assert monthly.cell(7, 19).number_format == "0.00%"
+    assert monthly.cell(7, 20).number_format == "0.00%"
+    assert monthly.cell(9, 19).number_format == "0.00%"
+    assert monthly.cell(10, 20).number_format == "0.00%"
+    wb.close()
+
+
+def test_monthly_overlay_geometry_maps_to_monthly_sheet_after_x_margin() -> None:
+    from types import SimpleNamespace
+
+    from progress_studio.infrastructure.excel.traditional_overlay_workbook import _monthly_project_window
+
+    wb = Workbook()
+    data = wb.active
+    data.title = "Dashboard_Data"
+    monthly = wb.create_sheet("main_monthly")
+
+    # Dashboard_Data owns reporting months only: Apr -> Jun.
+    for row, (period_date, plan) in enumerate(
+        [(date(2026, 4, 24), 0.1), (date(2026, 5, 29), 0.5), (date(2026, 6, 4), 1.0)],
+        start=2,
+    ):
+        data.cell(row, 4).value = period_date
+        data.cell(row, 5).value = plan
+
+    # main_monthly keeps a March X display margin before M1.  Its physical
+    # columns therefore no longer line up with the first weekly reporting col.
+    for col, (label, period_date) in enumerate(
+        [
+            ("X", date(2026, 3, 27)),
+            ("M1", date(2026, 4, 24)),
+            ("M2", date(2026, 5, 29)),
+            ("M3", date(2026, 6, 25)),
+            ("X", date(2026, 7, 31)),
+        ],
+        start=18,
+    ):
+        monthly.cell(3, col).value = label
+        monthly.cell(4, col).value = period_date
+
+    dataset = SimpleNamespace(
+        periods=(
+            SimpleNamespace(column=21, reporting_date=date(2026, 4, 24)),
+            SimpleNamespace(column=22, reporting_date=date(2026, 5, 1)),
+            SimpleNamespace(column=23, reporting_date=date(2026, 6, 4)),
+        )
+    )
+
+    first_row, last_row, first_col, last_col = _monthly_project_window(data, dataset, monthly)
+    assert (first_row, last_row) == (2, 4)
+    assert (first_col, last_col) == (19, 21)  # M1 through M3, not shifted to U/W.
+    wb.close()

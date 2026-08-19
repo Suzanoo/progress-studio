@@ -169,7 +169,7 @@ def _weekly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int
     return first_helper, last_helper, int(first_col), int(last_col)
 
 
-def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, int, int]:
+def _monthly_project_window(data_ws, dataset: MainDataset, monthly_ws=None) -> tuple[int, int, int, int]:
     """Return project-only monthly helper rows and physical month columns.
 
     Monthly reporting can legitimately finish in the month *after* the raw
@@ -182,15 +182,39 @@ def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, in
         if _as_date(data_ws.cell(row, 4).value) is not None
         and data_ws.cell(row, 5).value not in (None, "")
     ]
-    first_timescale_col = dataset.periods[0].column if dataset.periods else 1
     if not helper_rows:
-        return 2, 2, first_timescale_col, first_timescale_col
+        fallback_col = dataset.periods[0].column if dataset.periods else 1
+        return 2, 2, fallback_col, fallback_col
 
     first_helper, last_helper = helper_rows[0], helper_rows[-1]
     first_date = _as_date(data_ws.cell(first_helper, 4).value)
     last_date = _as_date(data_ws.cell(last_helper, 4).value)
     first_key = (first_date.year, first_date.month)
     last_key = (last_date.year, last_date.month)
+
+    # RN-3 introduces X display-margin weeks.  ``dataset.periods`` now contains
+    # reporting Wn periods only, so its first physical weekly column is no
+    # longer the left edge of ``main_monthly``.  Monthly chart geometry must be
+    # mapped against the monthly worksheet itself; otherwise the anchor shifts
+    # right by the number of pre-project X columns/months.
+    if monthly_ws is not None:
+        month_to_col: dict[tuple[int, int], int] = {}
+        for col in range(1, monthly_ws.max_column + 1):
+            value = _as_date(monthly_ws.cell(4, col).value)
+            if value is None:
+                continue
+            month_to_col.setdefault((value.year, value.month), col)
+        first_col = month_to_col.get(first_key)
+        last_col = month_to_col.get(last_key)
+        if first_col is not None and last_col is not None:
+            return first_helper, last_helper, first_col, max(first_col, last_col)
+
+    # Compatibility fallback for callers/tests that do not provide the monthly
+    # worksheet.  This preserves the pre-RN-3 behavior but is not authoritative
+    # for X-margin geometry.
+    first_timescale_col = dataset.periods[0].column if dataset.periods else 1
+    if not dataset.periods:
+        return first_helper, last_helper, first_timescale_col, first_timescale_col
 
     full_month_keys: list[tuple[int, int]] = []
     for period in dataset.periods:
@@ -205,12 +229,7 @@ def _monthly_project_window(data_ws, dataset: MainDataset) -> tuple[int, int, in
     last_pos = next((i for i, key in enumerate(full_month_keys) if key == last_key), len(full_month_keys) - 1)
     if last_pos < first_pos:
         last_pos = first_pos
-    return (
-        first_helper,
-        last_helper,
-        first_timescale_col + first_pos,
-        first_timescale_col + last_pos,
-    )
+    return first_helper, last_helper, first_timescale_col + first_pos, first_timescale_col + last_pos
 
 
 def _build_explicit_overlay_series_sources(
@@ -661,7 +680,9 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
             workbook[sheet_name]._charts = []
 
     weekly_first, weekly_last, weekly_first_col, weekly_last_col = _weekly_project_window(data_ws, dataset)
-    monthly_first, monthly_last, monthly_first_col, monthly_last_col = _monthly_project_window(data_ws, dataset)
+    monthly_first, monthly_last, monthly_first_col, monthly_last_col = _monthly_project_window(
+        data_ws, dataset, workbook["main_monthly"] if "main_monthly" in workbook.sheetnames else None
+    )
 
     # Build chart-only sources with an explicit leading (0, 0). This keeps
     # right-edge marker geometry correct even when Dashboard_Data starts exactly
