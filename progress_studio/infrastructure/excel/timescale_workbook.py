@@ -4,6 +4,11 @@ import copy
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from progress_studio.domain.reporting_period_identity import (
+    ReportingPeriodWindow,
+    number_reporting_periods,
+)
+
 try:
     from openpyxl import load_workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -612,12 +617,29 @@ def add_weekly_timescale(
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = HEADER_BORDER
 
-    # Week number and week-ending date.
-    for index, week_date in enumerate(week_dates, start=1):
+    # Reporting identity is independent from the physical display timescale.
+    # Margin columns remain visible but carry the explicit display-only marker X;
+    # only periods overlapping the project receive contiguous W1..Wn labels.
+    week_windows = [
+        ReportingPeriodWindow(week_date - timedelta(days=6), week_date)
+        for week_date in week_dates
+    ]
+    week_identities = number_reporting_periods(
+        week_windows,
+        earliest_start,
+        latest_finish,
+        prefix="W",
+    )
+
+    # Week number / display-only marker and week-ending date.
+    for index, (week_date, identity) in enumerate(
+        zip(week_dates, week_identities),
+        start=1,
+    ):
         col = first_timescale_col + index - 1
         week_cell = ws.cell(3, col)
         date_cell = ws.cell(4, col)
-        week_cell.value = f"W{index}"
+        week_cell.value = identity.label or "X"
         date_cell.value = week_date
         week_cell.fill = WEEK_FILL
         week_cell.font = Font(bold=True, color="000000")

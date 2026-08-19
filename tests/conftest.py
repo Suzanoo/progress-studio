@@ -48,6 +48,7 @@ FROZEN_FILES = {
 }
 
 ACTIVE_FILES = {
+    "test_rn3_x_margin_reporting_labels.py",
     "test_rn2_reporting_period_identity.py",
     "test_r1_reporting_range_freeze.py",
     "test_create_progress_initial_recalc.py",

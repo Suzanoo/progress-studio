@@ -68,6 +68,34 @@ def _month_buckets(ws, timescale_cols: list[int]) -> list[tuple[tuple[int, int],
     return list(grouped.items())
 
 
+def _is_weekly_reporting_label(value: object) -> bool:
+    text = str(value or "").strip().upper()
+    return len(text) > 1 and text.startswith("W") and text[1:].isdigit()
+
+
+def _monthly_display_labels(ws, buckets: list[tuple[tuple[int, int], list[int]]]) -> list[str]:
+    """Return X for display-only months and contiguous M1..Mn for reporting months.
+
+    Weekly Create Progress owns the reporting/margin distinction through Wn/X
+    labels.  Monthly presentation consumes that distinction only to label its
+    buckets; calculations continue to use the date columns and source ranges.
+    """
+
+    labels: list[str] = []
+    sequence = 0
+    for _, weekly_cols in buckets:
+        is_reporting = any(
+            _is_weekly_reporting_label(ws.cell(3, col).value)
+            for col in weekly_cols
+        )
+        if is_reporting:
+            sequence += 1
+            labels.append(f"M{sequence}")
+        else:
+            labels.append("X")
+    return labels
+
+
 def _remove_timescale_merges(ws, first_col: int) -> None:
     for merged in list(ws.merged_cells.ranges):
         if merged.max_col >= first_col:
@@ -139,6 +167,7 @@ def build_monthly_main_view(
     buckets = _month_buckets(source, timescale_cols)
     if not buckets:
         raise ValueError("No monthly buckets could be derived from the main weekly timescale.")
+    monthly_labels = _monthly_display_labels(source, buckets)
 
     # copy_worksheet keeps the exact Activity Data layout, row outline levels,
     # styles and formulas. We then replace only the weekly timescale.
@@ -174,7 +203,10 @@ def build_monthly_main_view(
     monthly.delete_cols(first_timescale_col, monthly.max_column - first_timescale_col + 1)
 
     source_ref = _quote_sheet(source_sheet)
-    for month_index, ((year, month), weekly_cols) in enumerate(buckets, start=1):
+    for month_index, (((year, month), weekly_cols), display_label) in enumerate(
+        zip(buckets, monthly_labels),
+        start=1,
+    ):
         target_col = first_timescale_col + month_index - 1
         first_week_col = get_column_letter(weekly_cols[0])
         last_week_col = get_column_letter(weekly_cols[-1])
@@ -189,7 +221,7 @@ def build_monthly_main_view(
         month_cell.border = HEADER_BORDER
 
         period_cell = monthly.cell(3, target_col)
-        period_cell.value = f"M{month_index}"
+        period_cell.value = display_label
         period_cell.fill = WEEK_FILL
         period_cell.font = Font(color="000000", bold=True)
         period_cell.alignment = Alignment(horizontal="center", vertical="center")

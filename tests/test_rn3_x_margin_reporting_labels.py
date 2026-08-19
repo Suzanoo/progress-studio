@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from pathlib import Path
+
+from openpyxl import Workbook, load_workbook
+
+from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
+from progress_studio.infrastructure.excel.okd_workbook import build_okd_sheets
+from progress_studio.infrastructure.excel.progress_workbook import (
+    find_timescale_columns,
+    prepare_progress_and_scurve,
+)
+from progress_studio.infrastructure.excel.timescale_workbook import add_weekly_timescale
+
+
+def _raw_schedule(path: Path) -> None:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "main"
+    headers = [
+        "Row Type", "WBS", "Description", "P/A", "Activity ID", "Task ID", "UID",
+        "Outline Level", "Plan Start", "Plan Finish", "Actual Start", "Actual Finish",
+        "% Complete", "Physical %", "Total Float (hr)",
+    ]
+    ws.append(headers)
+    ws.append([
+        "Activity", "1", "Task", "P", "A1000", "", "", 1,
+        date(2026, 2, 23), date(2026, 3, 10), None, None, 0, 0, 0,
+    ])
+    wb.save(path)
+    wb.close()
+
+
+def test_create_weekly_timescale_marks_margins_x_and_numbers_reporting_from_w1(tmp_path: Path) -> None:
+    source = tmp_path / "source.xlsx"
+    output = tmp_path / "weekly.xlsx"
+    _raw_schedule(source)
+
+    add_weekly_timescale(
+        source,
+        output,
+        sheet_name="main",
+        cutoff_day=5,  # Friday
+        margin_weeks=2,
+    )
+
+    wb = load_workbook(output, data_only=False)
+    ws = wb["main"]
+    timescale = [
+        (ws.cell(3, col).value, ws.cell(4, col).value)
+        for col in range(1, ws.max_column + 1)
+        if isinstance(ws.cell(4, col).value, (date, datetime))
+    ]
+    labels = [label for label, _ in timescale]
+
+    assert labels == ["X", "X", "X", "W1", "W2", "W3", "X", "X"]
+    assert [label for label in labels if str(label).startswith("W")] == ["W1", "W2", "W3"]
+    wb.close()
+
+
+def _weekly_main_with_x_margins() -> Workbook:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "main"
+    headers = [
+        "Row Type", "WBS", "Description", "P/A", "Activity ID", "Task ID", "UID",
+        "Outline Level", "Plan Start", "Plan Finish", "Actual Start", "Actual Finish",
+        "% Complete", "Physical %", "Amount", "Total Float (hr)", "XML Amount",
+    ]
+    for col, value in enumerate(headers, start=1):
+        ws.cell(4, col).value = value
+
+    # Four distinct monthly buckets make the X/M presentation contract explicit.
+    period_data = [
+        ("X", datetime(2026, 1, 30)),
+        ("W1", datetime(2026, 2, 27)),
+        ("W2", datetime(2026, 3, 27)),
+        ("X", datetime(2026, 4, 24)),
+    ]
+    for col, (label, reporting_date) in enumerate(period_data, start=18):
+        ws.cell(3, col).value = label
+        ws.cell(4, col).value = reporting_date
+
+    rows = [
+        ["Project Summary", "", "Project", "P", "", "", "", 0, date(2026, 2, 1), date(2026, 3, 20)],
+        ["", "", "", "A", "", "", "", 0],
+        ["Activity", "1", "Activity", "P", "A1000", "", "", 1, date(2026, 2, 1), date(2026, 3, 20)],
+        ["", "", "", "A", "A1000", "", "", 1],
+        ["S-Curve", "", "Plan", "P", "", "", "", 0],
+        ["S-Curve", "", "Acc. Plan", "AP", "", "", "", 0],
+        ["S-Curve", "", "Actual", "A", "", "", "", 0],
+        ["S-Curve", "", "Acc. Actual", "AA", "", "", "", 0],
+    ]
+    for row_idx, values in enumerate(rows, start=5):
+        for col_idx, value in enumerate(values, start=1):
+            ws.cell(row_idx, col_idx).value = value
+
+    # Reporting values exist only under W periods; X columns are display canvas.
+    ws.cell(7, 19).value = 0.5
+    ws.cell(7, 20).value = 0.5
+    ws.cell(9, 19).value = 0.5
+    ws.cell(9, 20).value = 0.5
+    ws.cell(10, 19).value = 0.5
+    ws.cell(10, 20).value = 1.0
+    return wb
+
+
+def test_monthly_create_uses_x_for_display_only_months_and_m1_mn_for_reporting_months() -> None:
+    wb = _weekly_main_with_x_margins()
+    build_monthly_main_view(wb)
+    ws = wb["main_monthly"]
+
+    assert [ws.cell(3, col).value for col in range(18, 22)] == ["X", "M1", "M2", "X"]
+    # The physical monthly display range remains intact; only identity changes.
+    assert [ws.cell(4, col).value for col in range(18, 22)] == [
+        date(2026, 1, 30), date(2026, 2, 27), date(2026, 3, 27), date(2026, 4, 24)
+    ]
+    wb.close()
+
+
+def test_progress_consumer_ignores_x_but_keeps_x_physical_cells() -> None:
+    wb = _weekly_main_with_x_margins()
+    ws = wb["main"]
+    headers = {str(ws.cell(4, c).value or "").strip().lower(): c for c in range(1, ws.max_column + 1)}
+
+    assert find_timescale_columns(ws, headers) == [19, 20]
+    ws.cell(7, 18).value = "PRE-MARGIN"
+    ws.cell(7, 21).value = "POST-MARGIN"
+
+    prepare_progress_and_scurve(wb, ws)
+
+    assert ws.cell(7, 18).value == "PRE-MARGIN"
+    assert ws.cell(7, 21).value == "POST-MARGIN"
+    assert ws.cell(3, 18).value == "X"
+    assert ws.cell(3, 21).value == "X"
+    wb.close()
+
+
+def test_okd_consumer_builds_reporting_helpers_from_w_only(tmp_path: Path) -> None:
+    source = tmp_path / "x-margin.xlsx"
+    output = tmp_path / "okd.xlsx"
+    wb = _weekly_main_with_x_margins()
+    wb.save(source)
+    wb.close()
+
+    result = build_okd_sheets(source, output, source_sheet="main")
+    assert result[1] == 2  # week count
+
+    wb = load_workbook(output, data_only=False)
+    progress = wb["progress"]
+    week_starts = [progress.cell(row, 1).value for row in range(2, progress.max_row + 1)]
+    assert len(week_starts) == 2
+    # No helper row is sourced from the X margin dates.
+    formulas = [str(progress.cell(row, 1).value or "") for row in range(2, progress.max_row + 1)]
+    assert all("R4" not in formula and "U4" not in formula for formula in formulas)
+    wb.close()
