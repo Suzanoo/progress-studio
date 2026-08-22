@@ -71,6 +71,17 @@ Do not commit:
 
 Historical design/milestone records belong under `docs/history/` and are not active product contracts.
 
+
+## Package-content verification
+
+Before platform-specific Windows/macOS packaging, build a wheel from the current source and verify that runtime JSON configuration and dashboard icons are present:
+
+```powershell
+.\scripts\check-package.ps1
+```
+
+The check builds into a temporary directory and leaves no `dist/` artifact in the repository. Platform-specific installer/bundle definitions belong under `packaging/`.
+
 ## Before handoff
 
 At minimum run the focused tests for the changed subsystem plus Smoke:

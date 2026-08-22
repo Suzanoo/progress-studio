@@ -71,3 +71,11 @@ Mapping and Payment-only paths must preserve data owned by other workspaces.
 - Product behavior changes require regression coverage.
 - Full release tests are required before RC/production, not after every small edit.
 - Real project workbooks should remain part of manual acceptance alongside synthetic fixtures.
+
+
+## Repository cleanup checkpoint
+
+- CL-2A — documentation/root cleanup: complete.
+- CL-2B — test organization: complete.
+- CL-2C — dead placeholder/source-script cleanup: complete.
+- CL-2D — repository hygiene and packaging readiness: establishes package-data verification and Windows/macOS packaging boundaries without building installers.

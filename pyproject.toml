@@ -37,4 +37,8 @@ markers = [
     "release: complete release gate; every collected test belongs here",
 ]
 [tool.setuptools.package-data]
-"progress_studio.config" = ["payment_lines.json"]
+"progress_studio" = [
+    "config/*.json",
+    "assets/dashboard/icons/*.png",
+    "services/distribution/*.json",
+]

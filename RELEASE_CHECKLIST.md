@@ -29,6 +29,11 @@ This checklist is for Release Candidate / production builds. It intentionally do
 
 ## Packaging
 
+- [ ] `scripts/check-package.ps1` passes and the built wheel contains all runtime JSON/icon resources.
+- [ ] Package/runtime version metadata are consistent.
+- [ ] Stable desktop/CLI entry points resolve from the built distribution.
+
+
 ### Windows
 
 - [ ] Build/installer produced from a clean environment.

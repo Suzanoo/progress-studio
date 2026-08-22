@@ -28,3 +28,10 @@ def test_example_golden_directory_contains_only_referenced_progress_fixture() ->
     golden = ROOT / "example/golden"
     assert (golden / "progress.xlsx").is_file()
     assert not (golden / "BOQ.xlsx").exists()
+
+
+def test_packaging_boundary_and_package_check_exist() -> None:
+    assert (ROOT / "packaging/windows/README.md").is_file()
+    assert (ROOT / "packaging/macos/README.md").is_file()
+    assert (ROOT / "scripts/check-package.py").is_file()
+    assert (ROOT / "scripts/check-package.ps1").is_file()
