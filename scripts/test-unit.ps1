@@ -1,2 +1,2 @@
 $ErrorActionPreference = "Stop"
-python -m pytest -m smoke $args
+python -m pytest -m unit $args

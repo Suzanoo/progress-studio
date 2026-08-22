@@ -156,4 +156,4 @@ Full release gate:
 python -m pytest -m release
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for the current tiering policy.
+See [docs/TESTING.md](docs/TESTING.md) for the current product test profiles and release gates.

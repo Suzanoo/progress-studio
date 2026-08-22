@@ -5,170 +5,87 @@ from pathlib import Path
 import pytest
 
 
-# MS-TEST1 ownership tiers.
-#
-# FROZEN:
-# Stable product contracts. They still run at release/full-suite gates, but are
-# intentionally excluded from routine milestone regression runs.
-#
-# ACTIVE:
-# Workbook/dashboard/payment/rebuild areas still changing in current milestones.
-#
-# SMOKE:
-# Small cross-section of high-value contracts intended for the fastest local gate.
-FROZEN_FILES = {
-    "test_lw13_dashboard_freeze.py",
-    "test_boq_mapping_service.py",
-    "test_desktop_phase2.py",
-    "test_entrypoints.py",
-    "test_generic_xml_import.py",
-    "test_mapping_store.py",
-    "test_ms10_mapped_to_readability.py",
-    "test_ms111_unified_working_tree.py",
-    "test_ms112_core_tree_editing.py",
-    "test_ms113_recursive_working_tree.py",
-    "test_ms114_main_rebuild_foundation.py",
-    # Frozen before LW refactor: preserves pre-LW shell/export workspace contracts.
-    "test_ms91_production_ui.py",
-    "test_ms93_professional_desktop_ui.py",
-    "test_ms_rb6_rebuild_workspace_ui.py",
-    "test_ms3_mapping_engine.py",
-    "test_ms4_share_allocation.py",
-    "test_ms5_persistent_session.py",
-    "test_ms63_scope.py",
-    "test_ms6_release_architecture.py",
-    "test_ms7_release.py",
-    "test_ms7_workspace_ux.py",
-    "test_ms8_architecture_cleanup.py",
-    "test_ms92_focus_mapping.py",
-    "test_ms94_mapping_productivity.py",
-    "test_ms95_supplemental_structure.py",
-    "test_ms961_unified_progress_tree.py",
-    "test_v202_bugfixes.py",
+# Product test profiles are behavior-based, not milestone-based.
+# Every test belongs to exactly one primary profile by directory:
+#   tests/unit/         - isolated logic / parsers / domain helpers
+#   tests/integration/  - component and workflow boundaries
+#   tests/regression/   - bugs/product contracts that must never return
+#   tests/acceptance/   - release-level product acceptance contracts
+# Every collected test also belongs to `release`.
+PROFILE_DIRS = {
+    "unit": "unit",
+    "integration": "integration",
+    "regression": "regression",
+    "acceptance": "acceptance",
 }
 
-ACTIVE_FILES = {
-    "test_rn3_x_margin_reporting_labels.py",
-    "test_rn2_reporting_period_identity.py",
-    "test_r1_reporting_range_freeze.py",
-    "test_create_progress_initial_recalc.py",
-    "test_chart_axis_ooxml_integrity.py",
-    "test_rebuild_2x2_matrix.py",
-    "test_architecture_recovery_contract.py",
-    "test_overlay_anchor_actual_monthly_regression.py",
-    "test_create_progress_baseline_finalization.py",
-    "test_final_workbook_policy_hotfix.py",
-    "test_finish1_workbook_workspace_consolidation.py",
-    "test_wp2_shared_workbook_policy.py",
-    "test_n1_xml_format_detector.py",
-    "test_n2_normalized_schedule_model.py",
-    "test_n3_msp_xml_adapter.py",
-    "test_n4_msp_regression_gate.py",
-    "test_n5_p6_xml_adapter.py",
-    "test_n6_normalized_schedule_validation.py",
-    "test_n7_engine_integration.py",
-    "test_n71_margin_dashboard_hotfix.py",
-    "test_n72_dashboard_cutoff_series.py",
-    "test_n8_msp_p6_equivalence_gate.py",
-    # Live Workbook refactor ownership begins here.
-    "test_lw0_rebuild_export_ux.py",
-    "test_lw1_rebuild_reader_contract.py",
-    "test_lw2_main_dataset_parser.py",
-    "test_lw3_direct_activity_deriver.py",
-    "test_lw4_tiny_progress_cache.py",
-    "test_lw5_live_dashboard_contract.py",
-    "test_lw6_monthly_engine.py",
-    "test_lw7_live_workbook_writer.py",
-    "test_lw8_save_recalc_contract.py",
-    "test_lw9_live_payment_integration.py",
-    "test_lw10_full_live_monthly.py",
-    "test_lw10_workbook_ux_polish.py",
-    "test_lw10_0_1_visual_polish.py",
-    "test_lw10_0_2_dashboard_monthly_correctness.py",
-    "test_lw10_0_3_curve_source_status.py",
-    "test_lw11_progress_curve_contract.py",
-    "test_lw114_dashboard_info_wbs_rollup.py",
-    "test_lw121_traditional_overlay.py",
-    "test_lw1311_overlay_rollback_hotfix.py",
-    "test_lw132_period_end_geometry.py",
-    "test_ms_p120_activity_status_focus.py",
-    "test_ms_rb721_dashboard_interactive_protection.py",
-    "test_ms_rb72_lightweight_protection.py",
-    "test_ms_rb711_hybrid_progress_contract.py",
-    "test_ms_rb71_final_sheet_visibility.py",
-    "test_ms_test1_test_suite_tiering.py",
-    "test_ms115_workbook_generation_engine.py",
-    "test_ms116_generation_progress_dialog.py",
-    "test_ms6_workbook_export.py",
-    "test_ms_p110_dashboard_embedded_icons.py",
-    "test_ms_p111_dashboard_control_table.py",
-    "test_ms_p113_filter_ui.py",
-    "test_ms_p117_monthly_main_view.py",
-    "test_ms_p119_snapshot_progress_table.py",
-    "test_ms_p13_activity_data_theme.py",
-    "test_ms_p15_actual_amount.py",
-    "test_ms_p16_excel_dashboard.py",
-    "test_ms_p17_dashboard_at_progress_stage.py",
-    "test_ms_p19_dashboard_ui_behavior.py",
-    "test_ms_pay1_payment_snapshot.py",
-    "test_ms_pay2_payment_workflow.py",
-    "test_ms_pay3_pay5_payment_position_engine.py",
-    "test_ms_pay6_payment_line_renderer.py",
-    "test_ms_pay7_embedded_payment_workflow.py",
-    "test_ms_r2_rebuild_from_edited_workbook.py",
-    "test_ms_rb1_rebuild_core_contract.py",
-    "test_ms_rb2_progress_rebuild_engine.py",
-    "test_ms_rb3_dashboard_progress_contract.py",
-    "test_ms_rb3_snapshot_performance.py",
-    "test_ms_rb4_payment_only_rebuild.py",
-    "test_ms_rb5_payment_collision_lanes.py",
-}
-
+# Smoke is intentionally small and high-value. It is a subset of the profiles
+# above and should answer: "is this build safe enough to hand to a user?"
 SMOKE_NODEIDS = {
-    "test_lw0_rebuild_export_ux.py",
-    "test_lw1_rebuild_reader_contract.py",
-    "test_entrypoints.py",
-    "test_ms115_workbook_generation_engine.py",
-    "test_ms_p119_snapshot_progress_table.py",
-    "test_ms_pay3_pay5_payment_position_engine.py",
-    "test_ms_pay6_payment_line_renderer.py::test_ms_pay65_default_render_includes_every_populated_payment",
-    "test_ms_rb1_rebuild_core_contract.py",
-    "test_ms_rb2_progress_rebuild_engine.py::test_rb2_rebuild_progress_replaces_only_progress_owned_sheets",
-    "test_ms_rb3_snapshot_performance.py",
-    "test_ms_rb4_payment_only_rebuild.py::test_rb4_rebuild_payment_replaces_payment_only",
-    "test_ms_rb5_payment_collision_lanes.py",
+    "integration/desktop/test_entrypoints.py",
+    "integration/create_progress/test_workbook_generation_engine.py",
+    "integration/create_progress/test_snapshot_progress_table.py",
+    "integration/rebuild/test_rebuild_core_contract.py",
+    "integration/rebuild/test_progress_rebuild_engine.py::test_rb2_rebuild_progress_replaces_only_progress_owned_sheets",
+    "integration/rebuild/test_snapshot_performance.py",
+    "integration/rebuild/test_payment_only_rebuild.py::test_rb4_rebuild_payment_replaces_payment_only",
+    "integration/rebuild/test_payment_collision_lanes.py",
+    "integration/payment/test_payment_position_engine.py",
+    "integration/payment/test_payment_line_renderer.py::test_ms_pay65_default_render_includes_every_populated_payment",
+    "regression/dashboard/test_dashboard_reporting_range.py",
+    "regression/dashboard/test_chart_ooxml_integrity.py",
+    "regression/overlay/test_traditional_overlay.py",
+    "regression/workbook/test_final_workbook_policy.py",
 }
+
+
+def _relative_nodeid(item: pytest.Item) -> str:
+    nodeid = item.nodeid.replace("\\", "/")
+    return nodeid.split("tests/", 1)[-1]
+
+
+def _primary_profile(item: pytest.Item) -> str | None:
+    path = Path(str(item.fspath)).resolve()
+    parts = path.parts
+    try:
+        tests_index = parts.index("tests")
+    except ValueError:
+        return None
+    if tests_index + 1 >= len(parts):
+        return None
+    folder = parts[tests_index + 1]
+    return PROFILE_DIRS.get(folder)
 
 
 def _matches_smoke(item: pytest.Item) -> bool:
-    short = item.nodeid.replace("\\", "/").split("tests/", 1)[-1]
+    short = _relative_nodeid(item)
     filename = Path(str(item.fspath)).name
-    return filename in SMOKE_NODEIDS or short in SMOKE_NODEIDS
+    for target in SMOKE_NODEIDS:
+        if "::" in target:
+            if short == target:
+                return True
+        elif short == target or short.startswith(target + "::") or filename == target:
+            return True
+    return False
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    unknown: set[str] = set()
+    invalid: list[str] = []
 
     for item in items:
-        filename = Path(str(item.fspath)).name
-
-        # Every test is part of the release gate.
         item.add_marker(pytest.mark.release)
-
-        if filename in ACTIVE_FILES:
-            item.add_marker(pytest.mark.active)
-        elif filename in FROZEN_FILES:
-            item.add_marker(pytest.mark.frozen)
+        profile = _primary_profile(item)
+        if profile is None:
+            invalid.append(_relative_nodeid(item))
         else:
-            unknown.add(filename)
+            item.add_marker(getattr(pytest.mark, profile))
 
         if _matches_smoke(item):
             item.add_marker(pytest.mark.smoke)
 
-    if unknown:
+    if invalid:
         pytest.exit(
-            "MS-TEST1: unclassified test file(s): "
-            + ", ".join(sorted(unknown))
-            + ". Add each new test module to ACTIVE_FILES or FROZEN_FILES in tests/conftest.py.",
+            "Test organization: test file(s) outside unit/integration/regression/acceptance: "
+            + ", ".join(sorted(invalid)),
             returncode=4,
         )
