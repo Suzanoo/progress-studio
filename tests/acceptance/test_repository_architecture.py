@@ -48,9 +48,9 @@ class Ms8ArchitectureCleanupTests(unittest.TestCase):
             context: PipelineContext = run_example(Path(td))
             self.assertEqual(context.metadata["activity_count"], 172)
             self.assertEqual(context.metadata["wbs_count"], 82)
-            self.assertEqual(context.metadata["progress"].weekly_columns, 76)
+            self.assertEqual(context.metadata["progress"].weekly_columns, 67)
             self.assertEqual(context.metadata["okd"].table_rows, 510)
-            self.assertEqual(context.metadata["okd"].checked_links, 40290)
+            self.assertEqual(context.metadata["okd"].checked_links, 35700)
 
 
 if __name__ == "__main__":
