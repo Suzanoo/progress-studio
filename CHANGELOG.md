@@ -1,3 +1,14 @@
+# Changelog
+
+## Unreleased — Repository documentation reset
+
+- Replaced the milestone-heavy root README with a product flow / input / output front door.
+- Rewrote `ARCHITECTURE.md` as the current ownership/flow source of truth.
+- Replaced `README_ROADMAP.md` with the pre-production `ROADMAP.md`.
+- Archived milestone, acceptance, freeze and v2.3 user-guide documents under `docs/history/`.
+- Added current `docs/USER_WORKFLOW.md` and `docs/DEVELOPMENT.md`.
+- Removed obsolete numbered-script instructions from `example/run_examples.txt`; `example/README.md` now points to current entry points.
+
 ## LW-13.2.1 — Monthly Cutoff Label Fix
 
 - Monthly red-line label now displays `Cutoff Month YYYY` by formatting the existing monthly category source cells as `mmmm yyyy`.

@@ -103,14 +103,14 @@ class Ms7ReleaseTests(unittest.TestCase):
                 report = wb["Distribution Report"]
 
                 self.assertEqual(main.max_row, 519)
-                self.assertEqual(progress.max_row, 77)
+                self.assertEqual(progress.max_row, 68)
                 self.assertEqual(table.max_row, 511)
                 self.assertEqual(report.max_row, 179)
-                self.assertEqual(context.metadata["progress"].weekly_columns, 76)
+                self.assertEqual(context.metadata["progress"].weekly_columns, 67)
                 self.assertEqual(context.metadata["activity_count"], 172)
                 self.assertEqual(context.metadata["wbs_count"], 82)
                 self.assertEqual(context.metadata["okd"].table_rows, 510)
-                self.assertEqual(context.metadata["okd"].checked_links, 40290)
+                self.assertEqual(context.metadata["okd"].checked_links, 35700)
 
                 formulas = sum(
                     1
@@ -124,15 +124,29 @@ class Ms7ReleaseTests(unittest.TestCase):
 
     def test_release_documents_are_current(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        roadmap = (ROOT / "README_ROADMAP.md").read_text(encoding="utf-8")
-        self.assertIn("2.3.0", readme)
-        self.assertIn("MS-7 — Mapping Workspace UX", roadmap)
-        self.assertNotIn("legacy/", readme)
-        self.assertNotIn("Scripts 05-07 remain", readme)
+        architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        workflow = (ROOT / "docs/USER_WORKFLOW.md").read_text(encoding="utf-8")
 
-    def test_no_thai_in_application_or_release_docs(self):
+        self.assertIn("Product flow", readme)
+        self.assertIn("main", readme)
+        self.assertIn("Ownership matrix", architecture)
+        self.assertIn("P11 Production Release", roadmap)
+        self.assertIn("Rebuild", workflow)
+        self.assertNotIn("Current release: `2.3.0`", readme)
+        self.assertNotIn("README_ROADMAP.md", readme)
+
+    def test_no_thai_in_application_or_active_release_docs(self):
         paths = list((ROOT / "progress_studio").rglob("*.py"))
-        paths.extend([ROOT / "README.md", ROOT / "README_ROADMAP.md", ROOT / "docs/acceptance/MS6_ACCEPTANCE.md"])
+        paths.extend([
+            ROOT / "README.md",
+            ROOT / "ARCHITECTURE.md",
+            ROOT / "ROADMAP.md",
+            ROOT / "RELEASE_CHECKLIST.md",
+            ROOT / "docs/README.md",
+            ROOT / "docs/USER_WORKFLOW.md",
+            ROOT / "docs/DEVELOPMENT.md",
+        ])
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertFalse(any("\u0e00" <= ch <= "\u0e7f" for ch in text), str(path))

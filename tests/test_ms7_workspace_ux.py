@@ -38,9 +38,11 @@ def test_workspace_uses_lightweight_native_controls():
     assert "<Motion>" not in amount_mapping
 
 
-def test_ms7_documents_exist_and_roadmap_is_complete():
+def test_ms7_historical_documents_are_archived_and_active_docs_exist():
     assert (ROOT / "ARCHITECTURE.md").is_file()
-    assert (ROOT / "docs/milestones/MS7.md").is_file()
-    assert (ROOT / "docs/acceptance/MS7_ACCEPTANCE.md").is_file()
-    roadmap = (ROOT / "README_ROADMAP.md").read_text(encoding="utf-8")
-    assert "| MS-7 Mapping Workspace UX | Completed |" in roadmap
+    assert (ROOT / "ROADMAP.md").is_file()
+    assert (ROOT / "docs/USER_WORKFLOW.md").is_file()
+    assert (ROOT / "docs/history/milestones/MS7.md").is_file()
+    assert (ROOT / "docs/history/acceptance/MS7_ACCEPTANCE.md").is_file()
+    roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "P11 Production Release" in roadmap

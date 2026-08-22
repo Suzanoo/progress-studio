@@ -1,101 +1,210 @@
 # Progress Studio Architecture
 
-## Purpose
+This file is the technical source of truth for current Progress Studio ownership boundaries. Historical milestone documents under `docs/history/` describe how the product reached this architecture but do not override this contract.
 
-Progress Studio connects a generated Progress workbook with a BOQ workbook, keeps mapping state in memory, and exports a reconciled workbook without using GUI widgets as data storage.
+## 1. End-to-end architecture
 
-## Data flow
+```mermaid
+flowchart TD
+    MSP[MS Project XML] --> DETECT[XML Format Detector]
+    P6[Primavera P6 XML] --> DETECT
 
-```text
-Primavera XML or generated Progress workbook
-        ↓
-Workbook readers and validation
-        ↓
-Domain records
-        ↓
-MappingStore / MappingSession
-        ├── Activity index
-        ├── BOQ index
-        ├── Allocation records
-        ├── Search and filters
-        └── Undo state
-        ↓
-Session repository or WorkbookExportService
-        ↓
-Self-contained `.progressstudio` project or rebuilt Excel workbook
+    DETECT --> ADAPTER[MSP / P6 Adapter]
+    ADAPTER --> NORMAL[Normalized Schedule]
+    NORMAL --> VALIDATE[Validation]
+    VALIDATE --> CREATE[Create Progress]
+
+    CREATE --> MAIN[main\nWorkbook Source of Truth]
+    CREATE --> MONTHLY[main_monthly]
+    CREATE --> DASH[Dashboard]
+
+    MAIN --> MAP[Mapping]
+    MAIN --> PAYMENT[Payment]
+    MAIN --> EDIT[User edits Excel]
+
+    EDIT --> REBUILD[Rebuild Workspace]
+    REBUILD --> RPROG[Progress Rebuild]
+    REBUILD --> RPAY[Payment Rebuild]
+
+    RPROG --> RENDER[Owned Renderers]
+    RPAY --> RENDER
+    MAP --> FINAL[Final Workbook Policy]
+    PAYMENT --> FINAL
+    RENDER --> FINAL
+
+    FINAL --> SAVE[Save Workbook]
 ```
 
-## Sources of truth
+## 2. Source boundaries
 
-- The generated `main` worksheet is the workbook source of truth for Activity Amount.
-- `main` is also the editable weekly timescale source; `main_monthly` is a formula-derived monthly presentation view and never owns progress inputs.
-- `MappingStore` is the runtime source of truth for Activities, BOQ items, selections, and allocations.
-- Treeview rows are presentation only. Business logic must never read values back from the GUI.
-- `.progressstudio` v8 stores mapping/tree state plus verified embedded copies of the Progress and BOQ source workbooks. This makes a saved project self-contained for future workbook rebuilds.
-- Workbook snapshots are source preservation only; runtime business logic still reads normalized domain records and never reads GUI widgets.
+### Before workbook creation
 
-## Rebuild contract
+Schedule XML is normalized through source-specific adapters:
 
 ```text
-.progressstudio v8
-    ├── mapping + working tree
-    ├── embedded Progress source
-    └── embedded BOQ source
-            ↓
-    restore verified local copies
-            ↓
-    WorkbookExportService / latest generation engine
-            ↓
-    latest-format rebuilt workbook
+MSP XML ─┐
+         ├─> source adapter -> Normalized Schedule -> validation
+P6 XML ──┘
 ```
 
-Projects created before v8 remain readable. They must be opened with their original/relinked source workbooks once and saved again before they become self-contained. Legacy Actual Progress migration from an edited workbook is intentionally outside MS-R1.
+The Progress workbook engine should not need to know which XML dialect produced the normalized schedule.
 
-## Workbook contract
+Supported XML paths in the current normalizer:
 
-A Progress workbook accepted for mapping must contain a worksheet named exactly `main` and the required generated headers. Export updates Plan Activity Amount in `main`; dependent worksheets recalculate when Microsoft Excel opens the result.
+- Microsoft Project XML.
+- Primavera P6 XML.
 
-## UI contract
+Amount/cost is deliberately not normalized from schedule XML. Initial workbook generation keeps the established fallback/fake amount behavior; BOQ Mapping owns real cost allocation.
 
-The desktop UI is event-driven and lightweight:
+### After workbook creation
 
-- Only visible pages are rendered.
-- Native Treeview selection and scrolling are preferred.
-- No row tooltips, hover rendering, animation, embedded charts, or continuous repaint loops.
-- Layout preferences may store only presentation state; they must not contain mapping data.
+`main` becomes the workbook source of truth for the editable schedule/progress state.
 
-## Export contract
+Rebuild operates from the selected workbook and does not require the original XML, BOQ file, mapping session, or GUI tree as an input to the standalone rebuild contract.
+
+## 3. Ownership matrix
+
+| Component | Owns | Must not own |
+|---|---|---|
+| XML Detector / Adapters | XML dialect detection and source normalization | Excel rendering, Mapping, Payment |
+| Normalized Schedule | Source-neutral WBS/Activity schedule contract | Workbook formatting |
+| Create Progress | Initial workbook generation | BOQ allocation rules, post-edit rebuild decisions |
+| Mapping | BOQ -> Activity allocation / Activity Amount | Payment rendering, Progress rebuild |
+| Payment | Payment Input reconciliation and Payment rendering | Progress/Dashboard regeneration |
+| Progress Rebuild | Progress-derived sheets from current `main` | Payment Input ownership |
+| Payment Rebuild | `Payment` output from current `main + Payment Input` | Progress-derived sheets |
+| Renderers | Presentation objects they create | Other renderer ownership / business calculation |
+| Final Workbook Policy | guide, visibility, protection and Excel recalc policy | Progress/Payment calculation |
+| Excel / user | editable workbook inputs and user-created sheets | Python snapshot generation |
+
+## 4. Create Progress contract
+
+The initial pipeline builds the workbook once from normalized schedule data and then applies presentation/final workbook policy before saving.
+
+Conceptually:
 
 ```text
-MappingStore
-    ↓ validate and reconcile
-Temporary workbook
-    ↓ update main + mapping sheets
-OOXML package validation
-    ↓ atomic replace
-Final mapped workbook
+Normalize
+  -> schedule/activity workbook data
+  -> weekly timescale
+  -> progress/distribution
+  -> monthly view
+  -> dashboard / overlays
+  -> final workbook policy
+  -> save
 ```
 
-A failed validation must not replace an existing destination workbook.
+Create Progress owns the initial reporting labels and display margins.
 
-## Schedule XML import contract
+## 5. Timescale contract
 
-Schedule XML is normalized before the workbook pipeline. The downstream schedule,
-mapping, session, and export services remain source-independent.
+Display range and reporting range are different concepts.
 
-Every non-summary activity must resolve these fields:
+```text
+DISPLAY RANGE
+X  X  X | W1 W2 W3 ... Wn | X X X
+          REPORTING RANGE
 
-- Activity Name
-- Plan Start
-- Plan Finish
+MONTHLY
+X | M1 M2 M3 ... Mn | X
+```
 
-If any required value is missing, invalid, or Plan Finish is earlier than Plan Start,
-the importer reports all detected issues and stops before creating a workbook.
+- `X` is a display-only margin period.
+- `W1` is the first weekly period overlapping the project reporting window.
+- `Wn` is the final weekly period overlapping the project finish.
+- `M1...Mn` follow the same rule at monthly level.
+- The physical date is authoritative for calculations.
+- W/M labels are human-facing reporting metadata, not calculation identity.
 
-Activity ID and WBS are optional. Missing Activity IDs are generated deterministically
-as `ACT-000001`, `ACT-000002`, and so on. Missing hierarchy is represented as a flat
-activity structure. Existing Microsoft Project / P6-exported XML remains supported
-through the same normalized reader.
+The display margin may remain visible in `main` / `main_monthly`. It must not extend Dashboard reporting data or progress calculation ranges.
 
-### Edited-workbook rebuild boundary (MS-R2)
-`.progressstudio` remains the structure/mapping source of truth. An edited exported workbook may be supplied as a secondary, read-only source of user-owned `main` inputs (Activity Amount, weekly Plan, weekly Actual). The migration is applied to the freshly rebuilt `main`, after which all derived workbook views are regenerated. No legacy formulas, formatting, WBS structure, or project-session state are imported.
+## 6. Reporting-range contract
+
+Reporting-derived outputs use only periods that overlap the project schedule window.
+
+```text
+Display:    X X | project reporting periods | X X
+Reporting:      | project reporting periods |
+```
+
+This applies to Dashboard reporting sources, chart series boundaries, cumulative Plan/Actual reporting and other derived reporting views.
+
+The final overlapping reporting period is retained even when Project Finish occurs inside that period.
+
+## 7. Rebuild workspace contract
+
+Rebuild is an orchestrator with a 2 x 2 user-facing matrix:
+
+| Workbook mode | Progress | Payment |
+|---|---|---|
+| Snapshot | rebuild Progress-owned generated outputs | rebuild Payment only |
+| Live | rebuild Live Progress-owned outputs | rebuild Live Payment only |
+
+### Progress-owned outputs
+
+Progress rebuild may replace the generated Progress views required by the selected mode. `main` remains authoritative and is preserved as the edited source.
+
+### Payment-owned output
+
+Payment rebuild owns `Payment` only and uses current `main + Payment Input`. Progress-derived views are preserved.
+
+### W/M labels during rebuild
+
+Rebuild does **not** renumber weekly `W/X` labels in `main`. User workbook structure is preserved. Rebuild readers/calculations should use dates and physical structure rather than treating a W/M sequence number as business identity.
+
+When a monthly view is regenerated, it is rebuilt as monthly buckets and follows the `X/M` display/reporting contract.
+
+## 8. Renderer ownership
+
+A renderer owns only the workbook objects it creates.
+
+Examples:
+
+- Traditional overlay renderer owns overlay series, cutoff redline, marker/label styling and overlay geometry.
+- Payment renderer owns Payment lines/badges.
+- Dashboard renderer owns Dashboard chart/presentation objects.
+
+A Payment workflow must not rebuild or restyle Progress overlays. Final workbook policy may reassert portable workbook properties required to survive openpyxl serialization, but it must not recalculate another renderer's business data.
+
+## 9. Final Workbook Policy
+
+All user-facing outputs converge on a shared final workbook policy for:
+
+- workbook guide / README sheet;
+- sheet visibility;
+- sheet protection and intended unlocked inputs;
+- Excel calculation properties.
+
+F9 and Save belong to Excel formula recalculation. They do not execute Python rebuild logic.
+
+Python-owned generated snapshots/caches must be regenerated through Rebuild when required.
+
+## 10. Performance policy
+
+openpyxl workbook I/O is expensive. The design target is:
+
+```text
+one user operation
+  -> load/create workbook as few times as practical
+  -> derive/mutate in RAM
+  -> apply owned renderers/policy
+  -> save once at the workflow boundary
+```
+
+Do not reopen a workbook solely to apply visibility, protection or calculation properties when the active workbook object can be finalized in memory.
+
+Reopening a saved workbook for validation is appropriate in tests/debugging, not as default production flow.
+
+## 11. GUI and domain separation
+
+- GUI widgets are presentation state, never business data authority.
+- Mapping allocation belongs to domain/services, not Treeview rows.
+- Stable Activity identity is Activity ID.
+- BOQ identity must use stable source metadata/keys rather than Description alone.
+- Unknown/user-created workbook sheets should be preserved unless an explicit contract says otherwise.
+
+## 12. Architecture-change rule
+
+A bug fix should not introduce a new architecture path when an existing owner already exists.
+
+Before changing cross-workspace behavior, tests should identify the affected ownership boundary (Create, Mapping, Payment, Rebuild, renderer, or Final Workbook Policy) and include the relevant workflow regression gate.

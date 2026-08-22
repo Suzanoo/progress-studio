@@ -1,24 +1,49 @@
-# Progress Studio V2 Release Checklist
+# Progress Studio Release Checklist
 
-- [x] MS-1 Application Skeleton
-- [x] MS-2 Import and Schedule
-- [x] MS-3 Timescale and Excel Infrastructure
-- [x] MS-4 BOQ and Amount
-- [x] MS-5 Progress and Distribution
-- [x] MS-6 OKD and Legacy Removal
-- [x] MS-7 Regression and Release
+This checklist is for Release Candidate / production builds. It intentionally does not carry an old fixed version number.
 
-## Release command
+## Source / Git
 
-```bash
-python -m unittest discover -s tests -v
-python main.py --help
-```
+- [ ] Working tree is clean.
+- [ ] Intended release commit is tagged.
+- [ ] `CHANGELOG.md` and `ROADMAP.md` are current.
+- [ ] No `.venv`, pytest cache, build output, temporary workbooks or debug ZIPs are included in release source archives.
 
-## Release identity
+## Automated gates
 
-- Product: Progress Studio
-- Version: 2.0.1
-- Primary worksheet: `main`
-- Entry point: `python main.py`
-- Legacy script dependency: none
+- [ ] Smoke tests pass.
+- [ ] Relevant regression tests pass.
+- [ ] Rebuild 2 x 2 matrix passes.
+- [ ] Normalizer MSP/P6 equivalence gate passes.
+- [ ] Editable-workbook mutation suite passes.
+- [ ] Full `release` test gate passes.
+
+## Excel compatibility
+
+- [ ] Representative Create Progress workbook opens in Microsoft Excel without repair/recovery dialog.
+- [ ] Weekly and Monthly Plan/Actual overlays render correctly.
+- [ ] Dashboard reporting range excludes display margins.
+- [ ] F9 / Save formula recalculation behaves as documented.
+- [ ] Protection/visibility policy is correct.
+- [ ] Payment-only workflow preserves Progress-owned charts/data.
+
+## Packaging
+
+### Windows
+
+- [ ] Build/installer produced from a clean environment.
+- [ ] Tested on clean supported Windows machine.
+- [ ] Launch, file dialogs, workbook generation and logs verified.
+
+### macOS
+
+- [ ] App bundle produced for the supported architecture(s).
+- [ ] Signing/notarization policy completed as required.
+- [ ] Tested on clean supported macOS machine.
+
+## Manual acceptance
+
+- [ ] Small synthetic schedule.
+- [ ] Representative real MSP project.
+- [ ] Representative P6 project.
+- [ ] Create -> Mapping -> Payment -> Excel edit -> Rebuild workflow.

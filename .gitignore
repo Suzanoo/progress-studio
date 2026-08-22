@@ -78,3 +78,6 @@ Excel_Toolkit_Output/
 *_plan_actual.xlsx
 *_weekly_timescale.xlsx
 *.tmp.xlsx
+
+*.rar
+*.7z

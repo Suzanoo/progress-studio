@@ -1,99 +1,76 @@
-
-### MS-P1.7 — Dashboard from initial XML generation
-
-- The `Dashboard` sheet is created during the **Build progress sheets** stage, before BOQ mapping.
-- A user importing XML receives a dashboard-ready workbook immediately, even while all activity amounts are still zero.
-- The same four-level orange Activity Data hierarchy theme is applied during initial generation and mapped export.
-- Mapping export refreshes the existing dashboard; it is no longer the first point at which the dashboard appears.
-
 # Progress Studio
 
-Progress Studio creates a progress workbook from schedule XML, maps BOQ amounts to activities, saves mapping sessions, and exports a recalculation-ready Excel workbook.
+Progress Studio is a desktop application for turning construction schedule data into an Excel progress workbook, mapping BOQ amounts to schedule activities, preparing payment views, and rebuilding derived workbook outputs after the workbook has been edited in Excel.
 
-**Current release:** `2.3.0`
+> Development status: pre-production stabilization. The repository is being cleaned, documented, regression-tested, and packaged before Windows and macOS production releases.
 
-## User documentation
+## Product flow
 
-- [Thai User Guide](docs/th/README.md)
-- [English User Guide](docs/en/README.md)
-- [Documentation index](docs/README.md)
+```mermaid
+flowchart LR
+    MSP[MS Project XML] --> CREATE[Create Progress]
+    P6[Primavera P6 XML] --> CREATE
 
-Start with:
+    CREATE --> WB[Progress Workbook]
 
-- [English User Guide](docs/en/README.md)
-- [Quick Start](docs/en/QUICK_START.md)
-- [Schedule XML Requirements](docs/en/XML_REQUIREMENTS.md)
-- [BOQ Mapping Guide](docs/en/MAPPING_GUIDE.md)
-- [Troubleshooting](docs/en/TROUBLESHOOTING.md)
+    WB --> MAP[Mapping\noptional]
+    WB --> PAY[Payment\noptional]
+    WB --> EDIT[Edit in Excel]
 
-## Schedule XML contract
+    MAP --> EDIT
+    PAY --> EDIT
+    EDIT --> REBUILD[Rebuild]
 
-Every activity must contain:
+    REBUILD --> OUT[Updated Progress Workbook]
+```
+
+### Inputs
+
+- Microsoft Project XML.
+- Primavera P6 XML.
+- BOQ workbook when Mapping is used.
+- An existing Progress Studio workbook when Rebuild is used.
+
+### Main outputs
+
+A generated workbook can contain:
+
+- `main` — editable weekly source of truth after initial workbook creation.
+- `main_monthly` — monthly presentation derived from weekly progress.
+- `Dashboard` — KPI, S-curve, cutoff controls, and Activity Progress.
+- `Payment Input` / `Payment` — when the Payment workflow is used.
+- hidden/internal helper sheets used by Progress Studio.
+
+## Typical workflow
+
+1. **Create Progress** — import MSP XML or P6 XML and create the initial workbook.
+2. **Mapping (optional)** — allocate BOQ amounts to schedule Activities.
+3. **Payment (optional)** — prepare payment requirements and render payment lines.
+4. **Edit in Excel** — update the workbook. `main` remains the workbook source of truth.
+5. **Rebuild** — regenerate Progress-owned or Payment-owned outputs from the edited workbook.
+
+For the detailed user workflow, see [docs/USER_WORKFLOW.md](docs/USER_WORKFLOW.md).
+
+## Reporting timescale
+
+Progress Studio distinguishes display margins from reporting periods:
 
 ```text
-Activity Name
-Plan Start
-Plan Finish
+X  X  X | W1 W2 W3 ... Wn | X X X
+          project reporting
+
+X | M1 M2 M3 ... Mn | X
 ```
 
-Import stops and no workbook is created when any required value is missing or invalid.
+- `X` = display-only margin period.
+- `W1...Wn` = weekly reporting periods.
+- `M1...Mn` = monthly reporting periods.
+- Create Progress owns the initial `X/W/M` labels.
+- Rebuild does not renumber the weekly labels in `main`.
 
-Optional:
+Calculation and reporting engines use dates/columns rather than the numeric W/M label as business identity.
 
-- Activity ID — generated automatically when missing
-- WBS — a flat structure is created when missing
-- Calendar, relationships, duration, actual dates, progress, resources, and codes
-
-## Windows quick start
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python desktop.py
-```
-
-## Workflow
-
-```text
-Schedule XML
-→ Progress Workbook
-→ Load BOQ
-→ Map BOQ to Activities
-→ Save Project (.progressstudio; self-contained in v8)
-→ Rebuild Latest Workbook
-→ Open in Microsoft Excel, recalculate, and save
-```
-
-
-## MS-R1 — Self-contained workbook rebuild
-
-Projects saved by this version embed verified copies of the Progress and BOQ source workbooks inside the `.progressstudio` project. After the project has been saved once in v8, the original source files are no longer required to rebuild a workbook with the latest Progress Studio generation/export engine.
-
-Legacy v7 and older projects still open normally, but require their original/relinked workbooks once. Save the project again to upgrade it to the self-contained v8 format. Migration of Actual Progress from a separately edited legacy workbook is a later milestone and is not part of MS-R1.
-
-## Technical documentation
-
-- [Documentation index](docs/README.md)
-- [Architecture](ARCHITECTURE.md)
-- [Roadmap](README_ROADMAP.md)
-- [Changelog](CHANGELOG.md)
-- [Release checklist](RELEASE_CHECKLIST.md)
-- [Engineering rules](COPILOT.md)
-- `docs/milestones/` — milestone implementation records
-- `docs/acceptance/` — milestone acceptance records
-
-## Tests
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
----
-
-## Standard installation and entry points (MS-1)
-
-Create a project-local virtual environment and install Progress Studio as an editable package.
+## Quick start for developers
 
 ### Windows PowerShell
 
@@ -118,364 +95,65 @@ progress-studio
 Available entry points:
 
 ```text
-progress-studio           Open the desktop GUI
-python -m progress_studio Open the desktop GUI
-progress-studio-cli       Run the command-line workflow
-python desktop.py         Legacy-compatible desktop launcher
-python main.py            Legacy-compatible CLI launcher
+progress-studio            Desktop GUI
+python -m progress_studio  Desktop GUI
+progress-studio-cli        CLI
+python desktop.py          Compatibility desktop launcher
+python main.py             Compatibility CLI launcher
 ```
 
-Run the test suite with:
-
-```bash
-pytest
-```
-
-## Excel export theme configuration
-
-The exported `main` sheet uses one central theme configuration file:
+## Repository map
 
 ```text
-progress_studio/infrastructure/excel/export_theme.py
+progress_studio/   Product code
+  app/             Application composition and desktop pipeline
+  domain/          Source-neutral models and contracts
+  services/        Use cases and orchestration
+  infrastructure/  XML, Excel, filesystem, renderers and persistence
+  presentation/    CLI / GUI presentation
+  pipeline/        Initial Create Progress pipeline steps
+  config/          Workbook and UI configuration
+
+tests/             Automated tests and fixtures
+docs/              Active documentation + historical records
+scripts/           Test/benchmark utilities
+example/           Small example inputs and golden reference files
 ```
 
-It contains two independent palettes:
-
-- `TimescalePalette` — Project, WBS level 1, WBS level 2, Plan/Actual, and S-curve colors in the timescale section.
-- `ActivityDataPalette` — WBS level 1, 2, 3, and 4 colors in the Activity Data section. WBS levels deeper than 4 reuse the level-4 color.
-
-The Activity Data formatter is implemented in:
-
-```text
-progress_studio/infrastructure/excel/activity_data_theme.py
-```
-
-Activity Data styling changes fill and font only. It uses the `Outline Level` value, preserves existing row borders, and does not modify timescale cells. Levels 1–4 use progressively lighter fills; level 5 and deeper use the level-4 fill.
-
-## Actual Amount calculation
-
-The exported `main` sheet calculates earned Actual Amount automatically:
-
-- Activity Actual Amount = Activity Plan Amount × Actual `% Complete`
-- WBS Actual Amount = sum of descendant Activity Actual Amounts
-- Project Actual Amount = sum of all Activity Actual Amounts
-
-Weekly Plan/Actual roll-ups continue to use the full Plan Amount as their weight, so displaying earned Actual Amount does not change progress percentages.
-
-
-## Weekly and Monthly Main Views
-
-Generated workbooks keep `main` as the editable **weekly source of truth** and now add `main_monthly` as a calculated monthly view. The monthly worksheet reuses the same Activity Data columns, Plan/Actual row pairs, WBS outline grouping, colors, and Row Type / P/A filters. Its timescale contains one column per reporting month, dated with the last weekly cutoff available in that month.
-
-Monthly progress is formula-driven from `main`: normal Plan/Actual rows sum the weekly increments belonging to the month, while cumulative S-Curve rows take the last weekly cumulative value in the month. Editing weekly Actual progress in `main` therefore updates `main_monthly` when Excel recalculates. `main_monthly` is presentation-only and should not be used as a second progress-entry source.
-
-## Excel Dashboard
-
-Generated workbooks now include a separate **Dashboard** worksheet as the first tab.
-Project-level KPI/chart data stays live from `progress`; Activity Progress reads the latest value-only snapshot in `progress_table`. The snapshot is regenerated on Export/Rebuild and contains:
-
-- Cutoff Date dropdown
-- Weekly / Monthly dropdown
-- Four KPI cards: Planned Progress, Actual Progress, Schedule Status, and Time Impact
-- S-Curve chart with full baseline Plan and cutoff-limited Actual
-- Activity Progress summary
-
-`Dashboard_Data` is a hidden helper worksheet used by the chart and dropdown logic. KPI values always follow the selected cutoff date; changing Weekly/Monthly only changes the chart reporting view. Dashboard colors and chart layout are configurable in `progress_studio/config/dashboard_theme.json`. `main` remains the editable Plan/Actual master, while `progress_table` is deliberately a lightweight snapshot refreshed by Export/Rebuild rather than a live weekly mirror.
-
-### Payment line theme config
-
-Payment backbone colors and lightweight label sizing are configured in:
-
-`progress_studio/config/payment_lines.json`
-
-The renderer reads this config for all populated Payment periods. `colors` maps
-`P01`, `P02`, ... to hex colors, while `label` controls badge width, height,
-font size, corner radius, text color, and anchor offset. Payment line geometry
-remains cell-border based.
-
-### Embedded Payment workflow
-
-Payment now uses one workbook from preparation through rebuild.
-
-User-facing sheets:
-- `Dashboard`
-- `main`
-- `Payment Input`
-- `Payment`
-- `main_monthly`
-- `progress`
-
-Generated/support sheets remain available to the engine but are hidden. In particular,
-`progress_table` is a value-only snapshot and is rebuilt (not patched) whenever the
-Payment workbook is rebuilt. `Payment` is also deleted/recreated from the current
-`main` + `Payment Input`.
-
-`Payment Input` is persistent user data. Existing percentages are reconciled by
-Activity ID; new activities receive suggested values. Payment Date is no longer an
-input because Planned Eligible Date is calculated from the latest required Activity point.
-
-### MS-RB1 — Standalone rebuild core contract
-
-The standalone rebuild path treats the selected workbook itself as the project source.
-
-- `main` is always the schedule/progress source of truth.
-- Progress rebuild owns only: `main_monthly`, `progress`, `progress_table`, `Dashboard_Data`, `Dashboard`.
-- Payment rebuild owns only: `Payment`, and requires embedded `Payment Input`.
-- `main`, `Payment Input`, internal metadata, and unknown user sheets are preserved by contract.
-- The rebuild core has no runtime dependency on XML, BOQ files, `.progressstudio`,
-  `.boqstudio`, mapping allocations, or the working tree.
-- Workbook analysis is sparse: it reads workbook metadata plus `main` worksheet XML only,
-  avoiding full openpyxl workbook loading before a rebuild is selected.
-
-### MS-RB2 — Progress rebuild execution
-
-`WorkbookRebuildEngine.rebuild_progress()` now executes the Progress rebuild contract.
-
-Input:
-- any Progress Studio `.xlsx` / `.xlsm` workbook with a valid `main` sheet.
-
-Preserved:
-- `main`
-- `Payment Input`
-- `Payment`
-- internal metadata sheets
-- unknown/user-created sheets
-
-Deleted and rebuilt from the current `main`:
-- `main_monthly`
-- `progress`
-- `progress_table`
-- `Dashboard_Data`
-- `Dashboard`
-
-The rebuild writes atomically through a temporary workbook. `progress_table` remains a
-value-only hidden snapshot, Dashboard_Data remains hidden, and Excel calculation policy
-is normalized before the final replace. MS-RB2 intentionally leaves the current
-formula-driven monthly/progress/dashboard behavior unchanged; snapshot/performance
-hardening belongs to MS-RB3.
-
-### MS-RB3 — Snapshot performance hardening
-
-Standalone `Rebuild Progress` now breaks the live dependency chain from generated
-views back to `main`.
-
-RB3 snapshot contract:
-- `main_monthly` = value-only snapshot
-- `progress` = value-only snapshot derived from current Activity data
-- `progress_table` = value-only snapshot
-- `Dashboard_Data` may keep lightweight formulas for Dashboard view/cutoff controls,
-  but does not link to `main`
-- `Dashboard` remains interactive and reads generated support sheets
-- final calculation policy is always `auto`, `fullCalcOnLoad=False`,
-  `forceFullCalc=False`
-
-Existing export/monthly builders keep their previous default behavior; snapshot mode
-is enabled by the standalone rebuild engine only.
-
-Real NKC2_R03 benchmark:
-- RB2 generated-sheet formulas: 10,911
-- RB3 generated-sheet formulas: 2,306
-- no direct generated-sheet formula links to `main`
-
-### MS-RB3.1 — Dashboard source contract fix
-
-Dashboard now follows the same two-sheet contract used by the OKD app:
-
-- S-Curve + KPI source: `progress`
-- Activity table source: `progress_table`
-
-`progress` stores cumulative Plan/Actual as 0..100 percent-points. Dashboard_Data
-converts those values to Excel chart fractions explicitly, including values below 1%
-(e.g. 0.31% -> 0.0031).
-
-Monthly chart points are sampled from cumulative `progress`:
-- Monthly Plan = last weekly cutoff in the month
-- Monthly Actual = last populated weekly Actual in the month
-
-No monthly SUM or multi-area LOOKUP formula is used, preventing the previous
-`#VALUE!` chain in Monthly Actual.
-
-### MS-RB4 — Payment-only rebuild
-
-`WorkbookRebuildEngine.rebuild_payment()` now owns the standalone Payment rebuild path.
-
-Input:
-- one workbook containing `main` + embedded `Payment Input`
-
-Rebuilt:
-- `Payment` only
-
-Preserved:
-- `main`
-- `Payment Input`
-- `main_monthly`
-- `progress`
-- `progress_table`
-- `Dashboard_Data`
-- `Dashboard`
-- internal metadata and user-created sheets
-
-The Payment renderer resolves Planned Eligible positions from current `main`, reads the
-current Payment requirements from `Payment Input`, removes stale `Payment`, and writes a
-new Payment sheet. Progress-generated views are deliberately not reconciled or rebuilt.
-
-### MS-RB5 — Payment collision lanes and label polish
-
-Payment business logic remains unchanged: each period has a true Planned Eligible
-boundary calculated from its sparse Activity requirements.
-
-Rendering now separates only the visual geometry when multiple Payment periods would
-occupy the same Excel boundary. Nearby lanes are allocated using configurable offsets,
-while every horizontal branch still ends at the true Activity target. Shifted header
-notes explicitly mark the visual offset as display-only.
-
-Default Payment label style is now:
-- width: 145 px
-- height: 26 px
-- font: 12
-- rounded corner radius: 6 px
-
-Collision and label settings live in `progress_studio/config/payment_lines.json`,
-including `collision_max_offset` and `collision_row_step`.
-
-### MS-RB6 — Standalone Rebuild workspace
-
-Rebuild is now a first-class workspace in the desktop sidebar:
-
-`Home → Create Progress Bar → Mapping → Payment → AI Helper → Export → Rebuild → Settings`
-
-The Rebuild workspace accepts one Excel workbook and asks for exactly one mode:
-
-- **Progress Workbook** — rebuilds `main_monthly`, `progress`, `progress_table`,
-  `Dashboard_Data`, and `Dashboard` from `main`.
-- **Payment** — rebuilds `Payment` only from `main + Payment Input`.
-
-The UI never asks for `.progressstudio`, `.boqstudio`, XML, BOQ, or mapping-tree inputs.
-
-Workspace ownership is also cleaned up:
-- **Export** creates the first mapped workbook only; old Rebuild controls are removed.
-- **Payment** prepares/reconciles `Payment Input` only.
-- **Rebuild** owns every post-Excel regeneration action.
-
-Rebuild execution runs on a worker thread and writes through the RB2/RB4 atomic engines.
-
-### MS-TEST1 — Test Suite Freeze & Tiering
-
-The test suite is now divided into explicit pytest tiers without deleting historical
-regression coverage:
-
-- `smoke` — fastest local contract gate
-- `active` — current workbook/dashboard/payment/rebuild regression
-- `frozen` — stable legacy regression, retained for subsystem/release checks
-- `release` — every collected test; full merge/tag/release gate
-
-Recommended Windows workflow:
+## Documentation
+
+- [Architecture](ARCHITECTURE.md) — technical source of truth and ownership boundaries.
+- [User workflow](docs/USER_WORKFLOW.md) — product workflow and workbook rules.
+- [Development](docs/DEVELOPMENT.md) — environment, repository rules and performance policy.
+- [Testing](docs/TESTING.md) — current automated test tiers.
+- [Roadmap](ROADMAP.md) — pre-production milestones.
+- [Release checklist](RELEASE_CHECKLIST.md) — release/installer gate.
+- [Changelog](CHANGELOG.md) — historical changes.
+- [Documentation index](docs/README.md).
+
+Historical milestone documents and older user guides are preserved under `docs/history/`. They are reference material, not current product contracts.
+
+## Important workbook rules
+
+- `main` is the editable workbook source of truth after Create Progress.
+- `main_monthly` and generated dashboards/helpers are derived outputs.
+- F9 / Save recalculates Excel formulas; it does **not** run the Python Rebuild engine.
+- Python-owned snapshots/caches require Progress Studio Rebuild when structural data changes.
+- Payment-only rebuild must preserve Progress-owned outputs.
+- Progress rebuild must preserve Payment-owned/user-owned inputs according to the Rebuild contract.
+
+## Tests
+
+Fast local gate:
 
 ```powershell
-.\scripts\test-smoke.ps1
-.\scripts\test-active.ps1
-.\scripts\test-release.ps1
+python -m pytest -m smoke -q
 ```
 
-New test modules must be classified in `tests/conftest.py`; collection aborts if a
-`test_*.py` file is left unclassified. Frozen tests should not be rewritten merely to
-make a new implementation pass—retire or change a frozen contract deliberately.
-See `docs/TESTING.md`.
+Full release gate:
 
-### MS-RB7.1 — Final sheet visibility contract
+```powershell
+python -m pytest -m release
+```
 
-Final portable workbook tabs are intentionally reduced to the user-facing set:
-
-Visible when present:
-- `main`
-- `main_monthly`
-- `Payment Input`
-- `Payment`
-- `Dashboard`
-
-Every other worksheet is set to Excel `veryHidden`, including generated support data,
-mapping lineage, audit sheets, and internal metadata. Missing user-facing sheets are
-allowed (for example, a workbook may not have Payment yet).
-
-The same central policy is applied after:
-- first mapped workbook export
-- Progress rebuild
-- Payment Input preparation/reconciliation
-- Payment line rendering / Payment-only rebuild
-
-RB7.1 changes visibility only. Cell/sheet protection and passwords are intentionally
-deferred to the next RB7 protection milestone.
-
-### MS-RB7.1.1 — Hybrid progress contract
-
-`progress` is no longer fully frozen after standalone Progress rebuild.
-
-Hybrid source contract:
-- `project_start` = snapshot value
-- `project_finish` = snapshot value
-- `week_start` = snapshot value
-- `plan` = snapshot cumulative percent-points
-- `actual` = live formula to the cumulative Actual S-Curve row in `main`
-
-This keeps the workbook light while allowing a user to edit Actual in `main` and have
-the S-Curve/Dashboard Actual update immediately in Excel without running Rebuild.
-
-`main_monthly` and `progress_table` remain value-only snapshots. Dashboard weekly
-Actual reads `progress`; Dashboard monthly Actual uses one contiguous `progress`
-range per month, avoiding the previous multi-area LOOKUP error.
-
-### MS-RB7.2 — Lightweight workbook protection
-
-Final workbooks use Excel sheet protection as an accidental-edit guard, not encryption.
-
-Protection contract:
-- `main` — protected, but user-editable Activity identity/schedule/value cells and
-  non-formula weekly Plan/Actual Activity cells are unlocked.
-- `Payment Input` — protected; only P01...Pn cells on ACT rows are unlocked.
-- `main_monthly`, `Payment`, `Dashboard`, `progress`, `progress_table`,
-  `Dashboard_Data`, and internal/support sheets — protected read-only.
-- workbook structure itself is not protected.
-
-Visibility contract:
-- visible: `main`, `main_monthly`, `Payment Input`, `Payment`, `Dashboard`
-- normal hidden: `progress`, `progress_table`
-- veryHidden: Dashboard/internal/support implementation sheets
-
-The internal password is applied automatically after first export, Progress rebuild,
-Payment Input preparation, and Payment rebuild. No VBA or macro is embedded in the
-workbook. Rebuild code can regenerate protected sheets because the protection is an
-Excel UI guard rather than file encryption.
-
-### MS-RB7.2.1 — Dashboard interactive protection fix
-
-Dashboard remains protected, but its two intended user controls stay editable:
-
-- `G5` — View (`Weekly` / `Monthly`)
-- `K5` — Cutoff Date
-
-All labels, KPI formulas, chart support cells, and layout cells remain locked. This
-preserves Dashboard interactivity without exposing the generated sheet structure to
-accidental edits.
-
-### MS-P12.0 — Activity Progress status focus
-
-Dashboard Activity Progress keeps the OKD two-row `Plan / Actual` structure and native
-Excel outline hierarchy.
-
-Columns are now:
-
-`WBS | Activity | Type | Total | Amount | Progress | Variance | Status`
-
-Behavior:
-- `Variance` is shown on Actual rows as `Actual Progress - Plan Progress`.
-- `Status` is shown on Actual rows as `Not Started`, `Behind`, `On Track`, or `Complete`.
-- a Status selector sits above the table at the top-right with
-  `All / Behind / On Track / Complete / Not Started`.
-- column AutoFilter arrows are removed entirely.
-- native WBS outline grouping remains unchanged.
-- the selector is macro-free: nonmatching Plan/Actual pairs are dimmed together rather
-  than physically hiding rows, preserving `.xlsx` portability and avoiding VBA/event code.
-- `progress_table` schema is not changed.
-
-The Status selector cell remains editable under Dashboard sheet protection.
-
+See [docs/TESTING.md](docs/TESTING.md) for the current tiering policy.

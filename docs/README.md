@@ -1,17 +1,23 @@
-# Progress Studio User Documentation
+# Progress Studio Documentation
 
-Choose your language:
+Active documentation is intentionally small. If two active documents disagree, `ARCHITECTURE.md` owns technical architecture and the implementation/tests own executable behavior.
 
-- [English User Guide](en/README.md)
-- [คู่มือภาษาไทย](th/README.md)
+## Start here
 
-## Recommended reading order
+- [Repository README](../README.md) — what Progress Studio is, inputs, outputs and product flow.
+- [User Workflow](USER_WORKFLOW.md) — Create, Mapping, Payment, Excel and Rebuild workflow.
+- [Architecture](../ARCHITECTURE.md) — ownership boundaries and technical contracts.
+- [Development](DEVELOPMENT.md) — developer setup and engineering rules.
+- [Testing](TESTING.md) — current automated test tiers.
+- [Roadmap](../ROADMAP.md) — pre-production milestones.
+- [Release Checklist](../RELEASE_CHECKLIST.md) — RC/production gate.
+- [Changelog](../CHANGELOG.md) — historical changes.
 
-1. Quick Start
-2. Schedule XML Requirements
-3. BOQ Workbook Requirements
-4. BOQ Mapping Guide
-5. Sessions and Export
-6. Troubleshooting
+## Engineering reference
 
-Progress Studio 2.3.0 uses one simple schedule contract: every activity must have **Activity Name**, **Plan Start**, and **Plan Finish**. Activity ID and WBS are optional.
+- `regressions/` — important regression investigations that remain useful for debugging.
+- `history/` — milestone, acceptance, freeze and older user-guide records. These documents are **not** current product contracts.
+
+## Historical user guides
+
+The old v2.3 Thai/English manuals are archived at `history/user-guides-v2.3/`. They contain obsolete contracts such as generic Activity-ID/WBS fallback behavior and should not be used as the current operational guide.
