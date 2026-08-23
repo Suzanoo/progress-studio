@@ -90,8 +90,9 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
     assert '<numFmt formatCode="0.0%"' in chart_xml
     # LW-12.3.2 label tags: Plan is above with pale-blue fill; Actual is below
     # with pale-green fill. Text is compact 7 pt and tinted by series.
-    assert '<dLblPos val="t"/>' in chart_xml
-    assert '<dLblPos val="b"/>' in chart_xml
+    label_positions = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('dLblPos')]
+    assert 't' in label_positions
+    assert 'b' in label_positions
     assert 'val="DDEBF7"' in chart_xml
     assert 'val="E2F0D9"' in chart_xml
     assert 'val="1F4E79"' in chart_xml
@@ -175,10 +176,14 @@ def test_lw124_cutoff_line_serializes_error_bar_and_label(tmp_path):
     err_bar_types = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('errBarType')]
     assert 'minus' in err_bar_types
     assert 'val="C00000"' in chart_xml
-    assert '<a:prstDash val="dash"/>' in chart_xml
-    assert '<showCatName val="1"/>' in chart_xml
-    assert '<showSerName val="1"/>' in chart_xml
-    assert '<separator val=" "/>' in chart_xml
+    preset_dashes = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('prstDash')]
+    assert 'dash' in preset_dashes
+    show_category_names = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('showCatName')]
+    assert '1' in show_category_names
+    show_series_names = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('showSerName')]
+    assert '1' in show_series_names
+    separators = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('separator')]
+    assert ' ' in separators
     assert 'val="FCE4D6"' in chart_xml
     assert 'sz="1000"' in chart_xml
     assert 'b="1"' in chart_xml
