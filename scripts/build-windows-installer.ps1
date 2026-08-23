@@ -27,7 +27,9 @@ Write-Host "Portable payload: $PortableFolder"
 if (-not $SkipPortableProbe) {
     Write-Host "Re-validating portable payload before installer packaging..."
     & "$RepoRoot\scripts\validate-windows-portable.ps1" -PortableFolder $PortableFolder
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if (-not $?) {
+        throw "WIN-2 portable validation failed."
+    }
 }
 
 # The .iss intentionally points to dist\ProgressStudio. If the caller supplies

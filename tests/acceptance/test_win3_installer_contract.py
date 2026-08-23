@@ -61,3 +61,31 @@ def test_win3_checklist_covers_install_uninstall_and_scope_boundary() -> None:
         "SHA-256",
     ):
         assert phrase in text
+
+
+@pytest.mark.acceptance
+@pytest.mark.release
+def test_win31_powershell_validator_does_not_use_stale_last_exit_code() -> None:
+    text = BUILD.read_text(encoding="utf-8")
+    validator_call = '& "$RepoRoot\\scripts\\validate-windows-portable.ps1" -PortableFolder $PortableFolder'
+    assert validator_call in text
+    tail = text.split(validator_call, 1)[1].split("# The .iss", 1)[0]
+    assert "$LASTEXITCODE" not in tail
+    assert 'if (-not $?)' in tail
+
+
+@pytest.mark.acceptance
+@pytest.mark.release
+def test_windows_installer_build_guide_records_repeatable_process() -> None:
+    guide = ROOT / "packaging" / "windows" / "BUILD_INSTALLER.md"
+    text = guide.read_text(encoding="utf-8")
+    for phrase in (
+        "build-windows-portable.ps1",
+        "validate-windows-portable.ps1",
+        "build-windows-installer.ps1",
+        "Inno Setup 6",
+        "ISCC.exe",
+        "ProgressStudio-Setup-2.3.0.exe",
+        "SHA-256",
+    ):
+        assert phrase in text

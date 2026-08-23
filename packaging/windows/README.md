@@ -79,3 +79,6 @@ After WIN-2 passes, build the Windows installer with Inno Setup 6:
 ```
 
 The installer wraps the validated portable payload and provides per-user installation, Start Menu shortcut, optional Desktop shortcut, and uninstall. See [`WIN3_CHECKLIST.md`](WIN3_CHECKLIST.md).
+
+
+For the complete repeatable installer procedure, see [`BUILD_INSTALLER.md`](BUILD_INSTALLER.md).
