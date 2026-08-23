@@ -14,7 +14,7 @@ Completed stabilization foundations include:
 - workbook protection / visibility / F9-Save policy work.
 - chart and overlay regression fixes.
 
-The repository is now in cleanup and pre-production hardening.
+Repository cleanup CL-2A through CL-2D is complete. The project is now at PR-1 Pre-Production Freeze, immediately before platform-specific production builds.
 
 ## Milestones
 
@@ -78,4 +78,5 @@ Mapping and Payment-only paths must preserve data owned by other workspaces.
 - CL-2A — documentation/root cleanup: complete.
 - CL-2B — test organization: complete.
 - CL-2C — dead placeholder/source-script cleanup: complete.
-- CL-2D — repository hygiene and packaging readiness: establishes package-data verification and Windows/macOS packaging boundaries without building installers.
+- CL-2D — repository hygiene and packaging readiness: complete.
+- PR-1 — pre-production freeze: full behavioral/package gate before Windows/macOS builds. See `docs/PR1_PRE_PRODUCTION_FREEZE.md`.

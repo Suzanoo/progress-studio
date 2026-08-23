@@ -11,6 +11,9 @@ This checklist is for Release Candidate / production builds. It intentionally do
 
 ## Automated gates
 
+Pre-production shortcut: `./scripts/check-preproduction.ps1` runs the complete behavior-directory gate plus package verification.
+
+
 - [ ] Smoke tests pass.
 - [ ] Relevant regression tests pass.
 - [ ] Rebuild 2 x 2 matrix passes.
