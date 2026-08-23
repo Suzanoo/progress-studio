@@ -32,6 +32,14 @@ def test_win1_spec_collects_runtime_resources_without_changing_core_entrypoint()
     assert '"services/distribution/*.json"' in text
     assert 'name="ProgressStudio"' in text
     assert "console=False" in text
+    # Spec-local paths must resolve from PyInstaller's SPECPATH, not from the
+    # current working directory. This prevents packaging/windows from being
+    # duplicated when PyInstaller evaluates the spec in-place.
+    assert "SPEC_DIR = Path(SPECPATH).resolve()" in text
+    assert 'LAUNCHER = SPEC_DIR / "launcher.py"' in text
+    assert "[str(LAUNCHER)]" in text
+    assert "pathex=[str(REPO_ROOT)]" in text
+    assert '["packaging/windows/launcher.py"]' not in text
 
     launcher = (ROOT / "packaging/windows/launcher.py").read_text(encoding="utf-8")
     assert "from progress_studio.entrypoints import desktop_main" in launcher

@@ -6,7 +6,20 @@ by hand. WIN-1 intentionally uses a one-folder distribution because it is
 faster to start and easier to inspect when diagnosing missing resources.
 """
 
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_data_files
+
+
+# PyInstaller executes spec files with ``SPECPATH`` set to the directory that
+# contains this file. Resolve every local path from that anchor so the build is
+# independent of the caller's current working directory.
+SPEC_DIR = Path(SPECPATH).resolve()
+REPO_ROOT = SPEC_DIR.parents[1]
+LAUNCHER = SPEC_DIR / "launcher.py"
+
+if not LAUNCHER.is_file():
+    raise FileNotFoundError(f"WIN-1 launcher not found: {LAUNCHER}")
 
 
 datas = collect_data_files(
@@ -19,8 +32,8 @@ datas = collect_data_files(
 )
 
 a = Analysis(
-    ["packaging/windows/launcher.py"],
-    pathex=["."],
+    [str(LAUNCHER)],
+    pathex=[str(REPO_ROOT)],
     binaries=[],
     datas=datas,
     hiddenimports=[],
