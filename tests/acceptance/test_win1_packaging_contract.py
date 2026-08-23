@@ -45,3 +45,16 @@ def test_win1_launcher_resource_smoke_runs_from_source_tree(monkeypatch) -> None
         runpy.run_path(str(launcher_path), run_name="__main__")
     except SystemExit as exc:
         assert exc.code == 0
+
+
+def test_win1_build_uses_disposable_isolated_environment() -> None:
+    text = (ROOT / "scripts/build-windows-portable.ps1").read_text(encoding="utf-8")
+    assert '".build-venv"' in text
+    assert "-m venv $BuildVenv" in text
+    assert '-e ".[build,dev]"' in text
+    assert "& $BuildPython -m pytest -m smoke -q" in text
+    assert "& $BuildPython -m PyInstaller" in text
+    assert "Removing isolated build environment" in text
+
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert ".build-venv/" in gitignore

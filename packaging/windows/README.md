@@ -18,7 +18,7 @@ Windows release milestones.
 
 ## Build on Windows
 
-From an activated development environment at the repository root:
+From the repository root (an activated development environment is optional):
 
 ```powershell
 .\scripts\build-windows-portable.ps1
@@ -26,11 +26,13 @@ From an activated development environment at the repository root:
 
 The script:
 
-1. installs/validates the `build` optional dependency group;
-2. runs the smoke gate;
-3. builds `packaging/windows/ProgressStudio.spec`;
-4. checks bundled JSON/icon resources;
-5. launches the executable in non-UI `--win1-smoke` mode.
+1. creates a disposable `.build-venv` isolated from the system/development Python;
+2. installs the `build` and `dev` optional dependency groups there;
+3. runs the smoke gate from that isolated environment;
+4. builds `packaging/windows/ProgressStudio.spec`;
+5. checks bundled JSON/icon resources;
+6. launches the executable in non-UI `--win1-smoke` mode;
+7. removes `.build-venv` after the build.
 
 To rebuild quickly after the smoke gate has already passed:
 
