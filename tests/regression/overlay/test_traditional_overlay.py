@@ -1,6 +1,7 @@
 from pathlib import Path
 from zipfile import ZipFile
 from datetime import datetime
+from xml.etree import ElementTree as ET
 from openpyxl import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -83,7 +84,9 @@ def test_overlay_serializes_two_cell_anchor_transparency_and_value_labels(tmp_pa
     # One noFill is the inner plot area and one is the outer chart area.
     assert chart_xml.count('<a:noFill') >= 2
     assert '<dLbls>' in chart_xml
-    assert '<showVal val="1"/>' in chart_xml
+    chart_root = ET.fromstring(chart_xml)
+    show_values = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('showVal')]
+    assert '1' in show_values
     assert '<numFmt formatCode="0.0%"' in chart_xml
     # LW-12.3.2 label tags: Plan is above with pale-blue fill; Actual is below
     # with pale-green fill. Text is compact 7 pt and tinted by series.
@@ -168,7 +171,9 @@ def test_lw124_cutoff_line_serializes_error_bar_and_label(tmp_path):
         chart_xml = zf.read('xl/charts/chart1.xml').decode('utf-8')
 
     assert '<errBars>' in chart_xml
-    assert '<errBarType val="minus"/>' in chart_xml
+    chart_root = ET.fromstring(chart_xml)
+    err_bar_types = [elem.get('val') for elem in chart_root.iter() if elem.tag.endswith('errBarType')]
+    assert 'minus' in err_bar_types
     assert 'val="C00000"' in chart_xml
     assert '<a:prstDash val="dash"/>' in chart_xml
     assert '<showCatName val="1"/>' in chart_xml
