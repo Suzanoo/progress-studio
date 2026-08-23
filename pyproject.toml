@@ -20,6 +20,7 @@ progress-studio-cli = "progress_studio.entrypoints:cli_main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
+build = ["pyinstaller>=6.10,<7"]
 
 [tool.setuptools.packages.find]
 where = ["."]

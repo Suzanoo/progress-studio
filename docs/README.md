@@ -21,3 +21,5 @@ Active documentation is intentionally small. If two active documents disagree, `
 ## Historical user guides
 
 The old v2.3 Thai/English manuals are archived at `history/user-guides-v2.3/`. They contain obsolete contracts such as generic Activity-ID/WBS fallback behavior and should not be used as the current operational guide.
+
+- [WIN-1 Windows Portable Build](WIN1_WINDOWS_PORTABLE_BUILD.md) — Windows portable packaging contract and acceptance.

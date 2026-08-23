@@ -80,3 +80,11 @@ Mapping and Payment-only paths must preserve data owned by other workspaces.
 - CL-2C — dead placeholder/source-script cleanup: complete.
 - CL-2D — repository hygiene and packaging readiness: complete.
 - PR-1 — pre-production freeze: full behavioral/package gate before Windows/macOS builds. See `docs/PR1_PRE_PRODUCTION_FREEZE.md`.
+
+
+## Windows production track
+
+- **WIN-1** — portable one-folder Windows build
+- **WIN-2** — clean-machine validation
+- **WIN-3** — installer / shortcuts / uninstall
+- **WIN-4** — signing, release metadata, and release package

@@ -55,3 +55,12 @@ Pre-production shortcut: `./scripts/check-preproduction.ps1` runs the complete b
 - [ ] Representative real MSP project.
 - [ ] Representative P6 project.
 - [ ] Create -> Mapping -> Payment -> Excel edit -> Rebuild workflow.
+
+## WIN-1 portable build
+
+- [ ] Run `scripts/build-windows-portable.ps1` on Windows from the PR-1 frozen source.
+- [ ] Confirm `dist/ProgressStudio/ProgressStudio.exe` exists.
+- [ ] Confirm `verify_portable.py` passes, including `--win1-smoke`.
+- [ ] Double-click the portable EXE and verify Home, Create Progress, Mapping, Payment, and Rebuild workspaces open.
+- [ ] Generate one Progress workbook from a known MSP/P6 input.
+- [ ] Do not create an installer or customer release until WIN-2 clean-machine validation passes.
