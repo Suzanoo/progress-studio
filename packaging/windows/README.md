@@ -68,3 +68,14 @@ This performs an automated source/venv-independent isolation probe. Then use
 [`WIN2_CHECKLIST.md`](WIN2_CHECKLIST.md) on a clean Windows user or VM. WIN-2 is
 not complete until both the automated probe and the manual clean-machine
 acceptance pass.
+
+
+## WIN-3 installer
+
+After WIN-2 passes, build the Windows installer with Inno Setup 6:
+
+```powershell
+.\scripts\build-windows-installer.ps1 -PortableFolder "C:\path\to\known-good\ProgressStudio"
+```
+
+The installer wraps the validated portable payload and provides per-user installation, Start Menu shortcut, optional Desktop shortcut, and uninstall. See [`WIN3_CHECKLIST.md`](WIN3_CHECKLIST.md).
