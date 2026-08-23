@@ -54,3 +54,10 @@ PR-1 is complete when:
 - documentation and release checklist reflect the pre-production state.
 
 Platform-specific installer/signing work begins only after this gate is green.
+
+## Windows release handoff
+
+WIN-1 builds the one-folder Windows portable application. WIN-2 validates that
+same artifact outside the repository and then on a clean Windows user/VM before
+installer work begins. Neither milestone changes frozen Progress Studio core
+behavior.

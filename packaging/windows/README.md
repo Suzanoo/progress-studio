@@ -53,3 +53,18 @@ Double-click `dist/ProgressStudio/ProgressStudio.exe` and verify:
 
 Do not distribute WIN-1 as the customer installer. WIN-2 will validate this
 portable folder on a clean Windows machine before installer work begins.
+
+## WIN-2 clean-machine validation
+
+After WIN-1 produces a passing portable folder, validate that exact folder
+without rebuilding it:
+
+```powershell
+.\scripts\validate-windows-portable.ps1 `
+  -PortableFolder "C:\path\to\dist\ProgressStudio"
+```
+
+This performs an automated source/venv-independent isolation probe. Then use
+[`WIN2_CHECKLIST.md`](WIN2_CHECKLIST.md) on a clean Windows user or VM. WIN-2 is
+not complete until both the automated probe and the manual clean-machine
+acceptance pass.
