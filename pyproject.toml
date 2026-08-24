@@ -13,7 +13,6 @@ dependencies = [
     "matplotlib>=3.8,<4",
     "Pillow>=10,<12",
 ]
-
 [project.scripts]
 progress-studio = "progress_studio.entrypoints:desktop_main"
 progress-studio-cli = "progress_studio.entrypoints:cli_main"
@@ -25,7 +24,6 @@ build = ["pyinstaller>=6.10,<7"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["progress_studio*"]
-
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "--strict-markers"
@@ -41,5 +39,7 @@ markers = [
 "progress_studio" = [
     "config/*.json",
     "assets/dashboard/icons/*.png",
+    "assets/brand/*.png",
+    "assets/brand/*.ico",
     "services/distribution/*.json",
 ]

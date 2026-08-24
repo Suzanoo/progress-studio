@@ -18,6 +18,9 @@ REQUIRED_RELATIVE_FILES = (
     Path("_internal/progress_studio/assets/dashboard/icons/actual.png"),
     Path("_internal/progress_studio/assets/dashboard/icons/schedule.png"),
     Path("_internal/progress_studio/assets/dashboard/icons/time_impact.png"),
+    Path("_internal/progress_studio/assets/brand/progress_studio_brand.png"),
+    Path("_internal/progress_studio/assets/brand/progress_studio_icon.png"),
+    Path("_internal/progress_studio/assets/brand/progress_studio.ico"),
 )
 
 
@@ -27,7 +30,6 @@ def verify(folder: Path, *, run_smoke: bool = True) -> None:
     if missing:
         rendered = "\n".join(f"  - {item}" for item in missing)
         raise SystemExit(f"WIN-1 portable bundle is missing required files:\n{rendered}")
-
     if run_smoke:
         exe = folder / "ProgressStudio.exe"
         result = subprocess.run(

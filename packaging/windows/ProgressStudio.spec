@@ -10,23 +10,26 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
 
-
 # PyInstaller executes spec files with ``SPECPATH`` set to the directory that
 # contains this file. Resolve every local path from that anchor so the build is
 # independent of the caller's current working directory.
 SPEC_DIR = Path(SPECPATH).resolve()
 REPO_ROOT = SPEC_DIR.parents[1]
 LAUNCHER = SPEC_DIR / "launcher.py"
+BRAND_ICON = REPO_ROOT / "progress_studio" / "assets" / "brand" / "progress_studio.ico"
 
 if not LAUNCHER.is_file():
     raise FileNotFoundError(f"WIN-1 launcher not found: {LAUNCHER}")
-
+if not BRAND_ICON.is_file():
+    raise FileNotFoundError(f"Progress Studio brand icon not found: {BRAND_ICON}")
 
 datas = collect_data_files(
     "progress_studio",
     includes=[
         "config/*.json",
         "assets/dashboard/icons/*.png",
+        "assets/brand/*.png",
+        "assets/brand/*.ico",
         "services/distribution/*.json",
     ],
 )
@@ -46,13 +49,13 @@ a = Analysis(
 )
 
 pyz = PYZ(a.pure)
-
 exe = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
     name="ProgressStudio",
+    icon=str(BRAND_ICON),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

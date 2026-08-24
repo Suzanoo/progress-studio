@@ -71,6 +71,10 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.current_workspace = "home"
 
         self.title(f"{SETTINGS.title} Desktop {SETTINGS.version}")
+        if sys.platform.startswith("win"):
+            brand_icon = Path(__file__).resolve().parents[2] / "assets" / "brand" / "progress_studio.ico"
+            if brand_icon.is_file():
+                self.iconbitmap(default=str(brand_icon))
         self.geometry("1180x760")
         self.minsize(960, 640)
         self.configure(bg=PALETTE.canvas)
