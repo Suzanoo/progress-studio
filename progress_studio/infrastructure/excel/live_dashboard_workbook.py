@@ -128,6 +128,7 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
     monthly_points = list(month_last_rows.values())
 
     weekly_count = len(weekly_points)
+    weekly_last_row = max(2, weekly_count + 1)
     max_rows = max(weekly_count, len(monthly_points), 1)
     for idx in range(max_rows):
         row = idx + 2
@@ -169,10 +170,21 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             f'IF(B{row}="",NA(),B{row}),IF(E{row}="",NA(),E{row})))',
         )
         # Raw selected Actual is deliberately separate from the chart mask.
-        # KPI formulas read this error-free helper; only column I contains #N/A.
+        #
+        # DF-1: a reporting cutoff may fall after the last period containing a
+        # new Actual value. Resolve the latest cumulative Actual at-or-before the
+        # selected reporting date instead of requiring an exact-date value.
+        #
+        # Both Weekly and Monthly views search the complete weekly J/C history.
+        # This is intentional: a Monthly cutoff must retain an Actual update that
+        # occurred inside the month even when the month-end source cell is blank.
+        #
+        # Column L never depends on Dashboard!K5. Column I remains the sole
+        # cutoff-aware chart mask, so cutoff changes cannot rewrite Actual history.
         ws.cell(
             row, 12,
-            f'=IF(G{row}="","",IF(Dashboard!$G$5="Weekly",C{row},F{row}))',
+            f'=IF(G{row}="","",IFERROR(LOOKUP(2,1/(($J$2:$J${weekly_last_row}<=G{row})*'
+            f'($C$2:$C${weekly_last_row}<>"")),$C$2:$C${weekly_last_row}),0))',
         )
         ws.cell(
             row, 9,
