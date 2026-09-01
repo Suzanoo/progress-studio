@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from openpyxl import Workbook, load_workbook
+from openpyxl.chart import LineChart, Reference
 
 from progress_studio.domain.earned_value import EarnedValuePoint, EarnedValueResult
 from progress_studio.services.earned_value_rebuild_service import (
@@ -66,26 +67,51 @@ def _source_workbook(tmp_path: Path, *, cutoff=CUTOFF, earned_value=False) -> Pa
     main = workbook.active
     main.title = "main"
     main["A1"] = "user main data"
+    main["A2"] = "Week"
+    main["B2"] = "Plan"
+    main["A3"] = 1
+    main["B3"] = 10
+    chart = LineChart()
+    chart.add_data(Reference(main, min_col=2, min_row=2, max_row=3), titles_from_data=True)
+    chart.set_categories(Reference(main, min_col=1, min_row=3, max_row=3))
+    main.add_chart(chart, "D2")
+
+    monthly = workbook.create_sheet("main_monthly")
+    monthly["A1"] = "keep monthly"
+    monthly["A2"] = "Month"
+    monthly["B2"] = "Plan"
+    monthly["A3"] = 1
+    monthly["B3"] = 10
+    monthly_chart = LineChart()
+    monthly_chart.add_data(
+        Reference(monthly, min_col=2, min_row=2, max_row=3), titles_from_data=True
+    )
+    monthly_chart.set_categories(Reference(monthly, min_col=1, min_row=3, max_row=3))
+    monthly.add_chart(monthly_chart, "D2")
+
     dashboard = workbook.create_sheet("Dashboard")
     dashboard["K5"] = cutoff
+    dashboard["A1"] = "keep dashboard"
+
+    payment = workbook.create_sheet("Payment")
+    payment["A1"] = "keep payment"
+
     if earned_value:
-        ws = workbook.create_sheet("Earned Value")
-        ws["A1"] = "old"
+        workbook.create_sheet("Earned Value")["A1"] = "old"
+        workbook.create_sheet("EV_Data")["A1"] = "old-data"
+
     path = tmp_path / "source.xlsx"
     workbook.save(path)
     workbook.close()
     return path
 
 
-def _service(renderer=None) -> EarnedValueRebuildService:
-    kwargs = dict(
+def _service() -> EarnedValueRebuildService:
+    return EarnedValueRebuildService(
         input_reader=StubInputReader(),
         main_reader=StubMainReader(),
         deriver=StubDeriver(),
     )
-    if renderer is not None:
-        kwargs["renderer"] = renderer
-    return EarnedValueRebuildService(**kwargs)
 
 
 @pytest.mark.unit
@@ -103,29 +129,48 @@ def test_ev_rebuild_analysis_reports_readiness_and_existing_sheet(tmp_path: Path
 
 
 @pytest.mark.unit
-def test_ev_rebuild_generate_preserves_existing_sheets_and_refreshes_only_ev(
+def test_ev_rebuild_generate_adds_native_ev_extension_and_preserves_existing_features(
     tmp_path: Path,
 ) -> None:
-    source = _source_workbook(tmp_path, earned_value=True)
+    source = _source_workbook(tmp_path)
     output = tmp_path / "output.xlsx"
 
-    def renderer(workbook, result):
-        if "Earned Value" in workbook.sheetnames:
-            del workbook["Earned Value"]
-        ws = workbook.create_sheet("Earned Value")
-        ws["A1"] = "EV-4"
-        ws["B1"] = result.project_bac
-
-    result = _service(renderer=renderer).generate(source, output)
+    result = _service().generate(source, output)
 
     assert result.refreshed_sheet == "Earned Value"
-    assert source.exists()
+    assert output.exists()
+
     workbook = load_workbook(output, data_only=False)
     try:
         assert workbook["main"]["A1"].value == "user main data"
-        assert workbook["Dashboard"]["K5"].value == CUTOFF
-        assert workbook["Earned Value"]["A1"].value == "EV-4"
-        assert workbook["Earned Value"]["B1"].value == pytest.approx(1000.0)
+        assert workbook["main_monthly"]["A1"].value == "keep monthly"
+        assert workbook["Dashboard"]["A1"].value == "keep dashboard"
+        assert workbook["Payment"]["A1"].value == "keep payment"
+        assert len(workbook["main"]._charts) == 1
+        assert len(workbook["main_monthly"]._charts) == 1
+        assert workbook.sheetnames.count("Earned Value") == 1
+        assert workbook.sheetnames.count("EV_Data") == 1
+        assert workbook["EV_Data"].sheet_state == "hidden"
+        assert len(workbook["Earned Value"]._charts) == 1
+    finally:
+        workbook.close()
+
+
+@pytest.mark.unit
+def test_ev_rebuild_refresh_replaces_only_ev_owned_sheets(tmp_path: Path) -> None:
+    source = _source_workbook(tmp_path, earned_value=True)
+    output = tmp_path / "output.xlsx"
+
+    _service().generate(source, output)
+
+    workbook = load_workbook(output, data_only=False)
+    try:
+        assert workbook.sheetnames.count("Earned Value") == 1
+        assert workbook.sheetnames.count("EV_Data") == 1
+        assert workbook["main"]["A1"].value == "user main data"
+        assert workbook["main_monthly"]["A1"].value == "keep monthly"
+        assert workbook["Dashboard"]["A1"].value == "keep dashboard"
+        assert workbook["Payment"]["A1"].value == "keep payment"
     finally:
         workbook.close()
 
@@ -160,3 +205,14 @@ def test_ev_rebuild_refuses_in_place_output(tmp_path: Path) -> None:
 
     with pytest.raises(EarnedValueRebuildError, match="must be a new workbook path"):
         _service().generate(source, source)
+
+@pytest.mark.unit
+def test_ev_rebuild_reads_existing_ev_status_date_before_dashboard(tmp_path: Path) -> None:
+    source = _source_workbook(tmp_path, earned_value=True)
+    selected = datetime(2026, 7, 31)
+    workbook = load_workbook(source)
+    workbook["Earned Value"]["M3"] = selected
+    workbook.save(source)
+    workbook.close()
+
+    assert EarnedValueRebuildService._read_cutoff(source) == selected

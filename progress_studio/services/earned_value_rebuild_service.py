@@ -7,6 +7,8 @@ import os
 import shutil
 import tempfile
 from typing import Callable
+import zipfile
+from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
 
@@ -23,10 +25,16 @@ from progress_studio.infrastructure.excel.rebuild_workbook_reader import (
     RebuildWorkbookReader,
     RebuildWorkbookReadError,
 )
+from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
+    reassert_traditional_overlay_transparency,
+)
 from progress_studio.services.earned_value_deriver import (
     EarnedValueDeriver,
     EarnedValueInputError,
 )
+
+
+_MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 
 class EarnedValueRebuildError(ValueError):
@@ -65,14 +73,16 @@ def _as_datetime(value: object) -> datetime | None:
 
 
 class EarnedValueRebuildService:
-    """Standalone EV boundary used by the Rebuild workspace.
+    """Standalone EV extension used by the Rebuild workspace.
 
-    EV owns only the ``Earned Value`` sheet. It reads:
-    - current ``main`` progress values,
-    - embedded BOQ/mapping provenance,
-    - the management reporting cutoff.
+    EV reads current ``main`` progress values, embedded BOQ/mapping provenance,
+    and the reporting cutoff. It mutates only EV-owned workbook presentation:
+    ``Earned Value`` and ``EV_Data``.
 
-    Progress/Payment rebuild ownership is deliberately untouched.
+    The source workbook is copied to a temporary output, opened once as a normal
+    workbook, EV-owned sheets are added/refreshed, the proven overlay transparency
+    guard is re-applied, and the workbook is saved once. Existing Progress,
+    Payment, Dashboard and user sheets are not rebuilt by this service.
     """
 
     def __init__(
@@ -90,10 +100,10 @@ class EarnedValueRebuildService:
 
     def analyze(self, workbook_path: Path) -> EarnedValueRebuildAnalysis:
         path = self._validate_path(workbook_path)
-        result, activity_count, boq_count, allocation_count = self._derive(path)
+        result, cutoff, activity_count, boq_count, allocation_count = self._derive(path)
         return EarnedValueRebuildAnalysis(
             workbook=path,
-            cutoff_date=self._require_cutoff(path),
+            cutoff_date=cutoff,
             activity_count=activity_count,
             boq_count=boq_count,
             allocation_count=allocation_count,
@@ -117,12 +127,11 @@ class EarnedValueRebuildService:
                 "Earned Value output must be a new workbook path."
             )
 
-        result, activity_count, boq_count, allocation_count = self._derive(source)
-        cutoff = self._require_cutoff(source)
+        result, cutoff, activity_count, boq_count, allocation_count = self._derive(source)
 
         output.parent.mkdir(parents=True, exist_ok=True)
         fd, temp_name = tempfile.mkstemp(
-            prefix=f".{output.stem}.ev4.",
+            prefix=f".{output.stem}.ev5.",
             suffix=output.suffix,
             dir=output.parent,
         )
@@ -139,10 +148,19 @@ class EarnedValueRebuildService:
                 keep_vba=keep_vba,
             )
             try:
+                # EV owns only its two sheets. Existing Progress/Payment/Dashboard
+                # builders are deliberately not called here.
                 self.renderer(workbook, result)
+
+                # Progress Studio already carries this guard for normal workbook
+                # round-trips. Re-assert presentation only; do not rebuild charts,
+                # series, cutoff logic or any existing worksheet data.
+                reassert_traditional_overlay_transparency(workbook)
+
                 workbook.save(temp_path)
             finally:
                 workbook.close()
+
             os.replace(temp_path, output)
         except Exception:
             temp_path.unlink(missing_ok=True)
@@ -162,7 +180,7 @@ class EarnedValueRebuildService:
     def _derive(
         self,
         path: Path,
-    ) -> tuple[EarnedValueResult, int, int, int]:
+    ) -> tuple[EarnedValueResult, datetime, int, int, int]:
         try:
             embedded = self.input_reader.read(path)
             dataset = self.main_reader.read_main_dataset(path)
@@ -195,6 +213,7 @@ class EarnedValueRebuildService:
             )
         return (
             result,
+            cutoff,
             activity_count,
             len(embedded.boq_rows),
             len(embedded.allocations),
@@ -219,9 +238,11 @@ class EarnedValueRebuildService:
             keep_vba=keep_vba,
         )
         try:
-            # EV is a management view, so the Dashboard reporting cutoff is the
-            # authoritative first choice. The main local control is a fallback
-            # for older/partially rebuilt workbooks.
+            if EARNED_VALUE_SHEET in workbook.sheetnames:
+                cutoff = _as_datetime(workbook[EARNED_VALUE_SHEET]["M3"].value)
+                if cutoff is not None:
+                    return cutoff
+
             if "Dashboard" in workbook.sheetnames:
                 cutoff = _as_datetime(workbook["Dashboard"]["K5"].value)
                 if cutoff is not None:
@@ -246,17 +267,21 @@ class EarnedValueRebuildService:
 
     @staticmethod
     def _has_sheet(path: Path, sheet_name: str) -> bool:
-        keep_vba = path.suffix.lower() == ".xlsm"
-        workbook = load_workbook(
-            path,
-            read_only=True,
-            data_only=False,
-            keep_vba=keep_vba,
-        )
+        """Inspect workbook.xml directly; no extra mutable workbook pass."""
         try:
-            return sheet_name in workbook.sheetnames
-        finally:
-            workbook.close()
+            with zipfile.ZipFile(path, "r") as archive:
+                workbook_xml = archive.read("xl/workbook.xml")
+        except (OSError, KeyError, zipfile.BadZipFile):
+            return False
+
+        root = ET.fromstring(workbook_xml)
+        sheets = root.find(f"{{{_MAIN_NS}}}sheets")
+        if sheets is None:
+            return False
+        return any(
+            sheet.attrib.get("name") == sheet_name
+            for sheet in sheets.findall(f"{{{_MAIN_NS}}}sheet")
+        )
 
     @staticmethod
     def _validate_path(workbook_path: Path) -> Path:
