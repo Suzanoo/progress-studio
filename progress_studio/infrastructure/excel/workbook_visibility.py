@@ -6,28 +6,28 @@ VISIBLE_SHEETS = (
     "main",
     "main_monthly",
     "Payment Input",
+    "Payment-Breakdown",
     "Payment",
     "Dashboard",
+    "Earned Value",
+    "EV Table",
 )
 
 HIDDEN_SHEETS = (
     "progress",
     "progress_table",
     "Dashboard_Data",
+    "EV_Data",
 )
 
 
-def apply_final_sheet_visibility(workbook) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    """Apply the proven pre-normalize final workbook visibility contract.
+def apply_final_sheet_visibility(
+    workbook,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """Apply the final user-facing workbook visibility contract.
 
-    Visible:
-      README, main, main_monthly, Payment Input, Payment, Dashboard
-
-    Normal hidden:
-      progress, progress_table, Dashboard_Data
-
-    Very hidden:
-      every other existing support/internal sheet
+    Earned Value is an existing public feature and must stay visible whenever
+    present. EV_Data remains a normal hidden helper sheet.
     """
     visible: list[str] = []
     hidden: list[str] = []
@@ -44,7 +44,6 @@ def apply_final_sheet_visibility(workbook) -> tuple[tuple[str, ...], tuple[str, 
             sheet.sheet_state = "veryHidden"
             very_hidden.append(sheet.title)
 
-    # Excel requires at least one visible sheet.
     if not visible and workbook.worksheets:
         workbook.worksheets[0].sheet_state = "visible"
         visible.append(workbook.worksheets[0].title)

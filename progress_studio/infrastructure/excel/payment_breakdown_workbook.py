@@ -45,32 +45,105 @@ def _display_period(period) -> str:
     return period.key
 
 
-def _is_active_fraction(value: float) -> bool:
-    """Red text only for 0% < value < 100%.
+def _is_zero_fraction(value: float) -> bool:
+    return isclose(
+        value,
+        0.0,
+        rel_tol=0.0,
+        abs_tol=_PROGRESS_TOLERANCE,
+    )
 
-    Values numerically equal to 100% within the PB tolerance are treated as
-    complete and keep the normal text colour.
-    """
-    return value > _PROGRESS_TOLERANCE and not isclose(
+
+def _is_complete_fraction(value: float) -> bool:
+    return isclose(
         value,
         1.0,
         rel_tol=0.0,
         abs_tol=_PROGRESS_TOLERANCE,
-    ) and value < 1.0
+    )
 
 
-def _write_progress_values(ws, row: int, start_col: int, values) -> None:
+def _is_active_fraction(value: float) -> bool:
+    """Red text only for values materially between 0% and 100%."""
+    return (
+        value > _PROGRESS_TOLERANCE
+        and value < 1.0 - _PROGRESS_TOLERANCE
+    )
+
+
+def _style_progress_cell(cell, value: float | None, *, bold: bool = False) -> None:
+    cell.number_format = "0.00%"
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    cell.border = _border()
+    cell.font = Font(
+        name=_FONT,
+        size=10,
+        bold=bold,
+        color=(
+            _RED
+            if value is not None and _is_active_fraction(value)
+            else _TEXT
+        ),
+    )
+
+
+def _write_progress_values(
+    ws,
+    row: int,
+    start_col: int,
+    values,
+    *,
+    bold: bool = False,
+) -> None:
+    """Write period progress, suppressing zero-value display only.
+
+    The calculation snapshot remains untouched.  A genuine 100% period value
+    is still displayed because this is a period-progress row, not cumulative.
+    """
     for offset, raw in enumerate(values):
         value = float(raw)
-        cell = ws.cell(row, start_col + offset, value)
-        cell.number_format = "0.00%"
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = _border()
-        cell.font = Font(
-            name=_FONT,
-            size=10,
-            color=_RED if _is_active_fraction(value) else _TEXT,
-        )
+        display_value = None if _is_zero_fraction(value) else value
+        cell = ws.cell(row, start_col + offset, display_value)
+        _style_progress_cell(cell, display_value, bold=bold)
+
+
+def _write_cumulative_values(
+    ws,
+    row: int,
+    start_col: int,
+    values,
+    *,
+    bold: bool = False,
+) -> None:
+    """Write cumulative values as a compact active span.
+
+    Presentation contract:
+    - leading 0% values are blank;
+    - in-progress values are shown in red;
+    - the first 100% is shown in normal text;
+    - repeated 100% values after completion are blank.
+
+    This is presentation only; source/derived cumulative arrays remain full.
+    """
+    completion_shown = False
+
+    for offset, raw in enumerate(values):
+        value = float(raw)
+        display_value: float | None
+
+        if _is_zero_fraction(value):
+            display_value = None
+        elif _is_complete_fraction(value):
+            if completion_shown:
+                display_value = None
+            else:
+                display_value = 1.0
+                completion_shown = True
+        else:
+            display_value = value
+
+        cell = ws.cell(row, start_col + offset, display_value)
+        _style_progress_cell(cell, display_value, bold=bold)
 
 
 def render_payment_breakdown(
@@ -79,11 +152,7 @@ def render_payment_breakdown(
     *,
     sheet_name: str = PAYMENT_BREAKDOWN_SHEET,
 ):
-    """Replace and render the Payment-Breakdown derived worksheet.
-
-    PB-3 is intentionally a renderer only.  It does not save the workbook,
-    modify `main`, or participate in Rebuild ownership yet.
-    """
+    """Replace and render the Payment-Breakdown derived worksheet."""
     old_index = None
     if sheet_name in workbook.sheetnames:
         old_index = workbook.sheetnames.index(sheet_name)
@@ -187,7 +256,7 @@ def render_payment_breakdown(
                 cell.alignment = Alignment(vertical="center")
 
             ws.cell(cumulative_row, 4).number_format = "#,##0.00"
-            _write_progress_values(
+            _write_cumulative_values(
                 ws,
                 cumulative_row,
                 period_start_col,
@@ -220,15 +289,10 @@ def render_payment_breakdown(
             combined_progress_row,
             period_start_col,
             derived.period_progress,
+            bold=True,
         )
         for col in range(period_start_col, period_start_col + period_count):
             ws.cell(combined_progress_row, col).fill = _fill(_LIGHT_BLUE)
-            ws.cell(combined_progress_row, col).font = Font(
-                name=_FONT,
-                size=10,
-                bold=True,
-                color=_RED if _is_active_fraction(ws.cell(combined_progress_row, col).value) else _TEXT,
-            )
 
         combined_cumulative = (
             derived.activity_name,
@@ -244,20 +308,15 @@ def render_payment_breakdown(
             cell.font = Font(name=_FONT, size=10, bold=True, color=_TEXT)
             cell.alignment = Alignment(vertical="center")
         ws.cell(combined_cumulative_row, 4).number_format = "#,##0.00"
-        _write_progress_values(
+        _write_cumulative_values(
             ws,
             combined_cumulative_row,
             period_start_col,
             derived.cumulative_progress,
+            bold=True,
         )
         for col in range(period_start_col, period_start_col + period_count):
             ws.cell(combined_cumulative_row, col).fill = _fill(_LIGHT_RED)
-            ws.cell(combined_cumulative_row, col).font = Font(
-                name=_FONT,
-                size=10,
-                bold=True,
-                color=_RED if _is_active_fraction(ws.cell(combined_cumulative_row, col).value) else _TEXT,
-            )
 
         current_row += 3
 
