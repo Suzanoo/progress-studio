@@ -12,7 +12,6 @@ from progress_studio.services.payment_breakdown_adapter import (
 
 
 PAYMENT_BREAKDOWN_SHEET = "Payment-Breakdown"
-
 _FONT = "Aptos"
 _NAVY = "1F4E78"
 _GREEN = "70AD47"
@@ -126,7 +125,6 @@ def _write_cumulative_values(
     This is presentation only; source/derived cumulative arrays remain full.
     """
     completion_shown = False
-
     for offset, raw in enumerate(values):
         value = float(raw)
         display_value: float | None
@@ -141,9 +139,20 @@ def _write_cumulative_values(
                 completion_shown = True
         else:
             display_value = value
-
         cell = ws.cell(row, start_col + offset, display_value)
         _style_progress_cell(cell, display_value, bold=bold)
+
+
+def _group_source_activity_rows(ws, start_row: int, end_row: int) -> None:
+    """Group source-detail rows while keeping them expanded by default."""
+    if end_row < start_row:
+        return
+    ws.row_dimensions.group(
+        start_row,
+        end_row,
+        outline_level=1,
+        hidden=False,
+    )
 
 
 def render_payment_breakdown(
@@ -157,7 +166,6 @@ def render_payment_breakdown(
     if sheet_name in workbook.sheetnames:
         old_index = workbook.sheetnames.index(sheet_name)
         workbook.remove(workbook[sheet_name])
-
     if old_index is None:
         ws = workbook.create_sheet(sheet_name)
     else:
@@ -165,18 +173,17 @@ def render_payment_breakdown(
 
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "F4"
+    ws.sheet_properties.outlinePr.summaryBelow = True
 
     period_start_col = 6
     period_count = len(snapshot.periods)
     last_col = max(5, period_start_col + period_count - 1)
-
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
     title = ws.cell(1, 1, "Payment Breakdown")
     title.fill = _fill(_NAVY)
     title.font = Font(name=_FONT, size=15, bold=True, color=_WHITE)
     title.alignment = Alignment(horizontal="left", vertical="center")
     ws.row_dimensions[1].height = 24
-
     ws.cell(
         2,
         1,
@@ -189,10 +196,8 @@ def render_payment_breakdown(
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=last_col)
     ws.cell(2, 1).font = Font(name=_FONT, size=9, color=_MUTED)
     ws.cell(2, 1).alignment = Alignment(horizontal="left")
-
     current_row = 4
     headers = ("Activity Name", "WBS", "Activity ID", "Amount", "Progress Type")
-
     for derived in snapshot.activities:
         block_header_row = current_row
         for col, label in enumerate(headers, start=1):
@@ -201,7 +206,6 @@ def render_payment_breakdown(
             cell.font = Font(name=_FONT, size=10, bold=True, color=_WHITE)
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = _border()
-
         for index, period in enumerate(snapshot.periods, start=period_start_col):
             cell = ws.cell(block_header_row, index, _display_period(period))
             cell.fill = _fill(_GREEN)
@@ -212,14 +216,13 @@ def render_payment_breakdown(
                 wrap_text=True,
             )
             cell.border = _border()
-
         ws.row_dimensions[block_header_row].height = 32
         current_row += 1
 
+        source_detail_start_row = current_row
         for source in derived.source_activities:
             progress_row = current_row
             cumulative_row = current_row + 1
-
             values = (
                 derived.activity_name,
                 source.wbs or "",
@@ -232,7 +235,6 @@ def render_payment_breakdown(
                 cell.border = _border()
                 cell.font = Font(name=_FONT, size=10, color=_TEXT)
                 cell.alignment = Alignment(vertical="center")
-
             ws.cell(progress_row, 4).number_format = "#,##0.00"
             _write_progress_values(
                 ws,
@@ -240,7 +242,6 @@ def render_payment_breakdown(
                 period_start_col,
                 source.period_progress,
             )
-
             cumulative_values = (
                 "",
                 source.wbs or "",
@@ -254,7 +255,6 @@ def render_payment_breakdown(
                 cell.border = _border()
                 cell.font = Font(name=_FONT, size=10, color=_TEXT)
                 cell.alignment = Alignment(vertical="center")
-
             ws.cell(cumulative_row, 4).number_format = "#,##0.00"
             _write_cumulative_values(
                 ws,
@@ -267,9 +267,14 @@ def render_payment_breakdown(
 
             current_row += 2
 
+        _group_source_activity_rows(
+            ws,
+            source_detail_start_row,
+            current_row - 1,
+        )
+
         combined_progress_row = current_row
         combined_cumulative_row = current_row + 1
-
         combined = (
             derived.activity_name,
             "",
@@ -293,7 +298,6 @@ def render_payment_breakdown(
         )
         for col in range(period_start_col, period_start_col + period_count):
             ws.cell(combined_progress_row, col).fill = _fill(_LIGHT_BLUE)
-
         combined_cumulative = (
             derived.activity_name,
             "",
@@ -317,7 +321,6 @@ def render_payment_breakdown(
         )
         for col in range(period_start_col, period_start_col + period_count):
             ws.cell(combined_cumulative_row, col).fill = _fill(_LIGHT_RED)
-
         current_row += 3
 
     widths = {
