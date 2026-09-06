@@ -191,26 +191,20 @@ def test_ev5_wbs_and_negative_variance_tables_follow_status_date() -> None:
     assert ws["G32"].value.startswith("=IFERROR(VLOOKUP(")
     assert ws["H32"].value.startswith("=IFERROR(VLOOKUP(")
 
-    # Hidden snapshots are keyed independently per cutoff.  This isolated
-    # fixture has no main sheet, so the compatibility fallback is label order.
-    structure = next(
-        row for row in range(2, data.max_row + 1)
-        if data.cell(row, 10).value == "20260213|1"
-    )
-    assert data.cell(structure, 11).value == datetime(2026, 2, 13)
-    assert data.cell(structure, 12).value == 1
-    assert data.cell(structure, 13).value == "MEP"
-    assert data.cell(structure, 16).value == pytest.approx(2_400_000.0)
-    assert data.cell(structure, 17).value == pytest.approx(1_800_000.0)
+    # EV_Data now exposes one live selected-date WBS layer instead of Python
+    # snapshots per cutoff. The visible dashboard lookup interface stays stable.
+    assert data["K2"].value == "='Earned Value'!$M$3"
+    assert data["M2"].value == "MEP"
+    assert data["L2"].value.startswith("=IF(P2<=0")
+    assert data["J2"].value.startswith("=IF(L2=""")
+    assert "SUMIFS(" in data["P2"].value
+    assert "SUMIFS(" in data["Q2"].value
 
     assert ws["I32"].value.startswith("=IFERROR(VLOOKUP(")
     assert ws["J32"].value.startswith("=IFERROR(VLOOKUP(")
-    concrete = next(
-        row for row in range(2, data.max_row + 1)
-        if data.cell(row, 20).value == "20260213|1"
-    )
-    assert data.cell(concrete, 24).value == "Concrete"
-    assert data.cell(concrete, 25).value == pytest.approx(-1_000_000.0)
+    assert data["U2"].value == "='Earned Value'!$M$3"
+    assert data["W2"].value.startswith("=IFERROR(INDEX(")
+    assert data["X2"].value.startswith("=IFERROR(INDEX(")
 
 
 @pytest.mark.unit
@@ -332,16 +326,17 @@ def test_ev6_renders_live_boq_table_with_native_filter_and_mapping_metadata() ->
     assert ws["I6"].value == "=H6-G6"
     assert ws["J6"].value == "=IF(G6=0,0,H6/G6)"
 
-    snapshots = [
+    live_rows = [
         tuple(data.cell(row, col).value for col in range(31, 35))
-        for row in range(2, data.max_row + 1)
-        if data.cell(row, 31).value is not None
+        for row in range(2, 4)
     ]
-    # Two selectable cutoffs x two BOQ items; compact helper stores no repeated labels/WBS/BAC.
-    assert len(snapshots) == 4
-    assert snapshots[0][0] == datetime(2026, 1, 30)
-    assert snapshots[0][1] == "B1"
-    assert snapshots[-1][0] == datetime(2026, 2, 13)
+    # One live row per BOQ: date follows M3 and PV/EV derive through mapping.
+    assert len(live_rows) == 2
+    assert live_rows[0][0] == "='Earned Value'!$M$3"
+    assert live_rows[0][1] == "B1"
+    assert live_rows[-1][1] == "B2"
+    assert live_rows[0][2].startswith("=SUMIFS(")
+    assert live_rows[0][3].startswith("=SUMIFS(")
 
 
 @pytest.mark.unit
@@ -466,13 +461,12 @@ def test_ev_wbs_excludes_future_zero_pv_work_from_active_rows() -> None:
     render_earned_value_sheet(workbook, result)
     data = workbook[EV_DATA_SHEET]
 
-    labels = [
-        data.cell(row, 13).value
-        for row in range(2, data.max_row + 1)
-        if data.cell(row, 10).value
-    ]
-    assert labels == ["1"]
-    assert "6" not in labels
+    # Structural WBS rows remain present, while live Excel rank becomes blank
+    # for zero-PV work. This avoids rebuilding the helper when Plan changes.
+    labels = [data.cell(row, 13).value for row in range(2, 4)]
+    assert labels == ["1", "6"]
+    assert data["L2"].value.startswith("=IF(P2<=0")
+    assert data["L3"].value.startswith("=IF(P3<=0")
 
 
 @pytest.mark.unit
@@ -495,12 +489,11 @@ def test_ev_top10_negative_variance_includes_activity_ids_from_mapping() -> None
     assert dashboard["J31"].value == "BOQ / WORK"
     assert dashboard["M31"].value == "SV"
     assert dashboard["O31"].value == "SPI"
-    first = next(
-        row for row in range(2, data.max_row + 1)
-        if data.cell(row, 20).value == "20260213|1"
-    )
-    assert data.cell(first, 23).value == "A1"
-    assert data.cell(first, 24).value == "Concrete"
+    assert data["U2"].value == "='Earned Value'!$M$3"
+    assert data["W2"].value.startswith("=IFERROR(INDEX(")
+    assert data["X2"].value.startswith("=IFERROR(INDEX(")
+    assert data["BO2"].value == "A1"
+    assert data["BP2"].value == "Concrete"
     assert dashboard["I41"].value.startswith("=IFERROR(VLOOKUP(")
 
 

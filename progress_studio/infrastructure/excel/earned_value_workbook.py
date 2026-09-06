@@ -13,6 +13,7 @@ from openpyxl.comments import Comment
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
 
 
 from progress_studio.domain.earned_value import (
@@ -360,6 +361,127 @@ def _main_wbs_by_activity(workbook, result: EarnedValueResult) -> dict[str, _Mai
     return resolved
 
 
+
+
+@dataclass(frozen=True, slots=True)
+class _MainLiveContract:
+    header_row: int
+    first_period_col: int
+    last_period_col: int
+    project_plan_row: int | None
+    project_actual_row: int | None
+    activity_rows: dict[str, tuple[int | None, int | None]]
+
+
+def _main_live_contract(workbook, result: EarnedValueResult) -> _MainLiveContract | None:
+    """Resolve the minimal direct-to-main formula contract used by live EV."""
+    if "main" not in workbook.sheetnames:
+        return None
+    ws = workbook["main"]
+    header_row = None
+    headers: dict[str, int] = {}
+    for row in range(1, min(ws.max_row, 25) + 1):
+        row_headers = {
+            str(ws.cell(row, col).value or "").strip().casefold(): col
+            for col in range(1, ws.max_column + 1)
+            if str(ws.cell(row, col).value or "").strip()
+        }
+        if "row type" in row_headers and "p/a" in row_headers:
+            header_row = row
+            headers = row_headers
+            break
+    if header_row is None:
+        return None
+    period_cols = [
+        col
+        for col in range(1, ws.max_column + 1)
+        if _as_datetime(ws.cell(header_row, col).value) is not None
+    ]
+    if not period_cols:
+        return None
+    row_type_col = headers["row type"]
+    pa_col = headers["p/a"]
+    activity_col = headers.get("activity id")
+    wanted = {activity.activity_id for activity in result.activities if activity.activity_id}
+    activity_rows: dict[str, list[int | None]] = {key: [None, None] for key in wanted}
+    project_plan_row = None
+    project_actual_row = None
+    project_summary_seen = False
+    for row in range(header_row + 1, ws.max_row + 1):
+        row_type = str(ws.cell(row, row_type_col).value or "").strip().casefold()
+        pa = str(ws.cell(row, pa_col).value or "").strip().upper()
+        activity_id = (
+            str(ws.cell(row, activity_col).value or "").strip()
+            if activity_col is not None
+            else ""
+        )
+        if row_type == "project summary" and pa == "P":
+            project_plan_row = row
+            project_summary_seen = True
+            continue
+        if project_summary_seen and project_actual_row is None and pa == "A" and not activity_id:
+            project_actual_row = row
+        if activity_id in activity_rows:
+            if pa == "P":
+                activity_rows[activity_id][0] = row
+            elif pa == "A":
+                activity_rows[activity_id][1] = row
+    return _MainLiveContract(
+        header_row=header_row,
+        first_period_col=min(period_cols),
+        last_period_col=max(period_cols),
+        project_plan_row=project_plan_row,
+        project_actual_row=project_actual_row,
+        activity_rows={key: (rows[0], rows[1]) for key, rows in activity_rows.items()},
+    )
+
+
+def _main_progress_formula(contract: _MainLiveContract, source_row: int | None, date_ref: str) -> str:
+    if source_row is None:
+        return "0"
+    first = get_column_letter(contract.first_period_col)
+    last = get_column_letter(contract.last_period_col)
+    return (
+        f'IFERROR(SUMIFS(main!${first}${source_row}:${last}${source_row},'
+        f'main!${first}${contract.header_row}:${last}${contract.header_row},'
+        f'"<="&{date_ref}),0)'
+    )
+
+
+def _mapping_allocations(workbook) -> tuple[tuple[str, str, float], ...]:
+    """Return frozen BOQ→Activity allocated amounts from the embedded mapping."""
+    if _MAPPING_SHEET not in workbook.sheetnames:
+        return ()
+    ws = workbook[_MAPPING_SHEET]
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows)
+    except StopIteration:
+        return ()
+    headers = {
+        str(value or "").strip().casefold(): index
+        for index, value in enumerate(header)
+        if str(value or "").strip()
+    }
+    required = ("boq key", "activity id", "allocated amount")
+    if any(name not in headers for name in required):
+        return ()
+    result: list[tuple[str, str, float]] = []
+    for values in rows:
+        def raw(name: str):
+            index = headers[name]
+            return values[index] if index < len(values) else None
+        boq_key = str(raw("boq key") or "").strip()
+        activity_id = str(raw("activity id") or "").strip()
+        try:
+            allocated = float(raw("allocated amount") or 0.0)
+        except (TypeError, ValueError):
+            allocated = 0.0
+        if boq_key and activity_id:
+            result.append((boq_key, activity_id, allocated))
+    return tuple(result)
+
+
 def _activity_performance_at(
     result: EarnedValueResult,
     cutoff: datetime | date | None,
@@ -541,12 +663,10 @@ def _boq_metadata_from_mapping(workbook) -> dict[str, tuple[str, str, str, str, 
 
 
 def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLayout) -> None:
-    """Render the EV-6 BOQ snapshot table driven by the dashboard Status Date.
+    """Render the EV-6 BOQ table driven by the dashboard Status Date.
 
-    The visible table contains one row per BOQ item and uses Excel formulas
-    against compact monthly BOQ snapshots in EV_Data.  Filtering/sorting is the
-    native worksheet AutoFilter; no second calculation engine or custom control
-    is introduced.
+    The visible table contains one row per BOQ item and reads the live EV_Data
+    formula layer. Filtering/sorting remains native worksheet behavior.
     """
     ws = workbook.create_sheet(EV_TABLE_SHEET)
     ws.sheet_view.showGridLines = False
@@ -666,49 +786,64 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
 
 
 def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
-    """Write only EV-owned helper data and reuse Dashboard_Data calendar state."""
+    """Build the EV-owned live formula layer over the editable ``main`` sheet.
+
+    BAC and BOQ allocation topology remain frozen from the successful EV rebuild.
+    Plan/Actual progress is read directly from ``main`` with Excel formulas so a
+    user edit followed by F9/Save updates PV/EV/SV/SPI without another rebuild.
+    """
     ws = workbook.create_sheet(EV_DATA_SHEET)
     ws.sheet_state = "hidden"
     ws.sheet_view.showGridLines = False
+
+    live = _main_live_contract(workbook, result)
+    allocations = _mapping_allocations(workbook)
+
+    # Reporting context is independent from EV!M3. Keep it live when the normal
+    # Progress Dashboard exists; standalone workbooks retain the rebuild cutoff.
+    ws["G1"] = "Status Top"
+    ws["G3"] = "Reporting Cutoff"
+    if "Dashboard" in workbook.sheetnames:
+        ws["G4"] = "=Dashboard!$K$5"
+    else:
+        ws["G4"] = result.cutoff_date
+    ws["G4"].number_format = "dd-mmm-yyyy"
 
     headers = ("Reporting Date", "PV", "EV Source", "EV", "Status Date", "Point Type")
     for column, header in enumerate(headers, start=1):
         ws.cell(1, column, header)
 
     chart_points = _monthly_chart_points(result)
-    max_value = max(
-        [
-            float(result.project_bac or 0.0),
-            *[
-                float(value)
-                for point in chart_points
-                for value in (point.planned_value, point.earned_value)
-                if value is not None
-            ],
-        ]
-        or [1.0]
-    )
-    status_top = max(max_value * 1.05, 1.0)
-    ws["G1"] = "Status Top"
+    status_top = max(float(result.project_bac or 0.0) * 1.05, 1.0)
     ws["G2"] = status_top
     ws["G2"].number_format = "#,##0.00"
-
     ws.cell(1, 29, "PV @ Status Date")
     ws.cell(1, 30, "EV @ Status Date")
 
     for row_index, point in enumerate(chart_points, start=2):
         ws.cell(row_index, 1, point.reporting_date)
-        ws.cell(row_index, 2, point.planned_value)
-        ws.cell(row_index, 3, point.earned_value)
-        # Same cutoff-mask/carry-forward behavior already used by the traditional
-        # main/main_monthly overlay.  The dropdown therefore updates in Excel
-        # without a Python rebuild for any historical Status Date in the list.
+        if live is not None and live.project_plan_row is not None:
+            plan_progress = _main_progress_formula(live, live.project_plan_row, f"A{row_index}")
+            ws.cell(row_index, 2, f"={float(result.project_bac or 0.0)}*({plan_progress})")
+        else:
+            ws.cell(row_index, 2, point.planned_value)
+        if live is not None and live.project_actual_row is not None:
+            actual_progress = _main_progress_formula(
+                live,
+                live.project_actual_row,
+                f"MIN(A{row_index},$G$4)",
+            )
+            ws.cell(row_index, 3, f"={float(result.project_bac or 0.0)}*({actual_progress})")
+        else:
+            ws.cell(row_index, 3, point.earned_value)
+        # Render EV through the selected Status Date. When M3 is later than the
+        # reporting cutoff, column C is already frozen at the latest permitted
+        # Actual date, so the plotted line carries forward flat through M3.
         ws.cell(
             row_index,
             4,
             f'=IF(A{row_index}="",NA(),IF(A{row_index}>'
-            f"'{EARNED_VALUE_SHEET}'!$M$3,NA(),"
-            f'IF(C{row_index}<>"",C{row_index},IFERROR(LOOKUP(2,1/($C$2:C{row_index}<>""),$C$2:C{row_index}),0))))',
+            f"'{EARNED_VALUE_SHEET}'!$M$3,NA(),C{row_index}))",
         )
         next_row = row_index + 1
         status_ref = f"'{EARNED_VALUE_SHEET}'!$M$3"
@@ -719,27 +854,13 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
             f'OR(A{next_row}="",A{next_row}>{status_ref})),$G$2,NA()))',
         )
         ws.cell(row_index, 6, point.point_type)
-        # Marker-only helper series.  They follow the same selected Status Date
-        # row as the redline and therefore move live in Excel without rebuild.
-        ws.cell(
-            row_index,
-            29,
-            f'=IF(ISNUMBER(E{row_index}),B{row_index},NA())',
-        )
-        ws.cell(
-            row_index,
-            30,
-            f'=IF(ISNUMBER(E{row_index}),D{row_index},NA())',
-        )
+        ws.cell(row_index, 29, f'=IF(ISNUMBER(E{row_index}),B{row_index},NA())')
+        ws.cell(row_index, 30, f'=IF(ISNUMBER(E{row_index}),D{row_index},NA())')
         ws.cell(row_index, 1).number_format = "dd-mmm-yyyy"
         for column in (2, 3, 4, 5, 29, 30):
             ws.cell(row_index, column).number_format = "#,##0.00"
-
     chart_last_row = max(2, len(chart_points) + 1)
 
-    # Reuse Dashboard_Data!K whenever it exists. EV_Data owns a cutoff list only
-    # as a compatibility fallback for standalone workbooks without the normal
-    # Progress Studio monthly reporting calendar.
     options = _selectable_cutoffs(workbook, result)
     if _dashboard_monthly_cutoff_range(workbook, result) is None:
         ws["H1"] = "Cutoff Options"
@@ -747,87 +868,175 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
             ws.cell(row, 8, value)
             ws.cell(row, 8).number_format = "dd-mmm-yyyy"
 
-    # True WBS snapshots: resolve Activity ID -> current WBS row from main,
-    # then write every active WBS for every selectable Status Date.  No Top-8
-    # truncation is applied; the visible table can therefore grow to the actual
-    # management scope at the selected cutoff.
+    # One live Activity row per Activity. This deliberately mirrors the direct-
+    # to-main Activity Progress pattern: no Activity×time Python snapshot cache.
+    activity_start_col = 53  # BA
+    activity_headers = (
+        "Status Date", "Activity ID", "WBS", "WBS Name", "BAC",
+        "Plan Progress", "Actual Progress", "PV", "EV",
+    )
+    for col, header in enumerate(activity_headers, start=activity_start_col):
+        ws.cell(1, col, header)
     wbs_by_activity = _main_wbs_by_activity(workbook, result)
+    activity_first_row = 2
+    for offset, activity in enumerate(result.activities):
+        row = activity_first_row + offset
+        meta = wbs_by_activity.get(activity.activity_id)
+        wbs_code = meta.code if meta is not None else (activity.wbs.strip() or "(Unassigned WBS)")
+        wbs_name = meta.name if meta is not None else ""
+        ws.cell(row, activity_start_col, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, activity_start_col + 1, activity.activity_id)
+        ws.cell(row, activity_start_col + 2, wbs_code)
+        ws.cell(row, activity_start_col + 3, wbs_name)
+        ws.cell(row, activity_start_col + 4, float(activity.bac or 0.0))
+        source_rows = None if live is None else live.activity_rows.get(activity.activity_id)
+        if source_rows is not None:
+            plan_row, actual_row = source_rows
+            plan_formula = _main_progress_formula(live, plan_row, f"${get_column_letter(activity_start_col)}{row}")
+            actual_formula = _main_progress_formula(
+                live,
+                actual_row,
+                f"MIN(${get_column_letter(activity_start_col)}{row},$G$4)",
+            )
+            ws.cell(row, activity_start_col + 5, f"={plan_formula}")
+            ws.cell(row, activity_start_col + 6, f"={actual_formula}")
+            ws.cell(row, activity_start_col + 7, f"={get_column_letter(activity_start_col + 4)}{row}*{get_column_letter(activity_start_col + 5)}{row}")
+            ws.cell(row, activity_start_col + 8, f"={get_column_letter(activity_start_col + 4)}{row}*{get_column_letter(activity_start_col + 6)}{row}")
+        else:
+            status = _point_on_or_before(activity.points, result.cutoff_date, require_ev=True)
+            ws.cell(row, activity_start_col + 5, 0 if activity.bac in (None, 0) or status is None or status.planned_value is None else status.planned_value / activity.bac)
+            ws.cell(row, activity_start_col + 6, 0 if activity.bac in (None, 0) or status is None or status.earned_value is None else status.earned_value / activity.bac)
+            ws.cell(row, activity_start_col + 7, None if status is None else status.planned_value)
+            ws.cell(row, activity_start_col + 8, None if status is None else status.earned_value)
+        ws.cell(row, activity_start_col).number_format = "dd-mmm-yyyy"
+        for col in range(activity_start_col + 4, activity_start_col + 9):
+            ws.cell(row, col).number_format = "#,##0.00"
+    activity_last_row = max(2, activity_first_row + len(result.activities) - 1)
+
+    # WBS interface J:S is kept stable for the existing dashboard, but its rows
+    # are now live formulas over the one-row-per-Activity helper above.
     for col, header in enumerate(
         ("Lookup Key", "Snapshot Date", "Rank", "WBS", "WBS Name", "BAC", "PV", "EV", "SV", "SPI"),
         start=10,
     ):
         ws.cell(1, col, header)
-    wbs_row = 2
-    wbs_display_rows = 0
-    for cutoff in options:
-        active_rows = _ranked_wbs_performance_at(
-            result, cutoff, wbs_by_activity=wbs_by_activity
-        )
-        wbs_display_rows = max(wbs_display_rows, len(active_rows))
-        for rank, perf in enumerate(active_rows, start=1):
-            key = f"{cutoff:%Y%m%d}|{rank}"
-            values = (
-                key, cutoff, rank, perf.label, perf.name, perf.bac, perf.planned_value,
-                perf.earned_value, perf.schedule_variance, perf.schedule_performance_index,
-            )
-            for col, value in enumerate(values, start=10):
-                ws.cell(wbs_row, col, value)
-            ws.cell(wbs_row, 11).number_format = "dd-mmm-yyyy"
-            for col in (15, 16, 17, 18):
-                ws.cell(wbs_row, col).number_format = "#,##0.00"
-            ws.cell(wbs_row, 19).number_format = "0.00"
-            wbs_row += 1
-    wbs_last_row = max(2, wbs_row - 1)
+    unique_wbs: dict[str, _MainWBS] = {}
+    for activity in result.activities:
+        meta = wbs_by_activity.get(activity.activity_id)
+        if meta is None:
+            code = activity.wbs.strip() or "(Unassigned WBS)"
+            unique_wbs.setdefault(code, _MainWBS(code, "", 10**9))
+        else:
+            unique_wbs.setdefault(meta.code, meta)
+    wbs_items = sorted(unique_wbs.values(), key=lambda item: (item.order, item.code.casefold()))
+    act_wbs_col = get_column_letter(activity_start_col + 2)
+    act_bac_col = get_column_letter(activity_start_col + 4)
+    act_pv_col = get_column_letter(activity_start_col + 7)
+    act_ev_col = get_column_letter(activity_start_col + 8)
+    for offset, meta in enumerate(wbs_items, start=0):
+        row = 2 + offset
+        ws.cell(row, 11, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, 13, meta.code)
+        ws.cell(row, 14, meta.name)
+        ws.cell(row, 15, f'=SUMIFS(${act_bac_col}$2:${act_bac_col}${activity_last_row},${act_wbs_col}$2:${act_wbs_col}${activity_last_row},M{row})')
+        ws.cell(row, 16, f'=SUMIFS(${act_pv_col}$2:${act_pv_col}${activity_last_row},${act_wbs_col}$2:${act_wbs_col}${activity_last_row},M{row})')
+        ws.cell(row, 17, f'=SUMIFS(${act_ev_col}$2:${act_ev_col}${activity_last_row},${act_wbs_col}$2:${act_wbs_col}${activity_last_row},M{row})')
+        ws.cell(row, 18, f'=Q{row}-P{row}')
+        ws.cell(row, 19, f'=IF(P{row}=0,0,Q{row}/P{row})')
+        ws.cell(row, 12, f'=IF(P{row}<=0,"",COUNTIF($P$2:P{row},">0"))')
+        ws.cell(row, 10, f'=IF(L{row}="","",TEXT(K{row},"yyyymmdd")&"|"&L{row})')
+        ws.cell(row, 11).number_format = "dd-mmm-yyyy"
+        for col in (15, 16, 17, 18):
+            ws.cell(row, col).number_format = "#,##0.00"
+        ws.cell(row, 19).number_format = "0.00"
+    wbs_last_row = max(2, len(wbs_items) + 1)
+    wbs_display_rows = max(1, len(wbs_items))
 
-    # Top 10 BOQ exceptions, now carrying the stable Activity ID(s) from the
-    # embedded mapping provenance so repeated BOQ descriptions are traceable.
+    # Mapping helper: allocation amounts remain structural/BAC authority; only
+    # the linked Activity Plan/Actual progress is live.
+    mapping_start_col = 62  # BJ
+    mapping_headers = ("BOQ Key", "Activity ID", "Allocated BAC", "PV", "EV")
+    for col, header in enumerate(mapping_headers, start=mapping_start_col):
+        ws.cell(1, col, header)
+    activity_id_col = get_column_letter(activity_start_col + 1)
+    activity_plan_col = get_column_letter(activity_start_col + 5)
+    activity_actual_col = get_column_letter(activity_start_col + 6)
+    mapping_first_row = 2
+    for offset, (boq_key, activity_id, allocated) in enumerate(allocations):
+        row = mapping_first_row + offset
+        ws.cell(row, mapping_start_col, boq_key)
+        ws.cell(row, mapping_start_col + 1, activity_id)
+        ws.cell(row, mapping_start_col + 2, allocated)
+        lookup_range = f'${activity_id_col}$2:${get_column_letter(activity_start_col + 8)}${activity_last_row}'
+        ws.cell(row, mapping_start_col + 3, f'=IFERROR({get_column_letter(mapping_start_col + 2)}{row}*VLOOKUP({get_column_letter(mapping_start_col + 1)}{row},{lookup_range},5,FALSE),0)')
+        ws.cell(row, mapping_start_col + 4, f'=IFERROR({get_column_letter(mapping_start_col + 2)}{row}*VLOOKUP({get_column_letter(mapping_start_col + 1)}{row},{lookup_range},6,FALSE),0)')
+        for col in range(mapping_start_col + 2, mapping_start_col + 5):
+            ws.cell(row, col).number_format = "#,##0.00"
+    mapping_last_row = max(2, mapping_first_row + len(allocations) - 1)
+
+    # BOQ interface AE:AK: one row per BOQ, selected Status Date only. This is
+    # live and O(BOQ), not BOQ×time. Existing EV Table SUMIFS remain compatible.
+    boq_headers = ("BOQ Snapshot Date", "BOQ Key", "BOQ PV", "BOQ EV", "BOQ SV", "BOQ SPI", "Negative Rank")
+    for col, header in enumerate(boq_headers, start=31):
+        ws.cell(1, col, header)
+    mapping_boq_col = get_column_letter(mapping_start_col)
+    mapping_pv_col = get_column_letter(mapping_start_col + 3)
+    mapping_ev_col = get_column_letter(mapping_start_col + 4)
+    boq_first_row = 2
+    for offset, boq in enumerate(result.boq_items):
+        row = boq_first_row + offset
+        ws.cell(row, 31, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, 32, boq.boq_key)
+        if allocations:
+            ws.cell(row, 33, f'=SUMIFS(${mapping_pv_col}$2:${mapping_pv_col}${mapping_last_row},${mapping_boq_col}$2:${mapping_boq_col}${mapping_last_row},AF{row})')
+            ws.cell(row, 34, f'=SUMIFS(${mapping_ev_col}$2:${mapping_ev_col}${mapping_last_row},${mapping_boq_col}$2:${mapping_boq_col}${mapping_last_row},AF{row})')
+        else:
+            status = _point_on_or_before(boq.points, result.cutoff_date, require_ev=True)
+            ws.cell(row, 33, None if status is None else status.planned_value)
+            ws.cell(row, 34, None if status is None else status.earned_value)
+        ws.cell(row, 35, f'=AH{row}-AG{row}')
+        ws.cell(row, 36, f'=IF(AG{row}=0,0,AH{row}/AG{row})')
+        # Unique ascending negative rank; row-order breaks exact SV ties.
+        ws.cell(row, 37, f'=IF(AI{row}>=0,"",COUNTIF($AI$2:$AI${max(2, len(result.boq_items)+1)},"<"&AI{row})+COUNTIF($AI$2:AI{row},AI{row}))')
+        ws.cell(row, 31).number_format = "dd-mmm-yyyy"
+        for col in (33, 34, 35):
+            ws.cell(row, col).number_format = "#,##0.00"
+        ws.cell(row, 36).number_format = "0.00"
+    boq_snapshot_last_row = max(2, len(result.boq_items) + 1)
+
+    # Top-10 interface T:Z stays stable, but now looks up the live BOQ ranking.
     activity_ids_by_boq = _activity_ids_by_boq_from_mapping(workbook)
+    metadata = _boq_metadata_from_mapping(workbook)
     for col, header in enumerate(
         ("Lookup Key", "Snapshot Date", "Rank", "Activity ID", "BOQ / Work", "SV", "SPI"),
         start=20,
     ):
         ws.cell(1, col, header)
-    neg_row = 2
-    for cutoff in options:
-        for rank, perf in enumerate(
-            _negative_boq_variance_at(
-                result, cutoff, activity_ids_by_boq=activity_ids_by_boq
-            )[:10],
-            start=1,
-        ):
-            key = f"{cutoff:%Y%m%d}|{rank}"
-            values = (
-                key, cutoff, rank, perf.activity_id, perf.label,
-                perf.schedule_variance, perf.schedule_performance_index,
-            )
-            for col, value in enumerate(values, start=20):
-                ws.cell(neg_row, col, value)
-            ws.cell(neg_row, 21).number_format = "dd-mmm-yyyy"
-            ws.cell(neg_row, 25).number_format = "#,##0.00"
-            ws.cell(neg_row, 26).number_format = "0.00"
-            neg_row += 1
-    negative_last_row = max(2, neg_row - 1)
+    boq_rank_range = f'$AK$2:$AK${boq_snapshot_last_row}'
+    for rank in range(1, 11):
+        row = rank + 1
+        ws.cell(row, 21, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, 22, rank)
+        ws.cell(row, 20, f'=TEXT(U{row},"yyyymmdd")&"|"&V{row}')
+        # Store static fallback labels beside the live lookup through INDEX/MATCH.
+        ws.cell(row, 23, f'=IFERROR(INDEX($BO$2:$BO${boq_snapshot_last_row},MATCH(V{row},{boq_rank_range},0)),"")')
+        ws.cell(row, 24, f'=IFERROR(INDEX($BP$2:$BP${boq_snapshot_last_row},MATCH(V{row},{boq_rank_range},0)),"")')
+        ws.cell(row, 25, f'=IFERROR(INDEX($AI$2:$AI${boq_snapshot_last_row},MATCH(V{row},{boq_rank_range},0)),"")')
+        ws.cell(row, 26, f'=IFERROR(INDEX($AJ$2:$AJ${boq_snapshot_last_row},MATCH(V{row},{boq_rank_range},0)),"")')
+        ws.cell(row, 21).number_format = "dd-mmm-yyyy"
+        ws.cell(row, 25).number_format = "#,##0.00"
+        ws.cell(row, 26).number_format = "0.00"
 
-    # EV-6 compact BOQ snapshots.  Only date/key/PV/EV are repeated per
-    # selectable Status Date; BOQ labels, WBS and BAC remain one-time values on
-    # the visible EV Table.  This keeps the helper payload materially smaller
-    # than a BOQ-by-week matrix.
-    for col, header in enumerate(("BOQ Snapshot Date", "BOQ Key", "BOQ PV", "BOQ EV"), start=31):
-        ws.cell(1, col, header)
-    boq_row = 2
-    for cutoff in options:
-        for boq in result.boq_items:
-            status = _point_on_or_before(boq.points, cutoff, require_ev=True)
-            ws.cell(boq_row, 31, cutoff)
-            ws.cell(boq_row, 32, boq.boq_key)
-            ws.cell(boq_row, 33, None if status is None else status.planned_value)
-            ws.cell(boq_row, 34, None if status is None else status.earned_value)
-            ws.cell(boq_row, 31).number_format = "dd-mmm-yyyy"
-            ws.cell(boq_row, 33).number_format = "#,##0.00"
-            ws.cell(boq_row, 34).number_format = "#,##0.00"
-            boq_row += 1
-    boq_snapshot_last_row = max(2, boq_row - 1)
+    # BO:BP provide BOQ Activity ID / display label aligned with AE:AK rows.
+    ws["BO1"] = "Activity ID"
+    ws["BP1"] = "BOQ / Work"
+    for offset, boq in enumerate(result.boq_items):
+        row = boq_first_row + offset
+        mapped = metadata.get(boq.boq_key, ("", "", "", "", ""))
+        ws.cell(row, 67, activity_ids_by_boq.get(boq.boq_key, ""))
+        ws.cell(row, 68, mapped[4] or boq.description or boq.stable_id or boq.boq_key)
 
+    negative_last_row = 11
     return _EVDataLayout(
         chart_last_row,
         status_top,
@@ -845,8 +1054,8 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
     - monthly PV/EV management curve plus exact Status Date marker,
     - WBS performance summary,
     - top negative BOQ variance,
-    - hidden ``EV_Data`` chart/snapshot source,
-    - EV-6 BOQ snapshot table with native Excel filter/sort.
+    - hidden ``EV_Data`` live formula source,
+    - EV-6 BOQ table with native Excel filter/sort.
     """
     _remove_owned_sheets(workbook)
     data_layout = _write_ev_data(workbook, result)
