@@ -240,35 +240,22 @@ def _cutoff_options(result: EarnedValueResult) -> tuple[datetime, ...]:
 
 
 def _dashboard_monthly_cutoff_range(workbook, result: EarnedValueResult) -> tuple[str, int] | None:
-    """Return the existing Dashboard_Data monthly cutoff list when compatible.
+    """Return the complete canonical Dashboard_Data monthly cutoff list.
 
-    Dashboard_Data!K is already the canonical list used by Dashboard and the
-    traditional monthly view.  Reuse it instead of creating another project
-    calendar.  Only the prefix through the current EV cutoff is exposed.
+    Dashboard_Data!K is already the monthly reporting calendar used by the
+    existing Progress Dashboard/main_monthly views. EV consumes that calendar
+    as-is; its selected Status Date must not truncate or redefine the list.
     """
     if DASHBOARD_DATA_SHEET not in workbook.sheetnames:
         return None
     ws = workbook[DASHBOARD_DATA_SHEET]
-    cutoff = _as_datetime(result.cutoff_date)
     last_row = 1
-    values: list[datetime] = []
     for row in range(2, ws.max_row + 1):
-        value = _as_datetime(ws.cell(row, 11).value)
-        if value is None:
-            continue
-        if cutoff is not None and value > cutoff:
-            break
-        values.append(value)
-        last_row = row
+        if _as_datetime(ws.cell(row, 11).value) is not None:
+            last_row = row
     if last_row < 2:
         return None
-    # A mid-period exact cutoff is valid EV state but is not part of the monthly
-    # Dashboard list.  In that case use EV_Data's fallback list so the current
-    # value remains a valid validation choice.
-    if cutoff is not None and cutoff not in values:
-        return None
     return (DASHBOARD_DATA_SHEET, last_row)
-
 
 def _add_cutoff_dropdown(workbook, ws, data_ws, result: EarnedValueResult) -> None:
     """Add the EV Status Date selector using the existing monthly cutoff source."""
@@ -497,7 +484,7 @@ def _activity_ids_by_boq_from_mapping(workbook) -> dict[str, str]:
 
 
 def _selectable_cutoffs(workbook, result: EarnedValueResult) -> tuple[datetime, ...]:
-    """Reuse Dashboard_Data monthly cutoffs when they cover the current EV cutoff."""
+    """Reuse the complete canonical Dashboard_Data monthly cutoff list."""
     dashboard_range = _dashboard_monthly_cutoff_range(workbook, result)
     if dashboard_range is None:
         return _cutoff_options(result)
@@ -750,9 +737,9 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
 
     chart_last_row = max(2, len(chart_points) + 1)
 
-    # Reuse Dashboard_Data!K whenever possible.  EV_Data owns a cutoff list only
-    # as a fallback for standalone/mid-period workbooks that have no compatible
-    # Dashboard monthly calendar.
+    # Reuse Dashboard_Data!K whenever it exists. EV_Data owns a cutoff list only
+    # as a compatibility fallback for standalone workbooks without the normal
+    # Progress Studio monthly reporting calendar.
     options = _selectable_cutoffs(workbook, result)
     if _dashboard_monthly_cutoff_range(workbook, result) is None:
         ws["H1"] = "Cutoff Options"

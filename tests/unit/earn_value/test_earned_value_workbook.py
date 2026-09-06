@@ -220,13 +220,14 @@ def test_ev5_reuses_dashboard_data_monthly_cutoff_list() -> None:
     dashboard_data["K1"] = "Monthly Cutoff"
     dashboard_data["K2"] = datetime(2026, 1, 30)
     dashboard_data["K3"] = datetime(2026, 2, 13)
-    dashboard_data["K4"] = datetime(2026, 2, 27)  # future vs current EV cutoff
+    # Canonical monthly date remains selectable even when later than EV reporting cutoff.
+    dashboard_data["K4"] = datetime(2026, 2, 27)
 
     render_earned_value_sheet(workbook, _result())
 
     ws = workbook[EARNED_VALUE_SHEET]
     validation = ws.data_validations.dataValidation[0]
-    assert validation.formula1 == '=INDIRECT("Dashboard_Data!$K$2:$K$3")'
+    assert validation.formula1 == '=INDIRECT("Dashboard_Data!$K$2:$K$4")'
 
 
 @pytest.mark.unit
