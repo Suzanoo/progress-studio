@@ -207,12 +207,14 @@ def test_ev_rebuild_refuses_in_place_output(tmp_path: Path) -> None:
         _service().generate(source, source)
 
 @pytest.mark.unit
-def test_ev_rebuild_reads_existing_ev_status_date_before_dashboard(tmp_path: Path) -> None:
+def test_ev_rebuild_uses_dashboard_reporting_cutoff_instead_of_ev_view_date(
+    tmp_path: Path,
+) -> None:
     source = _source_workbook(tmp_path, earned_value=True)
-    selected = datetime(2026, 7, 31)
+    selected_view_date = datetime(2026, 7, 31)
     workbook = load_workbook(source)
-    workbook["Earned Value"]["M3"] = selected
+    workbook["Earned Value"]["M3"] = selected_view_date
     workbook.save(source)
     workbook.close()
 
-    assert EarnedValueRebuildService._read_cutoff(source) == selected
+    assert EarnedValueRebuildService._read_cutoff(source) == CUTOFF

@@ -238,11 +238,8 @@ class EarnedValueRebuildService:
             keep_vba=keep_vba,
         )
         try:
-            if EARNED_VALUE_SHEET in workbook.sheetnames:
-                cutoff = _as_datetime(workbook[EARNED_VALUE_SHEET]["M3"].value)
-                if cutoff is not None:
-                    return cutoff
-
+            # Earned Value!M3 is dashboard view state only. The authoritative
+            # reporting context remains the normal Progress Studio cutoff.
             if "Dashboard" in workbook.sheetnames:
                 cutoff = _as_datetime(workbook["Dashboard"]["K5"].value)
                 if cutoff is not None:
