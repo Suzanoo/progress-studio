@@ -192,10 +192,10 @@ def test_ev_rebuild_uses_main_cutoff_as_fallback(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_ev_rebuild_hard_stops_without_cutoff(tmp_path: Path) -> None:
+def test_ev_rebuild_without_saved_cutoff_requires_main_reporting_dates(tmp_path: Path) -> None:
     source = _source_workbook(tmp_path, cutoff=None)
 
-    with pytest.raises(EarnedValueRebuildError, match="requires a reporting cutoff date"):
+    with pytest.raises(EarnedValueRebuildError, match="requires at least one valid reporting date"):
         _service().analyze(source)
 
 

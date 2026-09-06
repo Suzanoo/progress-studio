@@ -93,13 +93,13 @@ def test_bf1_stale_ev_view_never_overrides_dashboard_reporting_cutoff(
 
 
 @pytest.mark.unit
-def test_bf1_stale_ev_view_never_becomes_fallback_reporting_cutoff(
+def test_bf1_stale_ev_view_is_not_used_when_no_saved_view_seed_exists(
     tmp_path: Path,
 ) -> None:
     path = _workbook_with_dashboard(tmp_path, cutoff=None)
     assert EarnedValueRebuildService._read_cutoff(path) is None
     with pytest.raises(
-        EarnedValueRebuildError, match="requires a reporting cutoff date"
+        EarnedValueRebuildError, match="requires at least one valid reporting date"
     ):
         _service().analyze(path)
 
@@ -181,10 +181,43 @@ def test_bf2_standalone_workbook_keeps_ev_data_fallback_calendar() -> None:
     validation = ev.data_validations.dataValidation[0]
 
     assert "EV_Data!$H$2:$H$" in validation.formula1
-    assert data["H1"].value == "Cutoff Options"
+    assert data["H1"].value == "View Date Options"
     options = [
         data.cell(row, 8).value
         for row in range(2, data.max_row + 1)
         if isinstance(data.cell(row, 8).value, datetime)
     ]
-    assert options == [datetime(2026, 1, 30), datetime(2026, 2, 13)]
+    assert options == [datetime(2026, 1, 30), datetime(2026, 2, 27), datetime(2026, 3, 27)]
+
+@pytest.mark.unit
+def test_ev_initial_view_prefers_latest_actual_month_over_stale_dashboard_cutoff(
+    tmp_path: Path,
+) -> None:
+    class _Period:
+        def __init__(self, column: int, reporting_date: datetime) -> None:
+            self.column = column
+            self.reporting_date = reporting_date
+
+    class _Row:
+        pa = "A"
+        activity_id = "A1"
+
+        def __init__(self, values: dict[int, float | None]) -> None:
+            self._values = values
+
+        def period_value(self, column: int):
+            return self._values.get(column)
+
+    path = _workbook_with_dashboard(tmp_path, cutoff=datetime(2026, 4, 24))
+    dataset = SimpleNamespace(
+        periods=(
+            _Period(18, datetime(2026, 4, 24)),
+            _Period(19, datetime(2026, 8, 14)),
+            _Period(20, datetime(2026, 8, 28)),
+        ),
+        rows=(_Row({18: 0.10, 19: 0.20, 20: None}),),
+    )
+
+    # Actual exists in August even though Dashboard still shows April. The EV
+    # initial view uses the final August reporting point, not Dashboard cutoff.
+    assert EarnedValueRebuildService._initial_view_date(path, dataset) == datetime(2026, 8, 28)

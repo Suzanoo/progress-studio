@@ -108,19 +108,24 @@ def test_ev_l3_dataset_reads_plan_actual_live_from_main() -> None:
     render_earned_value_sheet(workbook, _result(), include_chart=False)
 
     data = workbook[EV_DATA_SHEET]
-    assert data["G4"].value == "=Dashboard!$K$5"
+    assert data["G4"].value is None
+    assert workbook.defined_names["EV_View_Date"].attr_text == "'Earned Value'!$M$3"
 
     # Project chart values are formulas over current main progress, not EV-1 values.
     assert "SUMIFS(main!" in data["B2"].value
     assert "SUMIFS(main!" in data["C2"].value
-    assert "MIN(A2,$G$4)" in data["C2"].value
+    assert "MIN(" not in data["C2"].value
+    assert "Dashboard!" not in data["C2"].value
 
     # BA:BI is one row per Activity and derives selected-date Plan/Actual from main.
-    assert data["BA2"].value == "='Earned Value'!$M$3"
+    assert data["BA2"].value == "=EV_View_Date"
     assert data["BB2"].value == "A1"
     assert "SUMIFS(main!" in data["BF2"].value
     assert "SUMIFS(main!" in data["BG2"].value
-    assert "MIN($BA2,$G$4)" in data["BG2"].value
+    assert '"<="&EV_View_Date' in data["BF2"].value
+    assert '"<="&EV_View_Date' in data["BG2"].value
+    assert "MIN(" not in data["BG2"].value
+    assert "Dashboard!" not in data["BG2"].value
     assert data["BH2"].value == "=BE2*BF2"
     assert data["BI2"].value == "=BE2*BG2"
 
@@ -135,28 +140,28 @@ def test_ev_l3_wbs_boq_and_table_use_live_selected_date_layer() -> None:
     table = workbook[EV_TABLE_SHEET]
 
     # WBS interface remains compatible with the dashboard but is no longer a
-    # Python date snapshot: it follows M3 and aggregates live Activity formulas.
-    assert data["K2"].value == "='Earned Value'!$M$3"
+    # Python date snapshot: it follows the semantic view date and live Activity formulas.
+    assert data["K2"].value == "=EV_View_Date"
     assert "SUMIFS(" in data["P2"].value
     assert "SUMIFS(" in data["Q2"].value
     assert "TEXT(K2" in data["J2"].value
 
     # AE:AK is one live row per BOQ; mapping BAC is static while PV/EV are live.
-    assert data["AE2"].value == "='Earned Value'!$M$3"
+    assert data["AE2"].value == "=EV_View_Date"
     assert data["AF2"].value == "B1"
     assert "SUMIFS(" in data["AG2"].value
     assert "SUMIFS(" in data["AH2"].value
     assert data["AI2"].value == "=AH2-AG2"
 
     # Existing visible views remain wired to the stable EV_Data interfaces.
-    assert 'TEXT($M$3,"yyyymmdd")' in ev["A32"].value
-    assert table["B3"].value == "='Earned Value'!$M$3"
+    assert 'TEXT(EV_View_Date,"yyyymmdd")' in ev["A32"].value
+    assert table["B3"].value == "=EV_View_Date"
     assert "EV_Data!$AG$2:$AG$" in table["G6"].value
     assert "EV_Data!$AH$2:$AH$" in table["H6"].value
 
 
 @pytest.mark.unit
-def test_ev_l3_future_view_freezes_actual_at_reporting_cutoff() -> None:
+def test_ev_l3_actual_is_live_through_view_date_and_independent_from_dashboard_cutoff() -> None:
     workbook = _live_workbook()
     render_earned_value_sheet(workbook, _result(), include_chart=False)
 
@@ -164,11 +169,19 @@ def test_ev_l3_future_view_freezes_actual_at_reporting_cutoff() -> None:
     ev = workbook[EARNED_VALUE_SHEET]
     ev["M3"] = datetime(2026, 8, 28)
 
-    # Excel evaluates these formulas. The contract is encoded by MIN(M3, G4):
-    # Plan reads through M3; Actual freezes at Dashboard!K5 when M3 is later.
-    assert "<=\"&$BA2" in data["BF2"].value
-    assert "MIN($BA2,$G$4)" in data["BG2"].value
-    assert data["G4"].value == "=Dashboard!$K$5"
+    # Both Plan and Actual read cumulative main values through the same semantic
+    # view date. Dashboard!K5 is presentation state for Dashboard only.
+    assert '"<="&EV_View_Date' in data["BF2"].value
+    assert '"<="&EV_View_Date' in data["BG2"].value
+    assert "MIN(" not in data["BG2"].value
+    assert "Dashboard!$K$5" not in data["BG2"].value
+    assert data["G4"].value is None
+
+    # Project Actual curve is likewise independent from Dashboard cutoff.
+    assert "SUMIFS(main!" in data["C4"].value
+    assert "MIN(" not in data["C4"].value
+    assert "Dashboard!" not in data["C4"].value
+
 
 @pytest.mark.unit
 def test_ev_l4_all_visible_views_share_live_m3_dataset() -> None:
@@ -179,17 +192,19 @@ def test_ev_l4_all_visible_views_share_live_m3_dataset() -> None:
     ev = workbook[EARNED_VALUE_SHEET]
     table = workbook[EV_TABLE_SHEET]
 
-    # KPI cards read the live chart interface selected by M3.
+    # KPI cards read the live chart interface through the semantic view date.
     assert "EV_Data!$B$2:$B$" in ev["D6"].value
-    assert "$M$3" in ev["D6"].value
+    assert "EV_View_Date" in ev["D6"].value
+    assert "$M$3" not in ev["D6"].value
     assert "EV_Data!$D$2:$D$" in ev["G6"].value
-    assert "$M$3" in ev["G6"].value
+    assert "EV_View_Date" in ev["G6"].value
+    assert "$M$3" not in ev["G6"].value
     assert ev["J6"].value == "=G6-D6"
     assert ev["M6"].value == '=IF(D6=0,0,G6/D6)'
 
     # WBS dashboard cells still use the stable J:S interface, whose values are
     # formulas over the live Activity layer rather than Python date snapshots.
-    assert 'TEXT($M$3,"yyyymmdd")' in ev["A32"].value
+    assert 'TEXT(EV_View_Date,"yyyymmdd")' in ev["A32"].value
     assert "SUMIFS(" in data["P2"].value
     assert "SUMIFS(" in data["Q2"].value
 
@@ -197,10 +212,10 @@ def test_ev_l4_all_visible_views_share_live_m3_dataset() -> None:
     assert data["T2"].value == '=TEXT(U2,"yyyymmdd")&"|"&V2'
     assert "INDEX($AI$2:$AI$" in data["Y2"].value
     assert "INDEX($AJ$2:$AJ$" in data["Z2"].value
-    assert 'TEXT($M$3,"yyyymmdd")' in ev["I32"].value
+    assert 'TEXT(EV_View_Date,"yyyymmdd")' in ev["I32"].value
 
     # EV Table shares the same selected-date BOQ interface.
-    assert table["B3"].value == "='Earned Value'!$M$3"
+    assert table["B3"].value == "=EV_View_Date"
     assert "EV_Data!$AG$2:$AG$" in table["G6"].value
     assert "EV_Data!$AH$2:$AH$" in table["H6"].value
     assert table["I6"].value == "=H6-G6"
@@ -217,5 +232,30 @@ def test_ev_l4_status_date_is_presented_as_view_state_not_cutoff() -> None:
 
     assert validation.prompt == "Choose the Earned Value view date."
     assert "view selector only" in ev["M3"].comment.text
-    assert "without changing the project reporting cutoff" in ev["M3"].comment.text
-    assert workbook[EV_DATA_SHEET]["G4"].value == "=Dashboard!$K$5"
+    assert "current Plan/Actual values in main" in ev["M3"].comment.text
+    assert workbook.defined_names["EV_View_Date"].attr_text == "'Earned Value'!$M$3"
+    assert workbook[EV_DATA_SHEET]["G4"].value is None
+
+@pytest.mark.unit
+def test_ev_live_formulas_do_not_depend_on_dashboard_cutoff_or_physical_m3() -> None:
+    workbook = _live_workbook()
+    render_earned_value_sheet(workbook, _result(), include_chart=True)
+
+    assert workbook.defined_names["EV_View_Date"].attr_text == "'Earned Value'!$M$3"
+
+    formula_cells: list[str] = []
+    for sheet_name in (EARNED_VALUE_SHEET, EV_DATA_SHEET, EV_TABLE_SHEET):
+        ws = workbook[sheet_name]
+        formula_cells.extend(
+            str(cell.value)
+            for row in ws.iter_rows()
+            for cell in row
+            if isinstance(cell.value, str) and cell.value.startswith("=")
+        )
+
+    formula_text = "\n".join(formula_cells)
+    assert "Dashboard!$K$5" not in formula_text
+    assert "Dashboard!" not in formula_text
+    assert "'Earned Value'!$M$3" not in formula_text
+    assert "$M$3" not in formula_text
+    assert "EV_View_Date" in formula_text

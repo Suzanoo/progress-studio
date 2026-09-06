@@ -75,8 +75,10 @@ def _as_datetime(value: object) -> datetime | None:
 class EarnedValueRebuildService:
     """Standalone EV extension used by the Rebuild workspace.
 
-    EV reads current ``main`` progress values, embedded BOQ/mapping provenance,
-    and the reporting cutoff. It mutates only EV-owned workbook presentation:
+    EV reads current ``main`` progress values and embedded BOQ/mapping provenance.
+    A current reporting control may seed the initial EV view date, but it is not
+    required as a post-rebuild calculation authority. The service mutates only
+    EV-owned workbook presentation:
     ``Earned Value`` and ``EV_Data``.
 
     The source workbook is copied to a temporary output, opened once as a normal
@@ -184,7 +186,7 @@ class EarnedValueRebuildService:
         try:
             embedded = self.input_reader.read(path)
             dataset = self.main_reader.read_main_dataset(path)
-            cutoff = self._require_cutoff(path)
+            cutoff = self._initial_view_date(path, dataset)
             result = self.deriver.derive(
                 dataset,
                 embedded.boq_rows,
@@ -219,14 +221,71 @@ class EarnedValueRebuildService:
             len(embedded.allocations),
         )
 
-    def _require_cutoff(self, path: Path) -> datetime:
-        cutoff = self._read_cutoff(path)
-        if cutoff is None:
-            raise EarnedValueRebuildError(
-                "Earned Value requires a reporting cutoff date. "
-                "Save a valid cutoff in Dashboard!K5 or the main Cutoff Date control."
-            )
-        return cutoff
+    @classmethod
+    def _initial_view_date(cls, path: Path, dataset) -> datetime:
+        """Resolve the initial EV view without making Dashboard cutoff authoritative.
+
+        Prefer the latest month containing real Actual progress in ``main`` and
+        select that month's final reporting period. Existing Dashboard/main cutoff
+        controls are only a fallback seed. If neither exists, use the latest
+        project reporting period.
+        """
+        periods = tuple(getattr(dataset, "periods", ()) or ())
+        rows = tuple(getattr(dataset, "rows", ()) or ())
+        actual_rows = tuple(
+            row for row in rows
+            if str(getattr(row, "pa", "") or "").strip().upper() == "A"
+            and str(getattr(row, "activity_id", "") or "").strip()
+        )
+
+        latest_actual: datetime | None = None
+        for period in periods:
+            reporting_date = _as_datetime(getattr(period, "reporting_date", None))
+            if reporting_date is None:
+                continue
+            has_actual = False
+            for row in actual_rows:
+                try:
+                    value = row.period_value(period.column)
+                except (AttributeError, TypeError):
+                    value = None
+                if value not in (None, ""):
+                    try:
+                        has_actual = abs(float(value)) > 1e-12
+                    except (TypeError, ValueError):
+                        has_actual = False
+                if has_actual:
+                    break
+            if has_actual and (latest_actual is None or reporting_date > latest_actual):
+                latest_actual = reporting_date
+
+        if latest_actual is not None:
+            same_month = [
+                _as_datetime(getattr(period, "reporting_date", None))
+                for period in periods
+                if _as_datetime(getattr(period, "reporting_date", None)) is not None
+                and _as_datetime(getattr(period, "reporting_date", None)).year == latest_actual.year
+                and _as_datetime(getattr(period, "reporting_date", None)).month == latest_actual.month
+            ]
+            if same_month:
+                return max(same_month)
+            return latest_actual
+
+        saved_view_seed = cls._read_cutoff(path)
+        if saved_view_seed is not None:
+            return saved_view_seed
+
+        reporting_dates = [
+            value
+            for period in periods
+            if (value := _as_datetime(getattr(period, "reporting_date", None))) is not None
+        ]
+        if reporting_dates:
+            return max(reporting_dates)
+
+        raise EarnedValueRebuildError(
+            "Earned Value requires at least one valid reporting date in worksheet 'main'."
+        )
 
     @staticmethod
     def _read_cutoff(path: Path) -> datetime | None:
@@ -238,8 +297,8 @@ class EarnedValueRebuildService:
             keep_vba=keep_vba,
         )
         try:
-            # Earned Value!M3 is dashboard view state only. The authoritative
-            # reporting context remains the normal Progress Studio cutoff.
+            # Earned Value!M3 is never used as a rebuild input. Existing Progress
+            # controls are only fallback seeds for the initial EV view date.
             if "Dashboard" in workbook.sheetnames:
                 cutoff = _as_datetime(workbook["Dashboard"]["K5"].value)
                 if cutoff is not None:

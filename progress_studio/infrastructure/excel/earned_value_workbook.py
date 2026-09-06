@@ -29,11 +29,13 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
     _LAYOUT as DASHBOARD_LAYOUT,
     _date_axis_for_line_chart,
 )
+from progress_studio.infrastructure.excel.progress_workbook import replace_defined_name
 
 
 EARNED_VALUE_SHEET = "Earned Value"
 EV_TABLE_SHEET = "EV Table"
 EV_DATA_SHEET = "EV_Data"
+EV_VIEW_DATE_NAME = "EV_View_Date"
 _MAPPING_SHEET = "BOQ Activity Mapping"
 
 _FONT = DASHBOARD_FONT
@@ -126,13 +128,11 @@ def _point_on_or_before(
 
 
 def _monthly_chart_points(result: EarnedValueResult) -> tuple[_ChartPoint, ...]:
-    """Sample EV-1 weekly cumulative points for a monthly management view.
+    """Sample the latest real reporting point in each calendar month.
 
-    No interpolation occurs. For each calendar month we retain the latest source
-    point in that month. The cutoff month also receives an exact Status Date
-    point whose values are the latest proven weekly cumulative values at or
-    before cutoff. This preserves the weekly source contract while giving the
-    chart a true management reporting marker.
+    The chart calendar is structural and independent from any rebuild/reporting
+    cutoff. Selected-date masking and markers are formula-driven later through
+    ``EV_View_Date``.
     """
     source = tuple(
         sorted(
@@ -147,101 +147,40 @@ def _monthly_chart_points(result: EarnedValueResult) -> tuple[_ChartPoint, ...]:
     if not source:
         return ()
 
-    cutoff = _as_datetime(result.cutoff_date)
-    cutoff_date = cutoff.date() if cutoff is not None else None
-
-    by_month: dict[tuple[int, int], list[EarnedValuePoint]] = defaultdict(list)
+    by_month: dict[tuple[int, int], EarnedValuePoint] = {}
     for point in source:
         reporting = _as_datetime(point.reporting_date)
-        by_month[(reporting.year, reporting.month)].append(point)
+        by_month[(reporting.year, reporting.month)] = point
 
-    sampled: list[_ChartPoint] = []
-    cutoff_month = None if cutoff is None else (cutoff.year, cutoff.month)
-
-    for month_key in sorted(by_month):
-        month_points = by_month[month_key]
-        latest = month_points[-1]
-
-        if month_key != cutoff_month:
-            sampled.append(
-                _ChartPoint(
-                    reporting_date=_as_datetime(latest.reporting_date),
-                    planned_value=latest.planned_value,
-                    earned_value=latest.earned_value,
-                    point_type="Monthly",
-                )
-            )
-            continue
-
-        status_source = _point_on_or_before(
-            tuple(month_points),
-            cutoff,
-            require_ev=True,
+    return tuple(
+        _ChartPoint(
+            reporting_date=_as_datetime(point.reporting_date),
+            planned_value=point.planned_value,
+            earned_value=point.earned_value,
+            point_type="Monthly",
         )
-        if status_source is not None:
-            sampled.append(
-                _ChartPoint(
-                    reporting_date=cutoff,
-                    planned_value=status_source.planned_value,
-                    earned_value=status_source.earned_value,
-                    point_type="Status Date",
-                )
-            )
-
-        latest_date = _as_date(latest.reporting_date)
-        if (
-            cutoff_date is not None
-            and latest_date is not None
-            and latest_date > cutoff_date
-        ):
-            sampled.append(
-                _ChartPoint(
-                    reporting_date=_as_datetime(latest.reporting_date),
-                    planned_value=latest.planned_value,
-                    earned_value=None,
-                    point_type="Monthly",
-                )
-            )
-        elif status_source is None:
-            sampled.append(
-                _ChartPoint(
-                    reporting_date=_as_datetime(latest.reporting_date),
-                    planned_value=latest.planned_value,
-                    earned_value=latest.earned_value,
-                    point_type="Monthly",
-                )
-            )
-
-    sampled.sort(key=lambda point: point.reporting_date)
-    return tuple(sampled)
+        for _, point in sorted(by_month.items())
+    )
 
 
-def _cutoff_options(result: EarnedValueResult) -> tuple[datetime, ...]:
-    """Return valid EV Status Dates up to the authoritative reporting cutoff.
+def _view_date_options(result: EarnedValueResult) -> tuple[datetime, ...]:
+    """Return the complete EV monthly view-date calendar.
 
-    Reuse the same monthly reporting convention as Dashboard/main_monthly: the
-    final real weekly reporting point inside each calendar month.  EV may move
-    retrospectively to an earlier Status Date in Excel; a future Status Date must
-    first become the authoritative project cutoff and then be rebuilt by Python.
+    ``EV_View_Date`` is presentation state only, so selectable dates are not
+    truncated by the rebuild cutoff. When Dashboard_Data is unavailable this
+    fallback reuses the latest real reporting point in every project month.
     """
-    cutoff = _as_datetime(result.cutoff_date)
     by_month: dict[tuple[int, int], datetime] = {}
     for point in result.project_points:
         reporting = _as_datetime(point.reporting_date)
         if reporting is None:
             continue
-        if cutoff is not None and reporting > cutoff:
-            continue
         by_month[(reporting.year, reporting.month)] = reporting
-
-    values = set(by_month.values())
-    if cutoff is not None:
-        values.add(cutoff)
-    return tuple(sorted(values))
+    return tuple(sorted(by_month.values()))
 
 
-def _dashboard_monthly_cutoff_range(workbook, result: EarnedValueResult) -> tuple[str, int] | None:
-    """Return the complete canonical Dashboard_Data monthly cutoff list.
+def _dashboard_monthly_view_date_range(workbook, result: EarnedValueResult) -> tuple[str, int] | None:
+    """Return the complete canonical Dashboard_Data monthly view-date list.
 
     Dashboard_Data!K is already the monthly reporting calendar used by the
     existing Progress Dashboard/main_monthly views. EV consumes that calendar
@@ -258,9 +197,18 @@ def _dashboard_monthly_cutoff_range(workbook, result: EarnedValueResult) -> tupl
         return None
     return (DASHBOARD_DATA_SHEET, last_row)
 
-def _add_cutoff_dropdown(workbook, ws, data_ws, result: EarnedValueResult) -> None:
-    """Add the EV Status Date selector using the existing monthly cutoff source."""
-    options = _cutoff_options(result)
+def _bind_ev_view_date(workbook, ws, coordinate: str = "M3") -> None:
+    """Bind the semantic EV view-date name to the current dashboard control."""
+    replace_defined_name(
+        workbook,
+        EV_VIEW_DATE_NAME,
+        f"'{ws.title}'!${coordinate[0]}${coordinate[1:]}",
+    )
+
+
+def _add_view_date_dropdown(workbook, ws, result: EarnedValueResult) -> None:
+    """Add the EV Status Date selector using the canonical monthly view calendar."""
+    options = _view_date_options(result)
 
     ws["L3"] = "Status Date"
     ws["L3"].fill = _solid(_NAVY)
@@ -273,11 +221,12 @@ def _add_cutoff_dropdown(workbook, ws, data_ws, result: EarnedValueResult) -> No
     ws["M3"].alignment = Alignment(horizontal="center", vertical="center")
     ws["M3"].comment = Comment(
         "This Earned Value Status Date is a view selector only. It updates KPI, chart, WBS, "
-        "Top Negative and EV Table views in Excel without changing the project reporting cutoff.",
+        "Top Negative and EV Table views from the current Plan/Actual values in main.",
         "Progress Studio",
     )
+    _bind_ev_view_date(workbook, ws)
 
-    dashboard_range = _dashboard_monthly_cutoff_range(workbook, result)
+    dashboard_range = _dashboard_monthly_view_date_range(workbook, result)
     if dashboard_range is not None:
         sheet_name, last_row = dashboard_range
         formula1 = f'=INDIRECT("{sheet_name}!$K$2:$K${last_row}")'
@@ -605,11 +554,11 @@ def _activity_ids_by_boq_from_mapping(workbook) -> dict[str, str]:
     return {key: ", ".join(sorted(values)) for key, values in grouped.items()}
 
 
-def _selectable_cutoffs(workbook, result: EarnedValueResult) -> tuple[datetime, ...]:
-    """Reuse the complete canonical Dashboard_Data monthly cutoff list."""
-    dashboard_range = _dashboard_monthly_cutoff_range(workbook, result)
+def _selectable_view_dates(workbook, result: EarnedValueResult) -> tuple[datetime, ...]:
+    """Reuse the complete canonical Dashboard_Data monthly view-date list."""
+    dashboard_range = _dashboard_monthly_view_date_range(workbook, result)
     if dashboard_range is None:
-        return _cutoff_options(result)
+        return _view_date_options(result)
     sheet_name, last_row = dashboard_range
     ws = workbook[sheet_name]
     return tuple(
@@ -686,7 +635,7 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
             cell.fill = _solid(_NAVY)
 
     ws["A3"] = "Status Date"
-    ws["B3"] = f"='{EARNED_VALUE_SHEET}'!$M$3"
+    ws["B3"] = f"={EV_VIEW_DATE_NAME}"
     ws["B3"].number_format = "dd-mmm-yyyy"
     ws["D3"] = "BOQ Items"
     ws["E3"] = len(result.boq_items)
@@ -735,12 +684,12 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
         pv = (
             f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$AG$2:$AG${snapshot_last},'
             f'{EV_DATA_SHEET}!$AF$2:$AF${snapshot_last},$K{row},'
-            f'{EV_DATA_SHEET}!$AE$2:$AE${snapshot_last},$B$3),0)'
+            f'{EV_DATA_SHEET}!$AE$2:$AE${snapshot_last},{EV_VIEW_DATE_NAME}),0)'
         )
         ev = (
             f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$AH$2:$AH${snapshot_last},'
             f'{EV_DATA_SHEET}!$AF$2:$AF${snapshot_last},$K{row},'
-            f'{EV_DATA_SHEET}!$AE$2:$AE${snapshot_last},$B$3),0)'
+            f'{EV_DATA_SHEET}!$AE$2:$AE${snapshot_last},{EV_VIEW_DATE_NAME}),0)'
         )
         ws.cell(row, 7, pv)
         ws.cell(row, 8, ev)
@@ -799,15 +748,9 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     live = _main_live_contract(workbook, result)
     allocations = _mapping_allocations(workbook)
 
-    # Reporting context is independent from EV!M3. Keep it live when the normal
-    # Progress Dashboard exists; standalone workbooks retain the rebuild cutoff.
+    # EV View Date is the only live EV reporting control. Dashboard cutoff and
+    # the rebuild cutoff never constrain post-rebuild Plan/Actual calculation.
     ws["G1"] = "Status Top"
-    ws["G3"] = "Reporting Cutoff"
-    if "Dashboard" in workbook.sheetnames:
-        ws["G4"] = "=Dashboard!$K$5"
-    else:
-        ws["G4"] = result.cutoff_date
-    ws["G4"].number_format = "dd-mmm-yyyy"
 
     headers = ("Reporting Date", "PV", "EV Source", "EV", "Status Date", "Point Type")
     for column, header in enumerate(headers, start=1):
@@ -831,22 +774,22 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
             actual_progress = _main_progress_formula(
                 live,
                 live.project_actual_row,
-                f"MIN(A{row_index},$G$4)",
+                f"A{row_index}",
             )
             ws.cell(row_index, 3, f"={float(result.project_bac or 0.0)}*({actual_progress})")
         else:
             ws.cell(row_index, 3, point.earned_value)
-        # Render EV through the selected Status Date. When M3 is later than the
-        # reporting cutoff, column C is already frozen at the latest permitted
-        # Actual date, so the plotted line carries forward flat through M3.
+        # Render cumulative Actual through the selected view date. Empty future
+        # Actual periods add nothing, so EV carries forward naturally without a
+        # second cutoff authority.
         ws.cell(
             row_index,
             4,
             f'=IF(A{row_index}="",NA(),IF(A{row_index}>'
-            f"'{EARNED_VALUE_SHEET}'!$M$3,NA(),C{row_index}))",
+            f"{EV_VIEW_DATE_NAME},NA(),C{row_index}))",
         )
         next_row = row_index + 1
-        status_ref = f"'{EARNED_VALUE_SHEET}'!$M$3"
+        status_ref = EV_VIEW_DATE_NAME
         ws.cell(
             row_index,
             5,
@@ -861,9 +804,9 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
             ws.cell(row_index, column).number_format = "#,##0.00"
     chart_last_row = max(2, len(chart_points) + 1)
 
-    options = _selectable_cutoffs(workbook, result)
-    if _dashboard_monthly_cutoff_range(workbook, result) is None:
-        ws["H1"] = "Cutoff Options"
+    options = _selectable_view_dates(workbook, result)
+    if _dashboard_monthly_view_date_range(workbook, result) is None:
+        ws["H1"] = "View Date Options"
         for row, value in enumerate(options, start=2):
             ws.cell(row, 8, value)
             ws.cell(row, 8).number_format = "dd-mmm-yyyy"
@@ -884,7 +827,7 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
         meta = wbs_by_activity.get(activity.activity_id)
         wbs_code = meta.code if meta is not None else (activity.wbs.strip() or "(Unassigned WBS)")
         wbs_name = meta.name if meta is not None else ""
-        ws.cell(row, activity_start_col, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, activity_start_col, f"={EV_VIEW_DATE_NAME}")
         ws.cell(row, activity_start_col + 1, activity.activity_id)
         ws.cell(row, activity_start_col + 2, wbs_code)
         ws.cell(row, activity_start_col + 3, wbs_name)
@@ -892,11 +835,11 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
         source_rows = None if live is None else live.activity_rows.get(activity.activity_id)
         if source_rows is not None:
             plan_row, actual_row = source_rows
-            plan_formula = _main_progress_formula(live, plan_row, f"${get_column_letter(activity_start_col)}{row}")
+            plan_formula = _main_progress_formula(live, plan_row, EV_VIEW_DATE_NAME)
             actual_formula = _main_progress_formula(
                 live,
                 actual_row,
-                f"MIN(${get_column_letter(activity_start_col)}{row},$G$4)",
+                EV_VIEW_DATE_NAME,
             )
             ws.cell(row, activity_start_col + 5, f"={plan_formula}")
             ws.cell(row, activity_start_col + 6, f"={actual_formula}")
@@ -935,7 +878,7 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     act_ev_col = get_column_letter(activity_start_col + 8)
     for offset, meta in enumerate(wbs_items, start=0):
         row = 2 + offset
-        ws.cell(row, 11, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, 11, f"={EV_VIEW_DATE_NAME}")
         ws.cell(row, 13, meta.code)
         ws.cell(row, 14, meta.name)
         ws.cell(row, 15, f'=SUMIFS(${act_bac_col}$2:${act_bac_col}${activity_last_row},${act_wbs_col}$2:${act_wbs_col}${activity_last_row},M{row})')
@@ -985,7 +928,7 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     boq_first_row = 2
     for offset, boq in enumerate(result.boq_items):
         row = boq_first_row + offset
-        ws.cell(row, 31, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, 31, f"={EV_VIEW_DATE_NAME}")
         ws.cell(row, 32, boq.boq_key)
         if allocations:
             ws.cell(row, 33, f'=SUMIFS(${mapping_pv_col}$2:${mapping_pv_col}${mapping_last_row},${mapping_boq_col}$2:${mapping_boq_col}${mapping_last_row},AF{row})')
@@ -1015,7 +958,7 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     boq_rank_range = f'$AK$2:$AK${boq_snapshot_last_row}'
     for rank in range(1, 11):
         row = rank + 1
-        ws.cell(row, 21, f"='{EARNED_VALUE_SHEET}'!$M$3")
+        ws.cell(row, 21, f"={EV_VIEW_DATE_NAME}")
         ws.cell(row, 22, rank)
         ws.cell(row, 20, f'=TEXT(U{row},"yyyymmdd")&"|"&V{row}')
         # Store static fallback labels beside the live lookup through INDEX/MATCH.
@@ -1101,14 +1044,13 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
 
     ws["A3"] = "PROJECT PERFORMANCE"
     ws["A3"].font = Font(name=_FONT, size=11, bold=True, color=_NAVY)
-    _add_cutoff_dropdown(workbook, ws, workbook[EV_DATA_SHEET], result)
+    _add_view_date_dropdown(workbook, ws, result)
 
     chart_last_row = data_layout.chart_last_row
-    # KPI values use the same selected Status Date as the chart.  This mirrors
-    # Dashboard's formula-driven cutoff contract and prevents a changed dropdown
-    # from leaving stale Python snapshot values on screen.
-    pv_formula = f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$B$2:$B${chart_last_row},{EV_DATA_SHEET}!$A$2:$A${chart_last_row},$M$3),0)'
-    ev_formula = f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$D$2:$D${chart_last_row},{EV_DATA_SHEET}!$A$2:$A${chart_last_row},$M$3),0)'
+    # KPI values use the same semantic view date as the chart so layout changes
+    # cannot leave stale or coordinate-bound calculation paths behind.
+    pv_formula = f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$B$2:$B${chart_last_row},{EV_DATA_SHEET}!$A$2:$A${chart_last_row},EV_View_Date),0)'
+    ev_formula = f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$D$2:$D${chart_last_row},{EV_DATA_SHEET}!$A$2:$A${chart_last_row},EV_View_Date),0)'
     kpis = (
         ("BAC", result.project_bac, "#,##0.00", "Budget"),
         ("PV", pv_formula, "#,##0.00", "Planned"),
@@ -1200,7 +1142,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
         # ticks already explain the horizontal dimension, so no generic
         # ``Period`` title is needed.
         _date_axis_for_line_chart(chart, title=None)
-        chart.legend.position = "t"
+        chart.legend.position = "b"
         # Match the existing Dashboard chart treatment instead of inventing a
         # second visual language for the same workbook.
         grid = GraphicalProperties()
@@ -1243,13 +1185,17 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             status_series = chart.series[2]
             status_series.graphicalProperties.line.noFill = True
             status_series.marker.symbol = "none"
+            status_line = GraphicalProperties()
+            status_line.line.solidFill = _RED
+            status_line.line.prstDash = "dash"
+            status_line.line.width = 18000
             status_series.errBars = ErrorBars(
                 errDir="y",
                 errBarType="minus",
                 errValType="fixedVal",
                 noEndCap=True,
                 val=data_layout.status_top,
-                spPr=GraphicalProperties(solidFill=_RED),
+                spPr=status_line,
             )
             # Show the selected date directly above the redline.  Category-name
             # labels keep the text live with the dropdown and avoid duplicating
@@ -1263,7 +1209,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             chart.y_axis.scaling.min = 0
             chart.y_axis.scaling.max = data_layout.status_top
 
-        # Cutoff markers are marker-only series: PV and EV remain clean S-curves
+        # Selected-view markers are marker-only series: PV and EV remain clean S-curves
         # with no per-period markers, while the selected comparison point is
         # visually explicit.
         if len(chart.series) >= 4:
@@ -1271,15 +1217,15 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             pv_marker.graphicalProperties.line.noFill = True
             pv_marker.marker.symbol = "circle"
             pv_marker.marker.size = 7
-            pv_marker.marker.graphicalProperties.solidFill = _BLUE
-            pv_marker.marker.graphicalProperties.line.solidFill = _BLUE
+            pv_marker.marker.graphicalProperties.solidFill = _RED
+            pv_marker.marker.graphicalProperties.line.solidFill = _RED
         if len(chart.series) >= 5:
             ev_marker = chart.series[4]
             ev_marker.graphicalProperties.line.noFill = True
             ev_marker.marker.symbol = "circle"
             ev_marker.marker.size = 7
-            ev_marker.marker.graphicalProperties.solidFill = _GREEN
-            ev_marker.marker.graphicalProperties.line.solidFill = _GREEN
+            ev_marker.marker.graphicalProperties.solidFill = _RED
+            ev_marker.marker.graphicalProperties.line.solidFill = _RED
 
         # Keep the management legend compact: PV, EV and Status Date only.
         # Marker-only helper series are deliberately hidden from the legend.
@@ -1293,7 +1239,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             ws.add_chart(chart, "A11")
 
     ws.merge_cells("A29:O29")
-    ws["A29"] = "PV = selected view date    •    EV = Actual through reporting cutoff, carried forward to view date"
+    ws["A29"] = "PV / EV = cumulative live Plan / Actual through selected Status Date"
     ws["A29"].font = Font(name=_FONT, size=9, italic=True, color=_MUTED)
     ws["A29"].alignment = Alignment(horizontal="left", vertical="center")
 
@@ -1327,7 +1273,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
     wbs_rows = max(1, data_layout.wbs_display_rows)
     for offset in range(1, wbs_rows + 1):
         excel_row = table_row + offset
-        key = f'TEXT($M$3,"yyyymmdd")&"|{offset}"'
+        key = f'TEXT(EV_View_Date,"yyyymmdd")&"|{offset}"'
         # WBS code, WBS name, BAC, PV, EV, SV, SPI.  WBS name spans B:C.
         lookup_targets = (
             (1, 1, 4),
@@ -1386,7 +1332,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
     lookup_range = f'{EV_DATA_SHEET}!$T$2:$Z${data_layout.negative_last_row}'
     for offset in range(1, 11):
         excel_row = table_row + offset
-        key = f'TEXT($M$3,"yyyymmdd")&"|{offset}"'
+        key = f'TEXT(EV_View_Date,"yyyymmdd")&"|{offset}"'
         # Activity ID | BOQ/Work (J:L) | SV (M:N) | SPI (O)
         lookup_targets = (
             (9, 9, 4),
