@@ -105,7 +105,7 @@ def test_ev5_dashboard_kpis_are_formula_driven_by_status_date() -> None:
 
 
 @pytest.mark.unit
-def test_ev5_chart_keeps_full_pv_and_uses_cutoff_masked_ev_and_status_line() -> None:
+def test_ev5_chart_uses_full_monthly_calendar_and_semantic_view_mask() -> None:
     workbook = Workbook()
     render_earned_value_sheet(workbook, _result())
 
@@ -113,27 +113,25 @@ def test_ev5_chart_keeps_full_pv_and_uses_cutoff_masked_ev_and_status_line() -> 
     assert data.sheet_state == "hidden"
     rows = [
         tuple(data.cell(row, col).value for col in range(1, 7))
-        for row in range(2, 6)
+        for row in range(2, 5)
     ]
     assert [row[0] for row in rows] == [
         datetime(2026, 1, 30),
-        datetime(2026, 2, 13),
         datetime(2026, 2, 27),
         datetime(2026, 3, 6),
     ]
-    assert [row[5] for row in rows] == ["Monthly", "Status Date", "Monthly", "Monthly"]
-    assert rows[1][1] == pytest.approx(6_000_000.0)
-    assert rows[1][2] == pytest.approx(4_500_000.0)
-    assert rows[2][1] == pytest.approx(9_000_000.0)
-    assert rows[2][2] is None
-    assert "'Earned Value'!$M$3" in rows[0][3]
-    assert "'Earned Value'!$M$3" in rows[0][4]
+    assert [row[5] for row in rows] == ["Monthly", "Monthly", "Monthly"]
+    assert rows[0][1] == pytest.approx(2_000_000.0)
+    assert rows[1][1] == pytest.approx(9_000_000.0)
+    assert rows[1][2] is None
+    assert "EV_View_Date" in rows[0][3]
+    assert "EV_View_Date" in rows[0][4]
 
     dashboard = workbook[EARNED_VALUE_SHEET]
     chart = dashboard._charts[0]
     assert len(chart.series) == 5
     assert chart.legend is not None
-    assert chart.legend.position == "t"
+    assert chart.legend.position == "b"
     assert chart.x_axis.axId == 10
     assert chart.x_axis.crossAx == 100
     assert chart.y_axis.axId == 100
@@ -150,7 +148,7 @@ def test_ev5_chart_keeps_full_pv_and_uses_cutoff_masked_ev_and_status_line() -> 
 
 
 @pytest.mark.unit
-def test_ev5_midweek_cutoff_does_not_interpolate_source_values() -> None:
+def test_ev5_initial_view_seed_does_not_rewrite_monthly_chart_calendar() -> None:
     result = _result()
     shifted = EarnedValueResult(
         cutoff_date=datetime(2026, 2, 16),
@@ -163,14 +161,15 @@ def test_ev5_midweek_cutoff_does_not_interpolate_source_values() -> None:
     render_earned_value_sheet(workbook, shifted)
 
     data = workbook[EV_DATA_SHEET]
-    status_row = next(
-        row
-        for row in range(2, 10)
-        if data.cell(row, 6).value == "Status Date"
-    )
-    assert data.cell(status_row, 1).value == datetime(2026, 2, 16)
-    assert data.cell(status_row, 2).value == pytest.approx(6_000_000.0)
-    assert data.cell(status_row, 3).value == pytest.approx(4_500_000.0)
+    dashboard = workbook[EARNED_VALUE_SHEET]
+    assert dashboard["M3"].value == datetime(2026, 2, 16)
+    assert workbook.defined_names["EV_View_Date"].attr_text == "'Earned Value'!$M$3"
+    assert [data.cell(row, 1).value for row in range(2, 5)] == [
+        datetime(2026, 1, 30),
+        datetime(2026, 2, 27),
+        datetime(2026, 3, 6),
+    ]
+    assert all(data.cell(row, 6).value == "Monthly" for row in range(2, 5))
 
 
 @pytest.mark.unit
@@ -183,7 +182,7 @@ def test_ev5_wbs_and_negative_variance_tables_follow_status_date() -> None:
 
     # WBS labels and values are both keyed by selected Status Date + rank.
     assert ws["A32"].value.startswith("=IFERROR(VLOOKUP(")
-    assert 'TEXT($M$3,"yyyymmdd")&"|1"' in ws["A32"].value
+    assert 'TEXT(EV_View_Date,"yyyymmdd")&"|1"' in ws["A32"].value
     assert ws["B32"].value.startswith("=IFERROR(VLOOKUP(")
     assert ws["D32"].value.startswith("=IFERROR(VLOOKUP(")
     assert ws["E32"].value.startswith("=IFERROR(VLOOKUP(")
@@ -191,26 +190,20 @@ def test_ev5_wbs_and_negative_variance_tables_follow_status_date() -> None:
     assert ws["G32"].value.startswith("=IFERROR(VLOOKUP(")
     assert ws["H32"].value.startswith("=IFERROR(VLOOKUP(")
 
-    # Hidden snapshots are keyed independently per cutoff.  This isolated
-    # fixture has no main sheet, so the compatibility fallback is label order.
-    structure = next(
-        row for row in range(2, data.max_row + 1)
-        if data.cell(row, 10).value == "20260213|1"
-    )
-    assert data.cell(structure, 11).value == datetime(2026, 2, 13)
-    assert data.cell(structure, 12).value == 1
-    assert data.cell(structure, 13).value == "MEP"
-    assert data.cell(structure, 16).value == pytest.approx(2_400_000.0)
-    assert data.cell(structure, 17).value == pytest.approx(1_800_000.0)
+    # EV_Data now exposes one live selected-date WBS layer instead of Python
+    # snapshots per cutoff. The visible dashboard lookup interface stays stable.
+    assert data["K2"].value == "=EV_View_Date"
+    assert data["M2"].value == "MEP"
+    assert data["L2"].value.startswith("=IF(P2<=0")
+    assert data["J2"].value.startswith("=IF(L2=""")
+    assert "SUMIFS(" in data["P2"].value
+    assert "SUMIFS(" in data["Q2"].value
 
     assert ws["I32"].value.startswith("=IFERROR(VLOOKUP(")
     assert ws["J32"].value.startswith("=IFERROR(VLOOKUP(")
-    concrete = next(
-        row for row in range(2, data.max_row + 1)
-        if data.cell(row, 20).value == "20260213|1"
-    )
-    assert data.cell(concrete, 24).value == "Concrete"
-    assert data.cell(concrete, 25).value == pytest.approx(-1_000_000.0)
+    assert data["U2"].value == "=EV_View_Date"
+    assert data["W2"].value.startswith("=IFERROR(INDEX(")
+    assert data["X2"].value.startswith("=IFERROR(INDEX(")
 
 
 @pytest.mark.unit
@@ -220,13 +213,14 @@ def test_ev5_reuses_dashboard_data_monthly_cutoff_list() -> None:
     dashboard_data["K1"] = "Monthly Cutoff"
     dashboard_data["K2"] = datetime(2026, 1, 30)
     dashboard_data["K3"] = datetime(2026, 2, 13)
-    dashboard_data["K4"] = datetime(2026, 2, 27)  # future vs current EV cutoff
+    # Canonical monthly date remains selectable even when later than EV reporting cutoff.
+    dashboard_data["K4"] = datetime(2026, 2, 27)
 
     render_earned_value_sheet(workbook, _result())
 
     ws = workbook[EARNED_VALUE_SHEET]
     validation = ws.data_validations.dataValidation[0]
-    assert validation.formula1 == '=INDIRECT("Dashboard_Data!$K$2:$K$3")'
+    assert validation.formula1 == '=INDIRECT("Dashboard_Data!$K$2:$K$4")'
 
 
 @pytest.mark.unit
@@ -243,7 +237,11 @@ def test_ev5_cutoff_fallback_contains_only_historical_dates() -> None:
         for row in range(2, data.max_row + 1)
         if isinstance(data.cell(row, 8).value, datetime)
     ]
-    assert options == [datetime(2026, 1, 30), datetime(2026, 2, 13)]
+    assert options == [
+        datetime(2026, 1, 30),
+        datetime(2026, 2, 27),
+        datetime(2026, 3, 6),
+    ]
 
 
 @pytest.mark.unit
@@ -283,7 +281,12 @@ def test_ev52_reuses_dashboard_visual_language_and_avoids_duplicate_cutoff_list(
     assert chart.x_axis.title is None
     assert chart.series[0].graphicalProperties.line.width == 26000
     assert chart.series[1].graphicalProperties.line.width == 26000
-    assert ws["A29"].value == "PV curve = full baseline    •    EV curve = selected Status Date"
+    assert ws["A29"].value == "PV / EV = cumulative live Plan / Actual through selected Status Date"
+    assert chart.legend.position == "b"
+    assert chart.series[2].errBars.spPr.line.solidFill.srgbClr == "C00000"
+    assert chart.series[2].errBars.spPr.line.prstDash == "dash"
+    assert chart.series[3].marker.graphicalProperties.solidFill.srgbClr == "C00000"
+    assert chart.series[4].marker.graphicalProperties.solidFill.srgbClr == "C00000"
 
 
 @pytest.mark.unit
@@ -313,7 +316,7 @@ def test_ev6_renders_live_boq_table_with_native_filter_and_mapping_metadata() ->
     ws = workbook["EV Table"]
     data = workbook[EV_DATA_SHEET]
     assert ws["A1"].value == "EARNED VALUE TABLE"
-    assert ws["B3"].value == "='Earned Value'!$M$3"
+    assert ws["B3"].value == "=EV_View_Date"
     assert [ws.cell(5, col).value for col in range(1, 11)] == [
         "BOQ ID", "WBS-2", "WBS-3", "WBS-4", "BOQ / WORK", "BAC", "PV", "EV", "SV", "SPI"
     ]
@@ -326,21 +329,22 @@ def test_ev6_renders_live_boq_table_with_native_filter_and_mapping_metadata() ->
     assert ws["E6"].value == "Concrete mapped"
     assert ws["F6"].value == pytest.approx(5_000_000.0)
     assert ws["G6"].value.startswith("=IFERROR(SUMIFS(EV_Data!$AG$")
-    assert "$B$3" in ws["G6"].value
+    assert "EV_View_Date" in ws["G6"].value
     assert ws["H6"].value.startswith("=IFERROR(SUMIFS(EV_Data!$AH$")
     assert ws["I6"].value == "=H6-G6"
     assert ws["J6"].value == "=IF(G6=0,0,H6/G6)"
 
-    snapshots = [
+    live_rows = [
         tuple(data.cell(row, col).value for col in range(31, 35))
-        for row in range(2, data.max_row + 1)
-        if data.cell(row, 31).value is not None
+        for row in range(2, 4)
     ]
-    # Two selectable cutoffs x two BOQ items; compact helper stores no repeated labels/WBS/BAC.
-    assert len(snapshots) == 4
-    assert snapshots[0][0] == datetime(2026, 1, 30)
-    assert snapshots[0][1] == "B1"
-    assert snapshots[-1][0] == datetime(2026, 2, 13)
+    # One live row per BOQ: date follows M3 and PV/EV derive through mapping.
+    assert len(live_rows) == 2
+    assert live_rows[0][0] == "=EV_View_Date"
+    assert live_rows[0][1] == "B1"
+    assert live_rows[-1][1] == "B2"
+    assert live_rows[0][2].startswith("=SUMIFS(")
+    assert live_rows[0][3].startswith("=SUMIFS(")
 
 
 @pytest.mark.unit
@@ -465,13 +469,12 @@ def test_ev_wbs_excludes_future_zero_pv_work_from_active_rows() -> None:
     render_earned_value_sheet(workbook, result)
     data = workbook[EV_DATA_SHEET]
 
-    labels = [
-        data.cell(row, 13).value
-        for row in range(2, data.max_row + 1)
-        if data.cell(row, 10).value
-    ]
-    assert labels == ["1"]
-    assert "6" not in labels
+    # Structural WBS rows remain present, while live Excel rank becomes blank
+    # for zero-PV work. This avoids rebuilding the helper when Plan changes.
+    labels = [data.cell(row, 13).value for row in range(2, 4)]
+    assert labels == ["1", "6"]
+    assert data["L2"].value.startswith("=IF(P2<=0")
+    assert data["L3"].value.startswith("=IF(P3<=0")
 
 
 @pytest.mark.unit
@@ -494,12 +497,11 @@ def test_ev_top10_negative_variance_includes_activity_ids_from_mapping() -> None
     assert dashboard["J31"].value == "BOQ / WORK"
     assert dashboard["M31"].value == "SV"
     assert dashboard["O31"].value == "SPI"
-    first = next(
-        row for row in range(2, data.max_row + 1)
-        if data.cell(row, 20).value == "20260213|1"
-    )
-    assert data.cell(first, 23).value == "A1"
-    assert data.cell(first, 24).value == "Concrete"
+    assert data["U2"].value == "=EV_View_Date"
+    assert data["W2"].value.startswith("=IFERROR(INDEX(")
+    assert data["X2"].value.startswith("=IFERROR(INDEX(")
+    assert data["BO2"].value == "A1"
+    assert data["BP2"].value == "Concrete"
     assert dashboard["I41"].value.startswith("=IFERROR(VLOOKUP(")
 
 

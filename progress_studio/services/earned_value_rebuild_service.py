@@ -75,8 +75,12 @@ def _as_datetime(value: object) -> datetime | None:
 class EarnedValueRebuildService:
     """Standalone EV extension used by the Rebuild workspace.
 
-    EV reads current ``main`` progress values, embedded BOQ/mapping provenance,
-    and the reporting cutoff. It mutates only EV-owned workbook presentation:
+    EV reads current ``main`` progress values and embedded BOQ/mapping provenance.
+    Rebuild does not infer an EV view from Actual progress or reporting cutoff.
+    An existing EV view is preserved; first creation uses the latest canonical
+    monthly reporting point (or latest main reporting date as fallback).
+    The service mutates only
+    EV-owned workbook presentation:
     ``Earned Value`` and ``EV_Data``.
 
     The source workbook is copied to a temporary output, opened once as a normal
@@ -184,7 +188,7 @@ class EarnedValueRebuildService:
         try:
             embedded = self.input_reader.read(path)
             dataset = self.main_reader.read_main_dataset(path)
-            cutoff = self._require_cutoff(path)
+            cutoff = self._view_date_seed(path, dataset)
             result = self.deriver.derive(
                 dataset,
                 embedded.boq_rows,
@@ -219,49 +223,61 @@ class EarnedValueRebuildService:
             len(embedded.allocations),
         )
 
-    def _require_cutoff(self, path: Path) -> datetime:
-        cutoff = self._read_cutoff(path)
-        if cutoff is None:
-            raise EarnedValueRebuildError(
-                "Earned Value requires a reporting cutoff date. "
-                "Save a valid cutoff in Dashboard!K5 or the main Cutoff Date control."
-            )
-        return cutoff
+    @classmethod
+    def _view_date_seed(cls, path: Path, dataset) -> datetime:
+        """Return a neutral UI seed for ``EV_View_Date``.
+
+        Rebuild never derives the view from Actual progress and never reads a
+        Dashboard/main reporting cutoff. Refresh preserves the user's existing
+        EV selection. First creation uses the latest canonical Dashboard_Data
+        monthly reporting point when available, otherwise the latest reporting
+        date exposed by ``main``.
+        """
+        saved_view = cls._read_existing_ev_view(path)
+        if saved_view is not None:
+            return saved_view
+
+        canonical_view = cls._read_latest_canonical_view_date(path)
+        if canonical_view is not None:
+            return canonical_view
+
+        reporting_dates = [
+            value
+            for period in tuple(getattr(dataset, "periods", ()) or ())
+            if (value := _as_datetime(getattr(period, "reporting_date", None))) is not None
+        ]
+        if reporting_dates:
+            return max(reporting_dates)
+
+        raise EarnedValueRebuildError(
+            "Earned Value requires at least one valid reporting date in worksheet 'main'."
+        )
 
     @staticmethod
-    def _read_cutoff(path: Path) -> datetime | None:
+    def _read_existing_ev_view(path: Path) -> datetime | None:
         keep_vba = path.suffix.lower() == ".xlsm"
-        workbook = load_workbook(
-            path,
-            read_only=True,
-            data_only=True,
-            keep_vba=keep_vba,
-        )
+        workbook = load_workbook(path, read_only=True, data_only=True, keep_vba=keep_vba)
         try:
-            if EARNED_VALUE_SHEET in workbook.sheetnames:
-                cutoff = _as_datetime(workbook[EARNED_VALUE_SHEET]["M3"].value)
-                if cutoff is not None:
-                    return cutoff
+            if EARNED_VALUE_SHEET not in workbook.sheetnames:
+                return None
+            return _as_datetime(workbook[EARNED_VALUE_SHEET]["M3"].value)
+        finally:
+            workbook.close()
 
-            if "Dashboard" in workbook.sheetnames:
-                cutoff = _as_datetime(workbook["Dashboard"]["K5"].value)
-                if cutoff is not None:
-                    return cutoff
-
-            if "main" in workbook.sheetnames:
-                ws = workbook["main"]
-                max_row = min(ws.max_row, 80)
-                max_col = min(ws.max_column, 30)
-                for row in range(1, max_row + 1):
-                    for col in range(1, max_col + 1):
-                        value = str(ws.cell(row, col).value or "").strip().lower()
-                        if value != "cutoff date":
-                            continue
-                        if col < max_col:
-                            cutoff = _as_datetime(ws.cell(row, col + 1).value)
-                            if cutoff is not None:
-                                return cutoff
-            return None
+    @staticmethod
+    def _read_latest_canonical_view_date(path: Path) -> datetime | None:
+        keep_vba = path.suffix.lower() == ".xlsm"
+        workbook = load_workbook(path, read_only=True, data_only=True, keep_vba=keep_vba)
+        try:
+            if "Dashboard_Data" not in workbook.sheetnames:
+                return None
+            ws = workbook["Dashboard_Data"]
+            values = [
+                value
+                for row in range(2, ws.max_row + 1)
+                if (value := _as_datetime(ws.cell(row, 11).value)) is not None
+            ]
+            return max(values) if values else None
         finally:
             workbook.close()
 

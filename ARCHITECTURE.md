@@ -226,6 +226,20 @@ as business identity.
 When a monthly view is regenerated, it is rebuilt as monthly buckets and
 follows the `X/M` display/reporting contract.
 
+### Earned Value live-workbook boundary
+
+EV Rebuild owns structural BAC / BOQ / mapping topology. After a successful
+EV build, `main` remains the live authority for Plan and Actual progress.
+
+Earned Value uses one semantic workbook control, `EV_View_Date`, for the
+selected reporting view. PV and EV both accumulate live `main` values through
+that view date. Dashboard cutoff controls are presentation state for Dashboard
+and are not Earned Value calculation inputs.
+
+Plan/Actual edits require only Excel recalculation (F9 / Save). Structural BOQ
+or mapping changes require EV Rebuild. See `EV_LIVE_CONTRACT.md` for the full
+contract.
+
 ## 8. Payment Breakdown contract
 
 Payment Breakdown is a separate Payment Workspace path.
