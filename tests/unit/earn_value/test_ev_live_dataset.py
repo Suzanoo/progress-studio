@@ -169,3 +169,53 @@ def test_ev_l3_future_view_freezes_actual_at_reporting_cutoff() -> None:
     assert "<=\"&$BA2" in data["BF2"].value
     assert "MIN($BA2,$G$4)" in data["BG2"].value
     assert data["G4"].value == "=Dashboard!$K$5"
+
+@pytest.mark.unit
+def test_ev_l4_all_visible_views_share_live_m3_dataset() -> None:
+    workbook = _live_workbook()
+    render_earned_value_sheet(workbook, _result(), include_chart=False)
+
+    data = workbook[EV_DATA_SHEET]
+    ev = workbook[EARNED_VALUE_SHEET]
+    table = workbook[EV_TABLE_SHEET]
+
+    # KPI cards read the live chart interface selected by M3.
+    assert "EV_Data!$B$2:$B$" in ev["D6"].value
+    assert "$M$3" in ev["D6"].value
+    assert "EV_Data!$D$2:$D$" in ev["G6"].value
+    assert "$M$3" in ev["G6"].value
+    assert ev["J6"].value == "=G6-D6"
+    assert ev["M6"].value == '=IF(D6=0,0,G6/D6)'
+
+    # WBS dashboard cells still use the stable J:S interface, whose values are
+    # formulas over the live Activity layer rather than Python date snapshots.
+    assert 'TEXT($M$3,"yyyymmdd")' in ev["A32"].value
+    assert "SUMIFS(" in data["P2"].value
+    assert "SUMIFS(" in data["Q2"].value
+
+    # Top Negative is ranked from the live BOQ SV/SPI layer and selected by M3.
+    assert data["T2"].value == '=TEXT(U2,"yyyymmdd")&"|"&V2'
+    assert "INDEX($AI$2:$AI$" in data["Y2"].value
+    assert "INDEX($AJ$2:$AJ$" in data["Z2"].value
+    assert 'TEXT($M$3,"yyyymmdd")' in ev["I32"].value
+
+    # EV Table shares the same selected-date BOQ interface.
+    assert table["B3"].value == "='Earned Value'!$M$3"
+    assert "EV_Data!$AG$2:$AG$" in table["G6"].value
+    assert "EV_Data!$AH$2:$AH$" in table["H6"].value
+    assert table["I6"].value == "=H6-G6"
+    assert table["J6"].value == "=IF(G6=0,0,H6/G6)"
+
+
+@pytest.mark.unit
+def test_ev_l4_status_date_is_presented_as_view_state_not_cutoff() -> None:
+    workbook = _live_workbook()
+    render_earned_value_sheet(workbook, _result(), include_chart=False)
+
+    ev = workbook[EARNED_VALUE_SHEET]
+    validation = next(iter(ev.data_validations.dataValidation))
+
+    assert validation.prompt == "Choose the Earned Value view date."
+    assert "view selector only" in ev["M3"].comment.text
+    assert "without changing the project reporting cutoff" in ev["M3"].comment.text
+    assert workbook[EV_DATA_SHEET]["G4"].value == "=Dashboard!$K$5"

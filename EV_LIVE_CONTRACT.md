@@ -111,3 +111,26 @@ EV rebuild is required for:
 - The existing full canonical monthly Status Date list is reused from `Dashboard_Data!K` when available.
 - EV rebuild still hard-stops for incomplete mapping exactly as EV-1 requires.
 - AC / CV / CPI / EAC / ETC / VAC / TCPI remain outside this scope.
+
+## EV-L4 visible-view contract
+
+All visible Earned Value views consume the same EV-L3 live formula layer. No
+visible view may fall back to a Python PV / EV / SV / SPI snapshot after a
+successful rebuild.
+
+The following views are bound to `Earned Value!M3` and recalculate in Excel:
+
+- Project KPI cards: BAC remains rebuild-owned; PV / EV / SV / SPI are live.
+- Management curve: PV follows the selected view date; EV uses Actual through
+  `MIN(M3, Reporting Cutoff)` and carries the last permitted EV value forward
+  flat through the selected view date.
+- Active WBS Performance: BAC is structural; PV / EV / SV / SPI aggregate the
+  one-row-per-Activity live helper layer.
+- Top 10 Negative Variance: rank, BOQ label, Activity ID, SV and SPI are taken
+  from the selected-date live BOQ layer.
+- EV Table: one row per BOQ; BAC is structural while PV / EV / SV / SPI are
+  formula-driven from the same selected-date live BOQ layer.
+
+`M3` is explicitly a **view selector**, not a reporting-cutoff control. Changing
+it must not alter `Dashboard!K5`, mapping topology, BAC, or any other structural
+state.

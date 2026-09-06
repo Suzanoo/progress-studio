@@ -278,7 +278,10 @@ def test_ev52_reuses_dashboard_visual_language_and_avoids_duplicate_cutoff_list(
     assert chart.x_axis.title is None
     assert chart.series[0].graphicalProperties.line.width == 26000
     assert chart.series[1].graphicalProperties.line.width == 26000
-    assert ws["A29"].value == "PV curve = full baseline    •    EV curve = selected Status Date"
+    assert ws["A29"].value == (
+        "PV = selected view date    •    EV = Actual through reporting cutoff, "
+        "carried forward to view date"
+    )
 
 
 @pytest.mark.unit

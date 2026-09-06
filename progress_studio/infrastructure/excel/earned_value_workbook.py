@@ -272,8 +272,8 @@ def _add_cutoff_dropdown(workbook, ws, data_ws, result: EarnedValueResult) -> No
     ws["M3"].font = Font(name=_FONT, size=10, bold=True, color=_TEXT)
     ws["M3"].alignment = Alignment(horizontal="center", vertical="center")
     ws["M3"].comment = Comment(
-        "This Earned Value Status Date updates KPI, chart, WBS and variance views in Excel. "
-        "Choose a later project reporting cutoff in the normal Progress Studio controls and rebuild EV first.",
+        "This Earned Value Status Date is a view selector only. It updates KPI, chart, WBS, "
+        "Top Negative and EV Table views in Excel without changing the project reporting cutoff.",
         "Progress Studio",
     )
 
@@ -288,7 +288,7 @@ def _add_cutoff_dropdown(workbook, ws, data_ws, result: EarnedValueResult) -> No
 
     validation = DataValidation(type="list", formula1=formula1, allow_blank=False)
     validation.promptTitle = "Status Date"
-    validation.prompt = "Choose the Earned Value reporting cutoff date."
+    validation.prompt = "Choose the Earned Value view date."
     validation.errorTitle = "Invalid Status Date"
     validation.error = "Select a date from the list."
     validation.errorStyle = "stop"
@@ -1293,7 +1293,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             ws.add_chart(chart, "A11")
 
     ws.merge_cells("A29:O29")
-    ws["A29"] = "PV curve = full baseline    •    EV curve = selected Status Date"
+    ws["A29"] = "PV = selected view date    •    EV = Actual through reporting cutoff, carried forward to view date"
     ws["A29"].font = Font(name=_FONT, size=9, italic=True, color=_MUTED)
     ws["A29"].alignment = Alignment(horizontal="left", vertical="center")
 
