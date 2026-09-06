@@ -431,8 +431,8 @@ class RebuildFrame(ttk.Frame):
         self._ev_validated_path = path
         action = "Refresh" if analysis.existing_earned_value_sheet else "Generate"
         self.ev_status_var.set(
-            f"Ready • EV view {analysis.cutoff_date:%d %b %Y} • "
-            f"{analysis.activity_count:,} activities • {analysis.boq_count:,} BOQ items"
+            f"Ready • {analysis.activity_count:,} activities • "
+            f"{analysis.boq_count:,} BOQ items"
         )
         self.ev_detail_var.set(
             f"{action} Earned Value • BAC {analysis.project_bac:,.2f} • "

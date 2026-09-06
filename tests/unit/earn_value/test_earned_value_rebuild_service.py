@@ -37,7 +37,9 @@ class StubInputReader:
 class StubMainReader:
     def read_main_dataset(self, path: Path):
         return SimpleNamespace(
-            activities=(SimpleNamespace(activity_id="A1"), SimpleNamespace(activity_id="A2"))
+            activities=(SimpleNamespace(activity_id="A1"), SimpleNamespace(activity_id="A2")),
+            periods=(SimpleNamespace(column=18, reporting_date=CUTOFF),),
+            rows=(),
         )
 
 
@@ -176,27 +178,34 @@ def test_ev_rebuild_refresh_replaces_only_ev_owned_sheets(tmp_path: Path) -> Non
 
 
 @pytest.mark.unit
-def test_ev_rebuild_uses_main_cutoff_as_fallback(tmp_path: Path) -> None:
+def test_ev_rebuild_does_not_use_main_or_dashboard_cutoff_as_view_seed(tmp_path: Path) -> None:
     workbook = Workbook()
     main = workbook.active
     main.title = "main"
     main["L5"] = "Cutoff Date"
-    main["M5"] = CUTOFF
-    path = tmp_path / "fallback.xlsx"
+    main["M5"] = datetime(2026, 4, 24)
+    dashboard = workbook.create_sheet("Dashboard")
+    dashboard["K5"] = datetime(2026, 5, 29)
+    path = tmp_path / "neutral-seed.xlsx"
     workbook.save(path)
     workbook.close()
 
     analysis = _service().analyze(path)
-
     assert analysis.cutoff_date == CUTOFF
 
 
 @pytest.mark.unit
-def test_ev_rebuild_without_saved_cutoff_requires_main_reporting_dates(tmp_path: Path) -> None:
-    source = _source_workbook(tmp_path, cutoff=None)
+def test_ev_rebuild_without_any_reporting_date_is_blocked(tmp_path: Path) -> None:
+    class EmptyMainReader:
+        def read_main_dataset(self, path: Path):
+            return SimpleNamespace(activities=(SimpleNamespace(activity_id="A1"),), periods=(), rows=())
 
+    source = _source_workbook(tmp_path, cutoff=None)
+    service = EarnedValueRebuildService(
+        input_reader=StubInputReader(), main_reader=EmptyMainReader(), deriver=StubDeriver()
+    )
     with pytest.raises(EarnedValueRebuildError, match="requires at least one valid reporting date"):
-        _service().analyze(source)
+        service.analyze(source)
 
 
 @pytest.mark.unit
@@ -207,9 +216,7 @@ def test_ev_rebuild_refuses_in_place_output(tmp_path: Path) -> None:
         _service().generate(source, source)
 
 @pytest.mark.unit
-def test_ev_rebuild_uses_dashboard_reporting_cutoff_instead_of_ev_view_date(
-    tmp_path: Path,
-) -> None:
+def test_ev_rebuild_refresh_preserves_existing_ev_view(tmp_path: Path) -> None:
     source = _source_workbook(tmp_path, earned_value=True)
     selected_view_date = datetime(2026, 7, 31)
     workbook = load_workbook(source)
@@ -217,4 +224,6 @@ def test_ev_rebuild_uses_dashboard_reporting_cutoff_instead_of_ev_view_date(
     workbook.save(source)
     workbook.close()
 
-    assert EarnedValueRebuildService._read_cutoff(source) == CUTOFF
+    assert EarnedValueRebuildService._view_date_seed(
+        source, StubMainReader().read_main_dataset(source)
+    ) == selected_view_date

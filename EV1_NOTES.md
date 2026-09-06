@@ -8,7 +8,7 @@ EV-1 is intentionally calculation-only. It does not render an Excel sheet, modif
 - `main` weekly period values are increments; EV-1 accumulates them before calculating value.
 - PV = BAC × cumulative Plan.
 - EV = BAC × cumulative Actual.
-- EV stops after cutoff; PV can continue to project finish.
+- The EV-1 Python derivation result stops EV after its input cutoff; PV can continue to project finish. The live workbook layer added later does **not** use that rebuild cutoff as a post-rebuild Actual boundary; see `EV_LIVE_CONTRACT.md`.
 - Margin periods outside the active Plan reporting range are excluded.
 - Every positive-amount BOQ row must be allocated to 100% within 0.01 percentage point; otherwise EV calculation hard-stops.
 - BOQ EV reverse-aggregates through `AllocationRecord`, preserving BOQ → Activity provenance.
@@ -23,7 +23,7 @@ EV-1 is intentionally calculation-only. It does not render an Excel sheet, modif
 ## Test coverage in this delivery
 
 1. Weekly increments accumulate before PV/EV calculation.
-2. EV stops after cutoff while PV continues.
+2. EV-1 derivation stops after its input cutoff while PV continues. Live workbook behavior is governed separately by `EV_LIVE_CONTRACT.md`.
 3. BOQ reverse aggregation reproduces the agreed 64 PV / 48 EV / -16 SV / 0.75 SPI example.
 4. BOQ mapping below 100% is a hard stop.
 5. Allocation rounding tolerance is accepted.

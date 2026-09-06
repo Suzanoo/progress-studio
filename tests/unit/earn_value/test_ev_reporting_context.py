@@ -37,13 +37,14 @@ class _InputReader:
 class _MainReader:
     def read_main_dataset(self, path: Path):
         return SimpleNamespace(
-            activities=(SimpleNamespace(activity_id="A1"),)
+            activities=(SimpleNamespace(activity_id="A1"),),
+            periods=(SimpleNamespace(column=18, reporting_date=REPORTING_CUTOFF),),
+            rows=(),
         )
 
 
 class _Deriver:
     def derive(self, dataset, boq_rows, allocations, *, cutoff_date):
-        assert cutoff_date == REPORTING_CUTOFF
         return EarnedValueResult(
             cutoff_date=cutoff_date,
             project_bac=1000.0,
@@ -84,42 +85,39 @@ def _workbook_with_dashboard(tmp_path: Path, cutoff=REPORTING_CUTOFF) -> Path:
 
 
 @pytest.mark.unit
-def test_bf1_stale_ev_view_never_overrides_dashboard_reporting_cutoff(
+def test_ev_refresh_preserves_existing_view_and_ignores_dashboard_cutoff(tmp_path: Path) -> None:
+    path = _workbook_with_dashboard(tmp_path, cutoff=REPORTING_CUTOFF)
+    assert EarnedValueRebuildService._read_existing_ev_view(path) == STALE_EV_VIEW
+    assert _service().analyze(path).cutoff_date == STALE_EV_VIEW
+
+
+@pytest.mark.unit
+def test_ev_first_creation_uses_latest_canonical_monthly_view_not_dashboard_cutoff(
     tmp_path: Path,
 ) -> None:
-    path = _workbook_with_dashboard(tmp_path)
-    assert EarnedValueRebuildService._read_cutoff(path) == REPORTING_CUTOFF
+    workbook = Workbook()
+    workbook.active.title = "main"
+    dashboard = workbook.create_sheet("Dashboard")
+    dashboard["K5"] = STALE_EV_VIEW
+    data = workbook.create_sheet("Dashboard_Data")
+    data["K2"] = datetime(2026, 7, 31)
+    data["K3"] = REPORTING_CUTOFF
+    path = tmp_path / "canonical-view.xlsx"
+    workbook.save(path)
+    workbook.close()
+
+    assert EarnedValueRebuildService._read_latest_canonical_view_date(path) == REPORTING_CUTOFF
     assert _service().analyze(path).cutoff_date == REPORTING_CUTOFF
 
 
 @pytest.mark.unit
-def test_bf1_stale_ev_view_is_not_used_when_no_saved_view_seed_exists(
-    tmp_path: Path,
-) -> None:
-    path = _workbook_with_dashboard(tmp_path, cutoff=None)
-    assert EarnedValueRebuildService._read_cutoff(path) is None
-    with pytest.raises(
-        EarnedValueRebuildError, match="requires at least one valid reporting date"
-    ):
-        _service().analyze(path)
-
-
-@pytest.mark.unit
-def test_bf1_main_cutoff_remains_fallback_when_dashboard_is_absent(
-    tmp_path: Path,
-) -> None:
+def test_ev_first_creation_falls_back_to_latest_main_reporting_date(tmp_path: Path) -> None:
     workbook = Workbook()
-    main = workbook.active
-    main.title = "main"
-    main["L5"] = "Cutoff Date"
-    main["M5"] = REPORTING_CUTOFF
-    ev = workbook.create_sheet(EARNED_VALUE_SHEET)
-    ev["M3"] = STALE_EV_VIEW
-    path = tmp_path / "main-fallback.xlsx"
+    workbook.active.title = "main"
+    path = tmp_path / "main-period-fallback.xlsx"
     workbook.save(path)
     workbook.close()
 
-    assert EarnedValueRebuildService._read_cutoff(path) == REPORTING_CUTOFF
     assert _service().analyze(path).cutoff_date == REPORTING_CUTOFF
 
 
@@ -190,34 +188,11 @@ def test_bf2_standalone_workbook_keeps_ev_data_fallback_calendar() -> None:
     assert options == [datetime(2026, 1, 30), datetime(2026, 2, 27), datetime(2026, 3, 27)]
 
 @pytest.mark.unit
-def test_ev_initial_view_prefers_latest_actual_month_over_stale_dashboard_cutoff(
-    tmp_path: Path,
-) -> None:
-    class _Period:
-        def __init__(self, column: int, reporting_date: datetime) -> None:
-            self.column = column
-            self.reporting_date = reporting_date
-
-    class _Row:
-        pa = "A"
-        activity_id = "A1"
-
-        def __init__(self, values: dict[int, float | None]) -> None:
-            self._values = values
-
-        def period_value(self, column: int):
-            return self._values.get(column)
-
-    path = _workbook_with_dashboard(tmp_path, cutoff=datetime(2026, 4, 24))
+def test_ev_view_seed_does_not_inspect_actual_progress_or_dashboard_cutoff(tmp_path: Path) -> None:
+    path = _workbook_with_dashboard(tmp_path, cutoff=REPORTING_CUTOFF)
+    # Existing EV view wins regardless of later Actual or Dashboard state.
     dataset = SimpleNamespace(
-        periods=(
-            _Period(18, datetime(2026, 4, 24)),
-            _Period(19, datetime(2026, 8, 14)),
-            _Period(20, datetime(2026, 8, 28)),
-        ),
-        rows=(_Row({18: 0.10, 19: 0.20, 20: None}),),
+        periods=(SimpleNamespace(column=18, reporting_date=datetime(2026, 12, 25)),),
+        rows=(SimpleNamespace(pa="A", activity_id="A1"),),
     )
-
-    # Actual exists in August even though Dashboard still shows April. The EV
-    # initial view uses the final August reporting point, not Dashboard cutoff.
-    assert EarnedValueRebuildService._initial_view_date(path, dataset) == datetime(2026, 8, 28)
+    assert EarnedValueRebuildService._view_date_seed(path, dataset) == STALE_EV_VIEW

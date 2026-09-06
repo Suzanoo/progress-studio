@@ -2,15 +2,20 @@
 
 ## Scope
 
-This document freezes the live-workbook contract agreed for the EV reporting-context fix and EV-L3 refactor.
+This document is the frozen contract for the live Earned Value workbook.
+It supersedes the earlier reporting-cutoff interpretation used during the
+EV reporting-context bug-fix iterations.
 
-EV rebuild remains the structural calculation boundary. The workbook then owns live reporting behavior for user edits to Plan and Actual progress.
+The design follows the established Live Progress pattern: Python owns
+structural derivation at Rebuild; Excel owns live Plan/Actual reporting from
+`main` after the workbook has been created.
 
 ## Ownership
 
-### Structural / rebuild-owned
+### Structural / EV-Rebuild owned
 
-The following are frozen by a successful EV rebuild and remain unchanged until EV is rebuilt again:
+A successful EV Rebuild freezes the structural EV topology until the next
+EV Rebuild:
 
 - BOQ identity and BOQ amount / BAC authority.
 - BOQ → Activity mapping relationship.
@@ -18,53 +23,103 @@ The following are frozen by a successful EV rebuild and remain unchanged until E
 - Activity identity and WBS binding used by EV.
 - Project, Activity and BOQ BAC values.
 
-A mapping validation failure continues to hard-stop EV rebuild. The existing EV-1 allocation completeness contract is unchanged.
+The existing EV-1 mapping-completeness rule is unchanged. A positive-amount
+BOQ that is not fully allocated still hard-stops EV Rebuild.
 
-### Live / Excel-owned
+### Live / Excel owned
 
-The following are read from the current `main` worksheet and must respond to F9 / Save without an EV rebuild:
+After EV has been built, the current `main` worksheet is the live authority
+for:
 
 - Activity Plan progress.
 - Activity Actual progress.
 
-Derived EV reporting values are therefore live:
+The following therefore recalculate in Excel after user edits followed by
+F9 / Save, without EV Rebuild:
 
 - PV.
 - EV.
 - SV.
 - SPI.
+- Project KPI values.
 - WBS performance.
 - Top negative BOQ variance.
 - EV Table values.
-- Project EV chart values.
+- Project PV / EV chart values.
 
-User edits to BOQ Amount or mapping topology are outside the live contract and require EV rebuild.
+User edits to BOQ Amount, mapping topology, mapping share, or allocated BAC
+remain outside the live contract and require EV Rebuild.
 
-## Status Date and reporting cutoff
+## EV View Date
 
-`Earned Value!M3` is dashboard view state only. It never becomes the project reporting cutoff.
+The Earned Value Status Date is presentation state only.
 
-The authoritative reporting cutoff remains the existing Progress Studio reporting context, normally `Dashboard!K5` with the established fallback used by the rebuild service.
-
-For any selected EV Status Date:
+The workbook exposes one semantic defined name:
 
 ```text
-Plan Date             = EV!M3
-Effective Actual Date = MIN(EV!M3, Reporting Cutoff)
+EV_View_Date
 ```
 
-Therefore, when Actual is available only through April and the user selects August:
+In the current layout it is bound to:
 
-- PV is evaluated through August.
-- EV uses the latest permitted Actual through April.
-- The EV graph carries that April EV value forward flat through August.
-- WBS, Top Negative and EV Table use the same August view / April Actual boundary.
+```text
+'Earned Value'!$M$3
+```
 
-Selecting a historical Status Date before the reporting cutoff evaluates both Plan and Actual at that historical date.
+Downstream EV formulas must use `EV_View_Date`, not the physical `$M$3`
+coordinate. This keeps calculation independent from future dashboard-layout
+changes.
 
-## EV-L3 data-flow contract
+The Status Date default is neutral UI state, not reporting logic:
 
-EV-L3 follows the established Live Progress pattern: Python builds a compact structural/formula contract; Excel recalculates values from `main`.
+1. EV refresh preserves the existing `EV_View_Date`.
+2. First EV creation uses the latest canonical monthly reporting point from
+   `Dashboard_Data` when available.
+3. A standalone workbook falls back to the latest valid reporting date in `main`.
+
+Rebuild never inspects Actual progress and never reads Dashboard/main cutoff to
+choose the EV view. The legacy `cutoff_date` field carried by the EV derivation
+result is retained only as the renderer's view-date seed; it is not an EV
+calculation authority.
+
+## Live calculation contract
+
+For the selected `EV_View_Date`:
+
+```text
+PV = BAC × cumulative Plan through EV_View_Date
+EV = BAC × cumulative Actual through EV_View_Date
+SV = EV - PV
+SPI = EV / PV
+```
+
+Plan and Actual both use the same view date.
+
+There is no Earned Value calculation rule of the form:
+
+```text
+MIN(EV_View_Date, Dashboard cutoff)
+```
+
+and EV formulas must not use `Dashboard!K5` as an Actual boundary.
+
+If later Actual periods are blank / zero, they add no cumulative progress, so
+EV remains flat naturally. When the user later enters Actual into those
+periods in `main`, F9 / Save immediately updates EV through the selected view
+date without rebuilding EV.
+
+## Dashboard independence
+
+The Progress Dashboard cutoff is Dashboard presentation state. It is not an
+Earned Value calculation input.
+
+Changing Dashboard reporting controls without changing `EV_View_Date` must
+not change Earned Value calculations.
+
+## EV_Data contract
+
+`EV_Data` is a hidden, thin live helper layer over `main` plus static EV
+structure. It is not a Python numeric snapshot of mutable reporting state.
 
 ```text
 main
@@ -72,65 +127,79 @@ main
       |
       v
 EV_Data live formula layer
-  Activity progress + BAC
+  Activity BAC + live progress
       |
-      +--> WBS live aggregation
+      +--> WBS aggregation
       |
-      +--> mapped BOQ live aggregation
+      +--> mapped BOQ aggregation
       |       |
-      |       +--> Top Negative live ranking
+      |       +--> Top Negative ranking
       |       +--> EV Table
       |
       +--> Project PV / EV chart source
 
-Earned Value!M3 --------> selected view date
-Dashboard!K5 -----------> Actual reporting boundary
+BOQ + Mapping --EV Rebuild--> static BAC / topology
+EV_View_Date ---------------> all live EV views
 ```
 
-EV-L3 must not store Python-computed PV / EV / SV / SPI snapshots that become stale after the user edits Plan or Actual in `main`.
+The live Activity layer is intentionally O(Activity) and follows the same
+direct-to-`main` pattern used by the Progress Dashboard Activity table. It
+must not create an Activity × time Python snapshot cache.
 
-The helper layer may retain static BAC, identity and mapping topology because those remain rebuild-owned.
+## Visible-view contract
+
+All visible Earned Value views consume the same live contract:
+
+- Project KPI cards: BAC is structural; PV / EV / SV / SPI are live.
+- Project chart: PV and EV are cumulative live curves from `main`; the selected
+  Status Date only masks / marks the view.
+- Active WBS Performance: aggregates the live Activity layer.
+- Top 10 Negative Variance: ranks the live BOQ SV / SPI layer.
+- EV Table: BAC is structural; PV / EV / SV / SPI are live.
+
+No visible view may fall back to a Python PV / EV / SV / SPI snapshot after a
+successful live EV build.
+
+## View-date calendar
+
+When `Dashboard_Data!K` exists, EV reuses its complete canonical monthly date
+calendar as a selectable date list only.
+
+The calendar is not a Dashboard-cutoff dependency. In standalone/unit
+workbooks without `Dashboard_Data`, EV builds a full monthly view-date list
+from the project reporting points and does not truncate it at the rebuild
+cutoff.
 
 ## Rebuild boundary
 
-No EV rebuild is required for:
+No EV Rebuild is required for:
 
 - Plan progress edits in `main`.
 - Actual progress edits in `main`.
-- Changing `Earned Value!M3`.
+- Changing the Earned Value Status Date / `EV_View_Date`.
 
-EV rebuild is required for:
+EV Rebuild is required for:
 
 - BOQ / BAC structural changes.
 - Mapping relationship changes.
 - Mapping share / allocated amount changes.
 - Other structural changes that invalidate embedded EV topology.
 
-## Compatibility
+## Acceptance contract
 
-- The existing full canonical monthly Status Date list is reused from `Dashboard_Data!K` when available.
-- EV rebuild still hard-stops for incomplete mapping exactly as EV-1 requires.
-- AC / CV / CPI / EAC / ETC / VAC / TCPI remain outside this scope.
+The implementation is accepted only when all of the following remain true:
 
-## EV-L4 visible-view contract
+1. Create EV while Actual currently exists only through an earlier period.
+2. Enter later Actual directly in `main` after EV creation.
+3. F9 / Save updates Project EV, WBS, Top Negative, EV Table and the EV curve
+   without EV Rebuild.
+4. Editing Plan in `main` likewise updates all dependent PV / SV / SPI views.
+5. Changing Dashboard cutoff controls does not change EV for an unchanged
+   `EV_View_Date`.
+6. EV formulas reference `EV_View_Date` semantically rather than depending on
+   the physical `$M$3` coordinate.
+7. Mapping incompleteness continues to hard-stop EV Rebuild.
 
-All visible Earned Value views consume the same EV-L3 live formula layer. No
-visible view may fall back to a Python PV / EV / SV / SPI snapshot after a
-successful rebuild.
+## Out of scope
 
-The following views are bound to `Earned Value!M3` and recalculate in Excel:
-
-- Project KPI cards: BAC remains rebuild-owned; PV / EV / SV / SPI are live.
-- Management curve: PV follows the selected view date; EV uses Actual through
-  `MIN(M3, Reporting Cutoff)` and carries the last permitted EV value forward
-  flat through the selected view date.
-- Active WBS Performance: BAC is structural; PV / EV / SV / SPI aggregate the
-  one-row-per-Activity live helper layer.
-- Top 10 Negative Variance: rank, BOQ label, Activity ID, SV and SPI are taken
-  from the selected-date live BOQ layer.
-- EV Table: one row per BOQ; BAC is structural while PV / EV / SV / SPI are
-  formula-driven from the same selected-date live BOQ layer.
-
-`M3` is explicitly a **view selector**, not a reporting-cutoff control. Changing
-it must not alter `Dashboard!K5`, mapping topology, BAC, or any other structural
-state.
+AC / CV / CPI / EAC / ETC / VAC / TCPI remain outside this contract.
