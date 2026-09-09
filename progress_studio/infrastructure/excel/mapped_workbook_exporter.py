@@ -22,7 +22,9 @@ from progress_studio.infrastructure.excel.mapping_reader import validate_progres
 from progress_studio.infrastructure.excel.activity_data_theme import apply_activity_data_wbs_hierarchy
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
 from progress_studio.infrastructure.excel.dashboard_workbook import build_dashboard
+from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
+from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
 from progress_studio.infrastructure.excel.okd_workbook import OKDExportError, build_progress_views_from_source
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 from progress_studio.infrastructure.excel.edited_workbook_migrator import migrate_edited_main_into_workbook
@@ -199,8 +201,15 @@ class MappedWorkbookExporter:
                 except PaymentWorkbookError:
                     payment_reconcile = None
 
-                build_monthly_main_view(workbook, require_timescale=False)
+                monthly_periods = build_monthly_main_view(workbook, require_timescale=False)
                 build_dashboard(workbook, project_name=output_file.stem)
+                # These builders replace main_monthly and Dashboard_Data. Restore
+                # their overlay charts and helper ranges from the final mapped main
+                # before final policy and the trailing Payment renderer save.
+                # Legacy inputs without a timescale keep their compatibility path.
+                if monthly_periods:
+                    dataset = main_dataset_from_workbook(workbook, workbook_name=output_file.name)
+                    build_traditional_overlays(workbook, dataset)
                 finalize_workbook(workbook, mode="snapshot", include_guide=True)
                 workbook.save(temp_file)
                 if progress_callback is not None:
