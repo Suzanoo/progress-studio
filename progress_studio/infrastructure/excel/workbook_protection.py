@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from copy import copy
 
+from openpyxl.cell.cell import Cell
+from openpyxl.formula.tokenizer import Tokenizer, TokenizerError
 from openpyxl.styles import Protection
+from openpyxl.utils.cell import range_boundaries
 from openpyxl.workbook.protection import WorkbookProtection
 
 from progress_studio.config.workbook_protection import WORKBOOK_SHEET_PASSWORD
+from progress_studio.infrastructure.excel.earned_value_workbook import (
+    EARNED_VALUE_SHEET,
+    EV_VIEW_DATE_NAME,
+)
 
 
 EDITABLE_MAIN_PLAN_HEADERS = {
@@ -151,6 +158,37 @@ def _protect_dashboard(ws) -> None:
     _set_unlocked(ws["G5"])
     _set_unlocked(ws["K5"])
 
+
+def _protect_earned_value(ws) -> None:
+    """Keep EV protected, opening only its semantic single-cell view control."""
+    _protect_sheet(ws)
+    definition = ws.parent.defined_names.get(EV_VIEW_DATE_NAME)
+    try:
+        if definition is None:
+            return
+        tokens = Tokenizer("=" + definition.attr_text).items
+        if (len(tokens) != 1 or tokens[0].type != "OPERAND"
+                or tokens[0].subtype != "RANGE"):
+            return
+        destinations = list(definition.destinations)
+        if len(destinations) != 1:
+            return
+        sheet_name, reference = destinations[0]
+        if sheet_name != ws.title:
+            return
+        min_col, min_row, max_col, max_row = range_boundaries(reference)
+    except (AttributeError, TypeError, ValueError, TokenizerError):
+        # Missing/broken bindings must not unlock a guessed cell or wider range.
+        return
+    if (min_col is None or min_row is None
+            or (min_col, min_row) != (max_col, max_row)
+            or not (1 <= min_col <= 16384 and 1 <= min_row <= 1048576)):
+        return
+    cell = ws.cell(min_row, min_col)
+    if isinstance(cell, Cell) and cell.data_type != "f":
+        _set_unlocked(cell)
+
+
 def _protect_payment_input(ws) -> None:
     _protect_sheet(ws)
 
@@ -184,6 +222,8 @@ def apply_final_sheet_protection(workbook) -> tuple[str, ...]:
             _protect_payment_input(ws)
         elif ws.title == "Dashboard":
             _protect_dashboard(ws)
+        elif ws.title == EARNED_VALUE_SHEET:
+            _protect_earned_value(ws)
         else:
             _protect_sheet(ws)
 
