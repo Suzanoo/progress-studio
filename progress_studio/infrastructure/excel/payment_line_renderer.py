@@ -22,6 +22,7 @@ from progress_studio.domain.payment_models import (
 )
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
+from progress_studio.infrastructure.excel.calculation_policy import request_initial_manual_excel_recalculation
 
 
 class PaymentLineRenderer:
@@ -46,6 +47,8 @@ class PaymentLineRenderer:
         source_workbook: Path,
         output_workbook: Path,
         periods: tuple[PaymentResolvedPeriod, ...],
+        *,
+        initial_manual_recalculation: bool = False,
     ) -> PaymentMultiLineRenderResult:
         """Standalone Payment boundary: load once, render, finalize once, save once."""
         source = Path(source_workbook)
@@ -71,6 +74,8 @@ class PaymentLineRenderer:
                     output_workbook=output,
                 )
                 finalize_workbook(wb, mode="snapshot", include_guide=True)
+                if initial_manual_recalculation:
+                    request_initial_manual_excel_recalculation(wb)
                 wb.save(temp_path)
             finally:
                 wb.close()
