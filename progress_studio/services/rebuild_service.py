@@ -25,6 +25,7 @@ from progress_studio.infrastructure.excel.traditional_overlay_workbook import bu
 from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
+from progress_studio.infrastructure.excel.calculation_policy import request_initial_manual_excel_recalculation
 from progress_studio.services.payment_service import PaymentService
 from progress_studio.services.monthly_cache_deriver import MonthlyCacheDeriver
 from progress_studio.services.payment_progress_adapter import MainDatasetPaymentProgressAdapter
@@ -424,6 +425,8 @@ class WorkbookRebuildEngine:
                     output_workbook=output,
                 )
                 finalize_workbook(wb, mode="live", include_guide=True)
+                # Payment save clears formula caches; request Excel to rebuild them.
+                request_initial_manual_excel_recalculation(wb)
                 wb.save(temp_path)
             finally:
                 wb.close()
@@ -483,6 +486,7 @@ class WorkbookRebuildEngine:
                 temp_path,
                 temp_path,
                 temp_path,
+                initial_manual_recalculation=True,
             )
 
             # PaymentService/renderer owns the single final policy pass for this

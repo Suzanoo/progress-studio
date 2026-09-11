@@ -377,6 +377,8 @@ class PaymentService:
         payment_workbook: Path,
         output_workbook: Path,
         period_ids: tuple[str, ...] | None = None,
+        *,
+        initial_manual_recalculation: bool = False,
     ) -> PaymentMultiLineRenderResult:
         """Render all populated periods by default, or an explicit subset when requested."""
         prepared = self.prepare_payment_input(
@@ -414,6 +416,7 @@ class PaymentService:
             Path(progress_workbook),
             Path(output_workbook),
             tuple(selected),
+            initial_manual_recalculation=initial_manual_recalculation,
         )
 
     def render_single_payment_line(
