@@ -91,5 +91,8 @@ def test_df1_marker_ownership_remains_on_raw_actual_helper():
     _build_live_data_sheet(workbook, _dataset(), object())
 
     data = workbook["Dashboard_Data"]
-    assert "SUMIFS($L$2:$L$7" in data["O2"].value
-    assert "SUMIFS($H$2:$H$7" in data["N2"].value
+    for row in range(2, 8):
+        assert f'L{row},NA()' in data.cell(row, 15).value
+        assert f'NA(),H{row})' in data.cell(row, 14).value
+        assert 'COUNTIFS($J$2:$J$7' in data.cell(row, 15).value
+        assert '$C$2:$C$7,"<>"' in data.cell(row, 15).value
