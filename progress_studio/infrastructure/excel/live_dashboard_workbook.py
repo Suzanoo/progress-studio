@@ -6,6 +6,7 @@ from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.legend import LegendEntry
+from openpyxl.chart.series import SeriesLabel
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -511,6 +512,8 @@ def build_live_dashboard(
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(cats)
     if len(chart.series) >= 2:
+        chart.series[0].tx = SeriesLabel(v="Plan")
+        chart.series[1].tx = SeriesLabel(v="Actual")
         chart.series[0].graphicalProperties.line.solidFill = BLUE
         chart.series[1].graphicalProperties.line.solidFill = GREEN
         # Keep the two main curves clean: no point markers along the full line.
