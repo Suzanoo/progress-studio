@@ -1200,11 +1200,19 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             # Show the selected date directly above the redline.  Category-name
             # labels keep the text live with the dropdown and avoid duplicating
             # a second floating worksheet label.
+            from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
+                _cutoff_label_text_properties, _label_graphical_properties,
+            )
             status_series.dLbls = DataLabelList(
                 showCatName=True,
                 showVal=False,
                 showSerName=False,
                 dLblPos="t",
+                showLegendKey=False,
+                # Literal prefix plus live category date, with no separator node.
+                numFmt='"Status Date "dd/mm/yyyy',
+                spPr=_label_graphical_properties("FCE4D6", "C00000"),
+                txPr=_cutoff_label_text_properties(),
             )
             chart.y_axis.scaling.min = 0
             chart.y_axis.scaling.max = data_layout.status_top

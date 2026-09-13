@@ -103,7 +103,7 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     assert "#N/A" not in dashboard["E10"].value
 
     chart = dashboard._charts[0]
-    assert len(chart.series) == 4
+    assert len(chart.series) == 5
     assert chart.y_axis.majorUnit == 0.25
     assert chart.y_axis.title is not None
     assert chart.x_axis.title is not None
@@ -115,7 +115,7 @@ def test_lw1133_kpis_use_error_free_raw_actual_and_cutoff_markers(tmp_path: Path
     assert chart.series[3].val.numRef.f.endswith("$O$2:$O$6")
     assert chart.series[2].dLbls is None
     assert chart.series[3].dLbls is None
-    assert [(entry.idx, entry.delete) for entry in chart.legend.legendEntry] == [(2, True), (3, True)]
+    assert [(entry.idx, entry.delete) for entry in chart.legend.legendEntry] == [(2, True), (3, True), (4, True)]
 
     # LW-11.3.4: schedule card keeps both status and signed progress gap.
     assert "CHAR(10)" in dashboard["H10"].value

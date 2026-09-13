@@ -19,7 +19,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
     LIGHT_AMBER, LIGHT_BLUE, LIGHT_GRAY, LIGHT_GREEN, LIGHT_RED,
     MUTED, NAVY, RED, WHITE, _FONT, _LAYOUT,
     _merge_title, _remove, _solid, _style_box, _thin_border, _add_kpi_icon,
-    _date_axis_for_line_chart,
+    _date_axis_for_line_chart, _add_dashboard_cutoff_indicator,
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
@@ -549,6 +549,7 @@ def build_live_dashboard(
     # horizontal context. Excel will thin date labels automatically as needed.
     chart.y_axis.majorUnit = 0.25
     chart.y_axis.title = "Progress (%)"
+    _add_dashboard_cutoff_indicator(chart, data_ws, cats, last_data_row)
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")

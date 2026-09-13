@@ -39,6 +39,57 @@ MUTED = "667085"
 WHITE = "FFFFFF"
 
 
+def _add_dashboard_cutoff_indicator(chart, data_ws, cats, last_row):
+    """AB belongs exclusively to the Dashboard cutoff, in both renderers.
+
+    Later main-sheet overlay builders own P:AA. Keep this helper outside that
+    block and bounded to the Dashboard curves, not the overlay's padded rows.
+    """
+    from openpyxl.chart.data_source import AxDataSource, NumRef
+    from openpyxl.chart.error_bar import ErrorBars
+    from openpyxl.chart.label import DataLabelList
+    from openpyxl.chart.legend import LegendEntry
+    from openpyxl.chart.series import SeriesLabel
+    from openpyxl.drawing.line import LineProperties
+    # Local import: the overlay renderer also imports Dashboard theme constants.
+    from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
+        _cutoff_label_text_properties, _label_graphical_properties,
+    )
+
+    data_ws["AB1"] = "Dashboard Cutoff (owned by Dashboard renderers)"
+    for row in range(2, last_row + 1):
+        # Match main-sheet selection: the last reporting point at/before cutoff.
+        # G already selects Weekly/Monthly and masks empty reporting dates.
+        data_ws.cell(row, 28, (
+            f'=IF(G{row}="",NA(),IF(AND(G{row}<=Dashboard!$K$5,'
+            f'OR(G{row + 1}="",G{row + 1}>Dashboard!$K$5)),1,NA()))'
+        ))
+    index = len(chart.series)
+    chart.add_data(Reference(data_ws, min_col=28, min_row=1, max_row=last_row),
+                   titles_from_data=True)
+    series = chart.series[index]
+    series.tx = SeriesLabel(v="Cutoff")
+    # Never reset categories on the existing curves or CP-1 marker series.
+    series.cat = AxDataSource(numRef=NumRef(f=str(cats)))
+    series.graphicalProperties.line.noFill = True
+    series.marker.symbol = "none"
+    series.errBars = ErrorBars(
+        errDir="y", errBarType="minus", errValType="fixedVal", noEndCap=True,
+        val=1, spPr=GraphicalProperties(ln=LineProperties(
+            solidFill="C00000", w=19050, prstDash="dash")),
+    )
+    series.dLbls = DataLabelList(
+        showVal=False, showCatName=True, showSerName=False, showLegendKey=False,
+        # Format the live category, including its prefix; avoid relying on
+        # openpyxl's non-text serialization of the OOXML label separator.
+        dLblPos="t", numFmt='"Cutoff "dd/mm/yyyy',
+        spPr=_label_graphical_properties("FCE4D6", "C00000"),
+        txPr=_cutoff_label_text_properties(),
+    )
+    if chart.legend is not None:
+        chart.legend.legendEntry.append(LegendEntry(idx=index, delete=True))
+
+
 def _load_dashboard_theme() -> dict:
     path = Path(__file__).resolve().parents[2] / "config" / "dashboard_theme.json"
     defaults = {
@@ -610,6 +661,7 @@ def _build_dashboard_sheet(workbook, project_name: str | None = None) -> None:
             chart.series[0].marker.size = int(_LAYOUT.get("marker_size", 4))
             chart.series[1].marker.symbol = "circle"
             chart.series[1].marker.size = int(_LAYOUT.get("marker_size", 4))
+    _add_dashboard_cutoff_indicator(chart, workbook[DATA_SHEET], cats, max_rows)
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")

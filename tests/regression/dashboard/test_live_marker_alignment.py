@@ -105,7 +105,7 @@ def test_marker_ranges_and_axes_survive_save_and_round_trip(tmp_path):
             ns = {'c': 'http://schemas.openxmlformats.org/drawingml/2006/chart'}
             chart = ET.fromstring(package.read('xl/charts/chart1.xml'))
             series = chart.findall('.//c:lineChart/c:ser', ns)
-            assert len(series) == 4
+            assert len(series) == 5
             for index, col in ((2, 'N'), (3, 'O')):
                 category = series[index].find('c:cat/c:numRef/c:f', ns)
                 assert category is not None
@@ -115,7 +115,7 @@ def test_marker_ranges_and_axes_survive_save_and_round_trip(tmp_path):
             axes = [chart.find('.//c:dateAx', ns), chart.find('.//c:valAx', ns)]
             assert [(a.find('c:axId', ns).get('val'), a.find('c:crossAx', ns).get('val')) for a in axes] == [('10', '100'), ('100', '10')]
         wb = load_workbook(path)
-        for series in wb['Dashboard']._charts[0].series[2:]:
+        for series in wb['Dashboard']._charts[0].series[2:4]:
             assert series.dLbls is None
     wb.close()
 

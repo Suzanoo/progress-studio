@@ -13,6 +13,7 @@ from progress_studio.infrastructure.excel.live_dashboard_workbook import build_l
 from progress_studio.infrastructure.excel.rebuild_workbook_reader import RebuildWorkbookReader
 from tests.regression.dashboard.test_progress_curve_contract import _fixture
 from tests.unit.earn_value.test_earned_value_workbook import _result
+from tests.regression.dashboard.test_dashboard_cutoff_indicator_pipeline import chart_for_sheet, assert_date_label
 
 NS = {'c': 'http://schemas.openxmlformats.org/drawingml/2006/chart',
       'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
@@ -33,8 +34,8 @@ def test_business_legend_and_marker_style_survive_final_save_and_reopen(tmp_path
         source = _fixture(tmp_path / 'input.xlsx')
         wb = load_workbook(source)
         build_live_dashboard(wb, RebuildWorkbookReader().read_main_dataset(source), cutoff=datetime(2026, 7, 24))
-        titles = ['Plan', 'Actual', 'Cutoff Plan Marker', 'Cutoff Actual Marker']
-        hidden = [2, 3]
+        titles = ['Plan', 'Actual', 'Cutoff Plan Marker', 'Cutoff Actual Marker', 'Cutoff']
+        hidden = [2, 3, 4]
     else:
         wb = Workbook()
         render_earned_value_sheet(wb, _result())
@@ -50,7 +51,7 @@ def test_business_legend_and_marker_style_survive_final_save_and_reopen(tmp_path
         path = tmp_path / f'{iteration}.xlsx'
         wb.save(path)
         with ZipFile(path) as package:
-            root = ET.fromstring(package.read('xl/charts/chart1.xml'))
+            root = chart_for_sheet(package, kind)
             series = root.findall('.//c:lineChart/c:ser', NS)
             # Deletion indices are valid only with this verified serialized order.
             assert [_title(s, wb) for s in series] == titles
@@ -70,6 +71,7 @@ def test_business_legend_and_marker_style_survive_final_save_and_reopen(tmp_path
                 assert node.find('c:crossAx', NS).get('val') == cross_id
             if kind == 'Earned Value':
                 status = series[2]
+                assert_date_label(status, 'Status Date')
                 assert status.find('c:errBars/c:spPr/a:ln/a:solidFill/a:srgbClr', NS).get('val') == 'C00000'
                 assert status.find('c:dLbls/c:showCatName', NS).get('val') == '1'
         wb.close()
