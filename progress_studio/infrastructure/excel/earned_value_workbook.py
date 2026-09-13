@@ -1118,7 +1118,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
     )
 
     # Project performance chart.
-    ws["A10"] = "PROJECT PERFORMANCE"
+    ws["A10"] = "PERFORMANCE CURVE — PV VS EV"
     ws["A10"].font = Font(name=_FONT, size=11, bold=True, color=_NAVY)
     # The chart already owns the PV / EV / Status Date legend.  Do not repeat a
     # worksheet-level legend on the right; it creates dead space and visually
@@ -1200,11 +1200,19 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             # Show the selected date directly above the redline.  Category-name
             # labels keep the text live with the dropdown and avoid duplicating
             # a second floating worksheet label.
+            from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
+                _cutoff_label_text_properties, _label_graphical_properties,
+            )
             status_series.dLbls = DataLabelList(
                 showCatName=True,
                 showVal=False,
                 showSerName=False,
                 dLblPos="t",
+                showLegendKey=False,
+                # Literal prefix plus live category date, with no separator node.
+                numFmt='"Status Date "dd/mm/yyyy',
+                spPr=_label_graphical_properties("FCE4D6", "C00000"),
+                txPr=_cutoff_label_text_properties(),
             )
             chart.y_axis.scaling.min = 0
             chart.y_axis.scaling.max = data_layout.status_top
@@ -1217,15 +1225,15 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             pv_marker.graphicalProperties.line.noFill = True
             pv_marker.marker.symbol = "circle"
             pv_marker.marker.size = 7
-            pv_marker.marker.graphicalProperties.solidFill = _RED
-            pv_marker.marker.graphicalProperties.line.solidFill = _RED
+            pv_marker.marker.graphicalProperties.solidFill = _BLUE
+            pv_marker.marker.graphicalProperties.line.solidFill = _BLUE
         if len(chart.series) >= 5:
             ev_marker = chart.series[4]
             ev_marker.graphicalProperties.line.noFill = True
             ev_marker.marker.symbol = "circle"
             ev_marker.marker.size = 7
-            ev_marker.marker.graphicalProperties.solidFill = _RED
-            ev_marker.marker.graphicalProperties.line.solidFill = _RED
+            ev_marker.marker.graphicalProperties.solidFill = _GREEN
+            ev_marker.marker.graphicalProperties.line.solidFill = _GREEN
 
         # Keep the management legend compact: PV, EV and Status Date only.
         # Marker-only helper series are deliberately hidden from the legend.

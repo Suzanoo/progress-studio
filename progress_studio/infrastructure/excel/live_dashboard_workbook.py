@@ -6,6 +6,7 @@ from datetime import date, datetime
 
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.legend import LegendEntry
+from openpyxl.chart.series import SeriesLabel
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -18,7 +19,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import (
     LIGHT_AMBER, LIGHT_BLUE, LIGHT_GRAY, LIGHT_GREEN, LIGHT_RED,
     MUTED, NAVY, RED, WHITE, _FONT, _LAYOUT,
     _merge_title, _remove, _solid, _style_box, _thin_border, _add_kpi_icon,
-    _date_axis_for_line_chart,
+    _date_axis_for_line_chart, _add_dashboard_cutoff_indicator,
 )
 from progress_studio.services.activity_table_deriver import ActivityTableDeriver
 from progress_studio.services.progress_cache_deriver import ProgressCacheDeriver
@@ -137,7 +138,8 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             progress_row, _reporting = weekly_points[idx]
             ws.cell(row, 1, f"='progress'!A{progress_row}")
             ws.cell(row, 2, f"='progress'!B{progress_row}")
-            ws.cell(row, 3, f"='progress'!C{progress_row}")
+            # Preserve missing Actual as blank, including literal blank sources.
+            ws.cell(row, 3, f'=IF(\'progress\'!C{progress_row}="","",\'progress\'!C{progress_row})')
             # Keep the validation/reporting list as a literal date.  Column A is
             # intentionally a lightweight live link to ``progress`` and therefore
             # cannot be resolved by openpyxl while rebuilding overlay geometry.
@@ -192,19 +194,22 @@ def _build_live_data_sheet(workbook, dataset: MainDataset, cache: ProgressCache)
             f'IF(L{row}="",NA(),L{row})))',
         )
 
-    # LW-11.3.5: marker helpers are a *single-point* range, not a full
-    # weekly/monthly series filled with #N/A. Excel can retain DataLabel objects
-    # for hidden/error points, which caused dozens of labels to appear. Keeping
-    # the marker source physically one row long guarantees one label per marker.
-    ws["M2"] = "=Dashboard!$K$5"
-    ws["N2"] = (
-        f'=IFERROR(SUMIFS($H$2:$H${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5),NA())'
-    )
-    ws["O2"] = (
-        f'=IFERROR(IF(ABS(SUMIFS($L$2:$L${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5)-'
-        f'SUMIFS($H$2:$H${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5))>0.0000001,'
-        f'SUMIFS($L$2:$L${max_rows + 1},$G$2:$G${max_rows + 1},Dashboard!$K$5),NA()),NA())'
-    )
+    # LineChart series share category positions: align marker values with G/H/I
+    # instead of supplying a separate one-point date category at index zero.
+    # Keep non-selected points as #N/A and never attach marker data labels.
+    for row in range(2, max_rows + 2):
+        ws.cell(row, 13, f'=IF(G{row}="","",G{row})')
+        ws.cell(row, 14, f'=IF(OR(G{row}="",G{row}<>Dashboard!$K$5),NA(),H{row})')
+        # L owns the carry-forward value, but its zero fallback cannot tell
+        # missing Actual from a recorded zero. Check the weekly source history
+        # without changing L, the curve mask, or the authoritative history.
+        ws.cell(
+            row, 15,
+            f'=IFERROR(IF(OR(G{row}="",G{row}<>Dashboard!$K$5),NA(),'
+            f'IF(AND(COUNTIFS($J$2:$J${weekly_last_row},"<="&Dashboard!$K$5,'
+            f'$C$2:$C${weekly_last_row},"<>")>0,ABS(L{row}-H{row})>0.0000001),'
+            f'L{row},NA())),NA())',
+        )
 
     for row in range(2, ws.max_row + 1):
         for col in (1, 4, 7, 10, 11, 13):
@@ -507,6 +512,8 @@ def build_live_dashboard(
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(cats)
     if len(chart.series) >= 2:
+        chart.series[0].tx = SeriesLabel(v="Plan")
+        chart.series[1].tx = SeriesLabel(v="Actual")
         chart.series[0].graphicalProperties.line.solidFill = BLUE
         chart.series[1].graphicalProperties.line.solidFill = GREEN
         # Keep the two main curves clean: no point markers along the full line.
@@ -515,17 +522,12 @@ def build_live_dashboard(
 
     # Two marker-only series expose the current cutoff positions without labels.
     # KPI cards carry the numeric values, so the chart stays visually clean.
-    marker_data = Reference(data_ws, min_col=14, max_col=15, min_row=1, max_row=2)
-    marker_cats = Reference(data_ws, min_col=13, min_row=2, max_row=2)
+    marker_data = Reference(data_ws, min_col=14, max_col=15, min_row=1, max_row=last_data_row)
     chart.add_data(marker_data, titles_from_data=True)
-    # add_data() applies the chart's existing category range to new series in
-    # some Excel/openpyxl combinations. Force both marker series to the single
-    # dynamic cutoff date cell so the marker source remains one physical point.
-    for marker_series in chart.series[2:4]:
-        marker_series.cat = None
     chart.set_categories(cats)
+    # Numeric date categories match the curves' physical reporting sequence.
     from openpyxl.chart.data_source import AxDataSource, NumRef
-    marker_cat_ref = f"'{DATA_SHEET}'!$M$2:$M$2"
+    marker_cat_ref = str(cats)
     for marker_series in chart.series[2:4]:
         marker_series.cat = AxDataSource(numRef=NumRef(f=marker_cat_ref))
     for idx, color in ((2, BLUE), (3, GREEN)):
@@ -547,6 +549,7 @@ def build_live_dashboard(
     # horizontal context. Excel will thin date labels automatically as needed.
     chart.y_axis.majorUnit = 0.25
     chart.y_axis.title = "Progress (%)"
+    _add_dashboard_cutoff_indicator(chart, data_ws, cats, last_data_row)
     ws.add_chart(chart, "B16")
 
     ws.merge_cells("B35:M35")

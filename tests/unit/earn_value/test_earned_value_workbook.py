@@ -285,8 +285,8 @@ def test_ev52_reuses_dashboard_visual_language_and_avoids_duplicate_cutoff_list(
     assert chart.legend.position == "b"
     assert chart.series[2].errBars.spPr.line.solidFill.srgbClr == "C00000"
     assert chart.series[2].errBars.spPr.line.prstDash == "dash"
-    assert chart.series[3].marker.graphicalProperties.solidFill.srgbClr == "C00000"
-    assert chart.series[4].marker.graphicalProperties.solidFill.srgbClr == "C00000"
+    assert chart.series[3].marker.graphicalProperties.solidFill.srgbClr == "2F75B5"
+    assert chart.series[4].marker.graphicalProperties.solidFill.srgbClr == "70AD47"
 
 
 @pytest.mark.unit
