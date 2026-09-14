@@ -62,7 +62,8 @@ def test_rb5_collision_render_has_distinct_backbones_and_staggered_labels(tmp_pa
         ),
     )
 
-    PaymentLineRenderer().render_periods(source, output, periods)
+    renderer = PaymentLineRenderer()
+    renderer.render_periods(source, output, periods)
 
     wb = load_workbook(output, data_only=False)
     try:
@@ -73,10 +74,10 @@ def test_rb5_collision_render_has_distinct_backbones_and_staggered_labels(tmp_pa
             for img in ws._images
         ]
         assert anchors[0] != anchors[1]
-        assert ws._images[0].width == 290
-        assert ws._images[0].height == 52
-        assert ws._images[1].width == 290
-        assert ws._images[1].height == 52
+        assert ws._images[0].width == renderer.theme.label.width_px
+        assert ws._images[0].height == renderer.theme.label.height_px
+        assert ws._images[1].width == renderer.theme.label.width_px
+        assert ws._images[1].height == renderer.theme.label.height_px
 
         # P08 keeps the true boundary, P09 takes a nearby visual lane.
         p08_left = ws.cell(11, 18).border.left
