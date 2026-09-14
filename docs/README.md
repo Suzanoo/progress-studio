@@ -37,3 +37,5 @@ current operational guide.
 
 -   [WIN-1 Windows Portable Build](WIN1_WINDOWS_PORTABLE_BUILD.md) ---
     Windows portable packaging contract and acceptance.
+
+- [Financial Forecast calculation contract](FINANCIAL_FORECAST_CONTRACT.md) — FF-1 source-neutral cash model, timing, reconciliation, defaults and limits.
