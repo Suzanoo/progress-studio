@@ -210,6 +210,13 @@ class MappedWorkbookExporter:
                 if monthly_periods:
                     dataset = main_dataset_from_workbook(workbook, workbook_name=output_file.name)
                     build_traditional_overlays(workbook, dataset)
+                # Finance follows the same authoritative edited-source choice as Payment.
+                from progress_studio.infrastructure.excel.finance_input_workbook import preserve_finance_inputs
+                finance_source = load_workbook(payment_source, data_only=False)
+                try:
+                    preserve_finance_inputs(finance_source, workbook)
+                finally:
+                    finance_source.close()
                 finalize_workbook(workbook, mode="snapshot", include_guide=True)
                 workbook.save(temp_file)
                 if progress_callback is not None:

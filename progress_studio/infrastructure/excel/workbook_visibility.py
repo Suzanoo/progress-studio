@@ -11,6 +11,8 @@ VISIBLE_SHEETS = (
     "Dashboard",
     "Earned Value",
     "EV Table",
+    "Finance Input",
+    "Cash Flow",
 )
 
 HIDDEN_SHEETS = (
@@ -18,6 +20,7 @@ HIDDEN_SHEETS = (
     "progress_table",
     "Dashboard_Data",
     "EV_Data",
+    "Finance_Data",
 )
 
 

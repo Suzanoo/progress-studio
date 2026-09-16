@@ -39,3 +39,4 @@ current operational guide.
     Windows portable packaging contract and acceptance.
 
 - [Financial Forecast calculation contract](FINANCIAL_FORECAST_CONTRACT.md) — FF-1 source-neutral cash model, timing, reconciliation, defaults and limits.
+- [Finance workbook](FF2_WORKBOOK.md) — FF-2 persistent inputs, live formulas, commands and Desktop Excel acceptance.
