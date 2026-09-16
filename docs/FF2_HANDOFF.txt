@@ -1,0 +1,79 @@
+Progress Studio FF-2 — engineering handoff, 2026-09-15
+
+STATUS
+Implementation delivered for review and Desktop Excel acceptance.
+FF-2 acceptance is NOT closed. FF-3 has NOT started.
+No Git/GitHub write operations were performed.
+
+BASELINE
+Suzanoo/progress-studio, main
+8515608ccb983202ff7ee30b74a8036094db2438
+Relevant source files were verified by Git blob hashes against the read-only
+GitHub tree. Work was performed in an isolated source copy, not a Git checkout.
+WORK_CONTRACT.md, WORK_SKILL.md and FINANCIAL_FORECAST_CONTRACT.md were followed.
+FF-0/FF-1 acceptance is retained; old FF-0 findings were not re-investigated.
+
+DELIVERED
+Persistent finance settings and three input tables; exact cash dates; gross
+certificate net/retention split; linked settlement/snapshot semantics; overrides
+with reasons and explicit blank/zero/clear-date handling; live dated funding and
+monthly reporting; invalid/incomplete status; Mapping input preservation;
+finance visibility registration; new-path atomic extension/refresh entry point.
+No GUI/workspace, automatic Progress forecast phasing, charts or FF-3 work added.
+Read docs/FF2_WORKBOOK.md for commands, scope, limitations and Excel acceptance.
+
+TEST RESULTS (distinct runs, counts must not be added as unique tests)
+- Finance unit + lifecycle: 85 passed in 11.23s.
+- Independent formula parity and invalid-input scenarios: 32 passed in 85.63s.
+- Smoke: 48 passed, 1 skipped, 616 deselected in 4.50s.
+- Regression: 1 failed, 200 passed, 1 skipped, 463 deselected in 38.00s.
+  The failure is the existing test_payment_label_is_doubled disagreement:
+  expected width 290, baseline configuration is 150. Neither the test nor
+  configuration was changed by FF-2. The broad regression gate is NOT PASS.
+  The skipped module is the optional formula evaluator, run separately above.
+- Real NKC2 extension structural check: no package issues; zero changed unowned
+  original package parts (apart from declared shared workbook/style metadata).
+  Source: NKC2-R03_2026-09-13_earned_value(2).xlsx.
+- Python 3.12.14; pytest 9.1.1. Test-only dependencies were installed outside
+  the repository. No production dependency or FF-1 domain/service was changed.
+
+FORMULA VERIFICATION LIMITS
+Independent evaluator supports the financial formulas but not full Excel
+ISFORMULA/blank-name semantics. Its disposable input uses exact named-reference
+inlining and cell-metadata ISFORMULA evaluation. No financial arithmetic is
+replaced by FF-1 outputs. This is not an executed Desktop Excel test.
+The artifact preview engine has additional boolean SUMIFS limitations; it is
+not used as authoritative financial parity evidence. Visual acceptance remains.
+
+PRESERVATION DESIGN
+Finance extension does not rebuild existing Progress/Dashboard/Payment/EV views.
+It grafts only owned sheets/tables into the original package, preserving existing
+chart/drawing bytes and original calculation properties. Styles are remapped
+without changing original style indices. The existing numbered opaque-part
+restoration helper could not guarantee this boundary, so a finance-only adapter
+was necessary. No general-purpose replacement infrastructure was introduced.
+Mapping follows Payment's edited-source precedence; the new lifecycle tests
+exercise all four Progress/Payment rebuild variants plus Mapping.
+Historical FF-0 tests were updated only for the now-registered visibility titles
+and explicit rejection of the disposable probe schema by production Mapping.
+
+REMAINING GATES / RISKS
+- Desktop Excel no-repair, first-open, F9/Save, protection, refresh/reopen and
+  actual project acceptance are PENDING.
+- Broad regression has the pre-existing Payment label failure above.
+- Large-capacity performance, arbitrary third-party workbook features,
+  .xlsm/1904 dates and extreme aggregate precision are not certified.
+- Finance sheet comments/hyperlinks are rejected by the narrow publisher;
+  ordinary Notes cells are supported. Prepared capacity and 600-month horizon
+  are explicit limits, not silently truncated successful forecasts.
+- Inputs require reconciled actuals/remaining estimates. No commercial balances
+  are fabricated from BOQ Contract Value or EV.
+
+INTENDED COMMIT MESSAGE (not committed)
+feat(finance): add persistent finance inputs and live workbook view
+
+HANDOFF
+The changed-files ZIP contains complete files at repository-relative paths,
+not the full repository. The synthetic acceptance workbook is separate and is
+not a production project forecast. Original source files were not overwritten.
+Wait for Product Owner acceptance; do not begin FF-3 or perform Git writes.
