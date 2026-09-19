@@ -7,8 +7,8 @@ Applies to: Coordinator acting between the Product Owner and Engineer
 ## Current role assignment
 
 - Product Owner: the user.
-- Coordinator: Codex.
-- Engineer / Architect / Investigator / authorized Git Operator: ChatGPT.
+- Coordinator / authorized Git Operator: ChatGPT.
+- Engineer / Architect / Investigator: Work.
 
 These are role assignments, not permanent product-name rules. The Product Owner
 may reassign the agents without renaming these documents. This section is the
@@ -113,16 +113,17 @@ Request wider re-investigation only when:
 
 ## 9. Git authority
 
-The Engineer is the assigned Git Operator. The Coordinator reviews and briefs
-the work; routine Git execution is not part of the Coordinator role.
+The Coordinator is the assigned Git Operator. The Engineer delivers and explains
+the work but does not perform Git or GitHub writes. Routine Git execution belongs
+to Coordinator only after Product Owner acceptance and explicit authorization.
 
 Implementation handoff must precede Git execution:
 
 Engineer sends a `.txt` report and changed files
 → Coordinator reads and summarizes with a numbered acceptance list
 → Product Owner accepts the work and explicitly authorizes Git actions
-→ Engineer performs only those actions
-→ Engineer reports the Git result to the Product Owner and Coordinator.
+→ Coordinator performs only those actions
+→ Coordinator reports the Git result to the Product Owner.
 
 Acceptance alone is not Git authorization. Review/apply/test does not authorize
 commit; commit does not authorize push; push does not authorize merge; merge
@@ -142,7 +143,7 @@ commit message, limitations and remaining acceptance gates.
 Coordinator prepares the acceptance briefing; Engineer must not treat its own
 test results or the Coordinator's recommendation as Product Owner acceptance.
 
-After authorized Git execution, Engineer reports repository, branch, commit SHA,
+After authorized Git execution, Coordinator reports repository, branch, commit SHA,
 push status, PR/merge result when applicable, and any remaining gates or failures.
 Do not claim a successful push or merge without verification.
 
