@@ -34,14 +34,13 @@ class ProgressStudioApplication:
             source_xml = source_xml.expanduser().resolve()
             if not source_xml.is_file():
                 raise ApplicationError(f"Input XML file not found: {source_xml}")
-            if options.amount <= 0:
-                raise ApplicationError("--amount must be greater than 0.")
 
             cutoff_day = options.cutoff_day or self._cli.select_cutoff_day()
             context = PipelineContext(
                 source_xml=source_xml,
                 cutoff_day=cutoff_day,
-                amount_per_activity=options.amount,
+                amount_per_activity=1.0,
+                weight_basis=options.weight_basis,
             )
             result = self._pipeline.run(context)
             if result.output_workbook:

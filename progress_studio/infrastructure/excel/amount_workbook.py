@@ -103,6 +103,10 @@ def rebuild_amount_mapping(workbook_path: Path, *, main_sheet: str, mapping_shee
     rows = collect_schedule_rows(ws_main)
     activities = [r for r in rows if str(r["row_type"]).lower() == "activity"]
     decision = decide_amount_source([r["amount"] for r in activities])
+    from progress_studio.infrastructure.excel.weight_basis import creation_basis, uses_dummy_weights
+    basis = creation_basis(wb)
+    if uses_dummy_weights(wb):
+        decision = AmountSourceDecision(True, f"DUMMY_{basis.upper()}")
     if mapping_sheet in wb.sheetnames:
         del wb[mapping_sheet]
     ws = wb.create_sheet(mapping_sheet)

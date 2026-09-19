@@ -61,9 +61,19 @@ Supported XML paths in the current normalizer:
 -   Microsoft Project XML.
 -   Primavera P6 XML.
 
-Amount/cost is deliberately not normalized from schedule XML. Initial
-workbook generation keeps the established fallback/fake amount behavior;
-BOQ Mapping owns real cost allocation.
+Amount/cost is deliberately not normalized from schedule XML in MS-1.
+Adapters expose working duration in hours and an explicit milestone flag.
+Create assigns non-monetary weights before the existing Amount Mapping pipeline:
+Equal (default) assigns 1 to ordinary activities; Duration uses source duration;
+both assign 0 to milestones and exclude WBS nodes from duplicate weighting.
+Duration validation never substitutes elapsed dates or Equal weights.
+BOQ Mapping continues to own real amount allocation.
+
+Creation Weight Basis is a key/value entry in the existing Info sheet, already
+preserved by Rebuild. Mapping generation explicitly carries this provenance into
+new workbooks. Excel presentation helpers explain dummy units without renaming
+engine-recognized Amount headers or introducing fixed cells in domain/services.
+See docs/WEIGHT_SELECTION.md for the MS-1 lifecycle contract.
 
 ### After workbook creation
 

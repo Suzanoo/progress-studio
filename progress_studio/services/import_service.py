@@ -5,6 +5,7 @@ from pathlib import Path
 from progress_studio.infrastructure.excel import ImportWorkbookWriter
 from progress_studio.infrastructure.schedule_xml import NormalizedScheduleXmlReader
 from progress_studio.services.schedule_service import ScheduleService
+from progress_studio.services.weighting import assign_dummy_weights, validate_weight_basis
 
 
 class ImportService:
@@ -13,8 +14,14 @@ class ImportService:
         self._schedule_service = schedule_service
         self._writer = writer
 
-    def import_xml(self, source_xml: Path, output_file: Path) -> tuple[str, int, int]:
+    def import_xml(self, source_xml: Path, output_file: Path, *, weight_basis: str | None = None) -> tuple[str, int, int]:
         project_name, rows = self._reader.read(source_xml)
+        if weight_basis is not None:
+            weight_basis = validate_weight_basis(weight_basis)
+            assign_dummy_weights(rows, weight_basis)
         self._schedule_service.roll_up_summary_dates(rows)
-        self._writer.write(output_file, source_xml, project_name, rows)
+        if weight_basis is None:
+            self._writer.write(output_file, source_xml, project_name, rows)
+        else:
+            self._writer.write(output_file, source_xml, project_name, rows, weight_basis=weight_basis)
         return project_name, sum(row.is_summary for row in rows), sum(not row.is_summary for row in rows)

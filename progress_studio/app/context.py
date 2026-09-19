@@ -22,3 +22,4 @@ class PipelineContext:
     monthly_workbook: Path | None = None
     output_workbook: Path | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    weight_basis: str = "equal"

@@ -17,8 +17,20 @@ workbook.
 The initial workbook includes weekly `main`, monthly `main_monthly`,
 Dashboard and internal/helper data required by the selected workflow.
 
-Initial schedule Amount uses Progress Studio's fallback/fake amount
-behavior. Real BOQ cost ownership belongs to Mapping.
+Choose **Equal** (default) or **Duration** as the Weight basis. Amount is visible
+but unavailable until MS-2. No fallback amount needs to be entered.
+
+Equal gives each ordinary activity one calculation unit. Duration uses the
+source working duration normalized to hours (P6 PlannedDuration / MSP Duration),
+not elapsed Start–Finish time. Milestones stay in the workbook with zero weight;
+summary/WBS rows roll up activity weights. Invalid ordinary duration stops
+Duration creation with the affected Activity IDs; it never switches to Equal.
+
+These dummy weights are not Contract Value, actual cost or cash flow. The workbook
+README identifies the basis; Info preserves it through Save/Reopen and Rebuild.
+BOQ Mapping still owns real amount allocation and updates the current-basis label.
+Weight is independent of the existing auto/flat/front/back/bell Plan distribution.
+See [Weight selection](WEIGHT_SELECTION.md) for validation and compatibility details.
 
 ## 2. Mapping (optional)
 

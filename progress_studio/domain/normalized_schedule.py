@@ -33,8 +33,9 @@ class NormalizedWbs:
 class NormalizedActivity:
     """One source-neutral schedule activity.
 
-    Amount is intentionally absent.  Create Progress keeps its existing fake
-    amount policy; schedule adapters only normalize schedule structure/data.
+    Real Amount is intentionally absent in MS-1. Adapters normalize working
+    duration to hours and preserve explicit milestone identity; Create assigns
+    Equal/Duration calculation weights separately from schedule normalization.
     """
 
     source_order: int
@@ -48,6 +49,8 @@ class NormalizedActivity:
     actual_finish: datetime | None = None
     percent_complete: float | None = None
     physical_percent_complete: float | None = None
+    duration_hours: float | None = None
+    is_milestone: bool = False
 
 
 @dataclass(frozen=True)
