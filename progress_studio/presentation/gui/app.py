@@ -83,7 +83,7 @@ class ProgressStudioDesktopApp(tk.Tk):
 
         self.xml_var = tk.StringVar()
         self.cutoff_var = tk.StringVar(value="5 - Friday")
-        self.amount_var = tk.StringVar(value=f"{SETTINGS.default_activity_amount:.0f}")
+        self.weight_basis_var = tk.StringVar(value="equal")
         self.distribution_var = tk.StringVar(value="auto")
         self.status_var = tk.StringVar(value="Ready")
         self.step_var = tk.StringVar(value="Select an XML schedule file to begin.")
@@ -368,8 +368,12 @@ class ProgressStudioDesktopApp(tk.Tk):
         ttk.Button(left, text="Browse...", command=self._browse_xml).grid(row=1, column=1, padx=(8, 0), pady=(8, 0))
         ttk.Label(left, text="Weekly cutoff day").grid(row=2, column=0, sticky="w", pady=(12, 0))
         ttk.Combobox(left, textvariable=self.cutoff_var, state="readonly", values=tuple(f"{number} - {name}" for number, name in DAYS)).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(12, 0))
-        ttk.Label(left, text="Fallback amount / activity").grid(row=3, column=0, sticky="w", pady=(8, 0))
-        ttk.Entry(left, textvariable=self.amount_var).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(left, text="Weight basis").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        weights = ttk.Frame(left, style="Surface.TFrame")
+        weights.grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
+        for label, value in (("Equal", "equal"), ("Duration", "duration"), ("Amount (unavailable)", "amount")):
+            ttk.Radiobutton(weights, text=label, variable=self.weight_basis_var, value=value,
+                            state="disabled" if value == "amount" else "normal").pack(anchor="w")
         ttk.Label(left, text="Plan distribution").grid(row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(left, textvariable=self.distribution_var, state="readonly", values=("auto", "flat", "front", "back", "bell")).grid(row=4, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
         self.run_button = ttk.Button(left, text="Create Progress Workbook", style="Accent.TButton", command=self._start)
@@ -471,11 +475,12 @@ class ProgressStudioDesktopApp(tk.Tk):
             return
         try:
             xml = Path(self.xml_var.get().strip())
-            amount = float(self.amount_var.get().replace(",", "").strip())
+            from progress_studio.services.weighting import validate_weight_basis
+            basis = validate_weight_basis(self.weight_basis_var.get())
             cutoff = self.cutoff_var.get().split(" ", 1)[0]
-            options = DesktopRunOptions(xml, cutoff, amount, self.distribution_var.get())
-        except ValueError:
-            messagebox.showerror("Invalid input", "Fallback amount must be a valid number.")
+            options = DesktopRunOptions(xml, cutoff, distribution_method=self.distribution_var.get(), weight_basis=basis)
+        except ValueError as exc:
+            messagebox.showerror("Invalid input", str(exc))
             return
         self.output_file = None
         self.project_folder = None

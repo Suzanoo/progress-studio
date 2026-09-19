@@ -33,8 +33,9 @@ from progress_studio.services.timescale_service import TimescaleService
 class DesktopRunOptions:
     source_xml: Path
     cutoff_day: str
-    amount_per_activity: float
+    amount_per_activity: float = 1.0  # retained for positional API compatibility; Create computes weights
     distribution_method: str = "auto"
+    weight_basis: str = "equal"
 
 
 class DesktopRunner:
@@ -55,13 +56,14 @@ class DesktopRunner:
             raise ValueError("Input file must be an XML schedule file.")
         if options.cutoff_day not in {"1", "2", "3", "4", "5", "6", "7"}:
             raise ValueError("Cutoff day must be between 1 and 7.")
-        if options.amount_per_activity <= 0:
-            raise ValueError("Placeholder amount must be greater than 0.")
+        from progress_studio.services.weighting import validate_weight_basis
+        basis = validate_weight_basis(options.weight_basis)
 
         context = PipelineContext(
             source_xml=source,
             cutoff_day=options.cutoff_day,
-            amount_per_activity=options.amount_per_activity,
+            amount_per_activity=1.0,
+            weight_basis=basis,
         )
         return self._pipeline_factory(options.distribution_method).run(context, observer=observer)
 

@@ -61,6 +61,9 @@ def finalize_workbook(
         build_workbook_guide(workbook)
         guide_sheet = "README"
 
+    from progress_studio.infrastructure.excel.weight_basis import apply_weight_labels
+    apply_weight_labels(workbook)
+
     # Preserve renderer-owned transparent overlay appearance across openpyxl
     # load/save round-trips. This changes presentation only; it does not rebuild
     # series, cutoff logic, or any business data.

@@ -139,6 +139,8 @@ class P6XmlAdapter:
                     activity_name=self._text(activity, "Name", namespace),
                     wbs_code=resolve_code(wbs_object_id),
                     outline_level=resolve_level(wbs_object_id) + 1,
+                    duration_hours=self._float(activity, "PlannedDuration", namespace),
+                    is_milestone=self._text(activity, "Type", namespace) in {"Start Milestone", "Finish Milestone"},
                     plan_start=self._datetime(activity, "PlannedStartDate", namespace),
                     plan_finish=self._datetime(activity, "PlannedFinishDate", namespace),
                     actual_start=self._datetime(activity, "ActualStartDate", namespace),

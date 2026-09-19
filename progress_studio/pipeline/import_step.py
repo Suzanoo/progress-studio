@@ -26,7 +26,7 @@ class ImportStep:
         print("=" * 72)
         print(f"INPUT  : {context.source_xml}")
         print(f"OUTPUT : {output_file}")
-        name, wbs_count, activity_count = self._service.import_xml(context.source_xml, output_file)
+        name, wbs_count, activity_count = self._service.import_xml(context.source_xml, output_file, weight_basis=context.weight_basis)
         context.imported_workbook = output_file
         context.metadata.update(project_name=name, wbs_count=wbs_count, activity_count=activity_count)
         print(f"WBS        : {wbs_count:,}")

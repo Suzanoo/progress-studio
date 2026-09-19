@@ -10,7 +10,7 @@ from progress_studio.domain import Activity, ActivityWbsSequencer
 
 
 class ImportWorkbookWriter:
-    def write(self, output_file: Path, source_file: Path, project_name: str, rows: list[Activity]) -> None:
+    def write(self, output_file: Path, source_file: Path, project_name: str, rows: list[Activity], *, weight_basis: str | None = None) -> None:
         wb = Workbook()
         ws = wb.active
         ws.title = WORKBOOK_SCHEMA.main_sheet
@@ -86,5 +86,8 @@ class ImportWorkbookWriter:
         info.append(["Activity Rows", sum(not row.is_summary for row in rows)])
         info.column_dimensions["A"].width = 22
         info.column_dimensions["B"].width = 70
+        if weight_basis is not None:
+            from progress_studio.infrastructure.excel.weight_basis import set_creation_basis
+            set_creation_basis(wb, weight_basis)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_file)

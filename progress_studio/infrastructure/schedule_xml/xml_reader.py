@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
@@ -108,6 +109,8 @@ class ScheduleXmlReader:
                     physical_percent_complete=self._float(task, ("PhysicalPercentComplete",)),
                     total_slack_minutes=self._float(task, ("TotalSlack",)),
                     amount=self._float(task, ("Cost", "Amount")) if not is_summary else None,
+                    duration_hours=self._duration_hours(self._text(task, ("Duration",))),
+                    is_milestone=self._bool(task, ("Milestone",)),
                 )
             )
 
@@ -117,6 +120,16 @@ class ScheduleXmlReader:
         if issues:
             raise ScheduleXmlValidationError(issues)
         return project_name, activities
+
+    @staticmethod
+    def _duration_hours(value: str) -> float | None:
+        # MSP serializes working duration as ISO hours/minutes/seconds. Do not
+        # infer duration from dates or assume a calendar day is a working day.
+        match = re.fullmatch(r"PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?", value)
+        if not match or not any(part is not None for part in match.groups()):
+            return None
+        hours, minutes, seconds = (float(part or 0) for part in match.groups())
+        return hours + minutes / 60 + seconds / 3600
 
     @staticmethod
     def _local_name(tag: str) -> str:

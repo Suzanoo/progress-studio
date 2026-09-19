@@ -65,6 +65,8 @@ class MspXmlAdapter:
                 actual_finish=row.actual_finish,
                 percent_complete=row.percent_complete,
                 physical_percent_complete=row.physical_percent_complete,
+                duration_hours=row.duration_hours,
+                is_milestone=row.is_milestone,
             )
             for row in activity_rows
         )

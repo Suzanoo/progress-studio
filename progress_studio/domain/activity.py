@@ -22,3 +22,5 @@ class Activity:
     physical_percent_complete: float | None
     total_slack_minutes: float | None
     amount: float | None
+    duration_hours: float | None = None
+    is_milestone: bool = False
