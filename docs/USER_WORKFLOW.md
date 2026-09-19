@@ -71,7 +71,29 @@ Payment Breakdown** again from the Payment Workspace.
 See [Payment Breakdown](PAYMENT_BREAKDOWN.md) for the detailed feature
 contract.
 
-## 4. Work in Excel
+## 4. Financial Forecast (optional)
+
+Open **Finance** in the sidebar or **Tools → Financial Forecast Workspace**.
+Browse to a saved Progress Studio `.xlsx`, or paste its path and click
+**Check Workbook**. On first creation, enter finance Opening date, Actuals through
+and Project currency, then **Create Finance Workbook** to a new file.
+
+Use **Open Result** to edit persistent **Finance Input** and inspect **Cash Flow**
+in Excel. Enter reconciled opening cash, transactions and remaining forecasts;
+the app does not infer them from progress. Credit term defaults to 30 days and
+retention to 5%. F9 / Save recalculates the live finance view.
+
+Save/close Excel before returning to the app. Check an existing finance workbook
+and use **Refresh Finance Workbook** when regenerating finance outputs or
+explicitly increasing prepared input rows. Saved settings, notes and overrides
+are retained. Source and existing output files are never overwritten.
+
+For Mapping, Payment or Rebuild, select the latest saved workbook explicitly.
+Those workspaces retain their existing ownership; Finance is not a new
+Progress/Payment Rebuild mode. See [Financial Forecast desktop](FF3_DESKTOP.md)
+for the full procedure and acceptance checks.
+
+## 5. Work in Excel
 
 After initial generation, `main` is the workbook source of truth.
 
@@ -90,7 +112,7 @@ X    | M1 M2 ... Mn | X
 -   `X` = display margin.
 -   `Wn` / `Mn` = reporting-period labels.
 
-## 5. Recalculation in Excel
+## 6. Recalculation in Excel
 
 Progress Studio workbooks use a user-driven Excel formula calculation
 policy.
@@ -102,7 +124,7 @@ policy.
 If a generated snapshot/cache/view must be regenerated after structural
 changes, use Progress Studio Rebuild.
 
-## 6. Rebuild
+## 7. Rebuild
 
 Rebuild uses the selected workbook itself as the source.
 

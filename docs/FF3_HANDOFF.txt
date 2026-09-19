@@ -1,0 +1,109 @@
+Progress Studio — FF-3 Desktop Integration + Full Regression
+Baseline: main @ 997a815ca51aff08a2f1ab6fd4204e2a9d4fc8c2
+
+Status
+Engineering implementation complete. Product Owner desktop/application + Excel
+acceptance remains OPEN. FF-0/FF-1/FF-2 acceptance is retained.
+Full regression and integration are NOT all-green: two unrelated baseline
+assertions about the same Payment label width are reproduced.
+No Git/GitHub writes. No subsequent milestone or deferred finance feature begun.
+
+Implementation
+- Finance workspace reachable from sidebar, Home and Tools menu.
+- Browse/check saved .xlsx, explicit first-creation finance dates/currency,
+  create/refresh to new output, explicit capacity expansion, Open Result.
+- Existing finance settings/records remain workbook-owned. Refresh does not
+  replace them with disabled desktop fields. No cash inference from schedule.
+- Read-only service analysis, background worker and main-thread result queue,
+  stale-file recheck, disabled busy controls, visible failures and close guard.
+- Reuses FF-2 generation, atomic lifecycle/package merge, calculation policy,
+  protection/visibility and normal desktop patterns. Scrollable workspace body.
+- Finance model, formulas, renderer, input layout, Mapping and other workbook
+  owners are unchanged. No fixed Excel coordinates added to domain/services.
+
+Complete changed-file list: 9 files
+M progress_studio/presentation/gui/app.py
+A progress_studio/presentation/gui/finance.py
+M progress_studio/services/financial_forecast_workbook_service.py
+A tests/integration/desktop/test_finance_workspace.py
+A tests/unit/finance/test_finance_workbook_analysis.py
+A docs/FF3_DESKTOP.md
+A docs/FF3_HANDOFF.txt
+M docs/README.md
+M docs/USER_WORKFLOW.md
+
+Delivery contains complete files at repository-relative paths, not diffs or a
+full repository. Apply all nine files to the stated baseline. Existing shared
+fixtures, including tests/fixtures/finance_workbook_probe.py, are already in
+997a815 and are not newly changed. The baseline copy was verified by Git blob
+hashes against the repository tree; no Git checkout/write operation was used.
+
+Tests — Python 3.12.14, existing runtime/test dependencies
+Optional formulas evaluator was available and executed; it was not skipped.
+No production dependency was added.
+
+1. python -m pytest tests/unit/finance tests/integration/desktop/test_finance_workspace.py -q
+   115 passed in 16.48s.
+2. python -m pytest tests/regression/finance tests/regression/workbook/test_finance_extension_probe.py -q
+   49 passed in 142.64s (0:02:22).
+3. python -m pytest -m smoke -q
+   49 passed, 682 deselected in 14.17s.
+4. python -m pytest -m regression -q
+   1 failed, 232 passed, 498 deselected in 188.40s (0:03:08).
+5. Baseline-only reproduction in an unchanged hash-verified 997a815 source copy:
+   python -m pytest tests/regression/dashboard/test_visual_polish.py::test_payment_label_is_doubled -q
+   1 failed in 0.43s; identical assertion: expected label width 290, actual 150.
+6. python -m pytest -m integration -q
+   1 failed, 160 passed, 5 skipped, 565 deselected in 40.10s.
+7. Baseline-only reproduction:
+   python -m pytest tests/integration/payment/test_payment_line_renderer.py::test_ms_pay64_adds_only_one_label_drawing_per_payment -q
+   1 failed in 0.44s; identical expected image width 290, actual 150.
+8. python -m compileall -q progress_studio/presentation/gui/finance.py progress_studio/presentation/gui/app.py progress_studio/services/financial_forecast_workbook_service.py
+   Exit 0.
+
+Commands ran from the relevant source root with PYTHONPATH pointing to the
+existing test dependency directories and that root. Integration skips are the
+repository's intentionally frozen historical UI contracts. Full regression here
+means the complete repository regression profile (-m regression), not all release
+tests; the full release/installer gate was not requested or executed.
+
+Known baseline failure
+tests/regression/dashboard/test_visual_polish.py::test_payment_label_is_doubled
+The test expects width_px == 290; accepted payment theme has width_px == 150.
+Neither test nor Payment config/implementation is changed by FF-3. This is not
+a new FF-3 failure. No unrelated behavior was modified to force a green gate.
+The integration assertion in test_ms_pay64_adds_only_one_label_drawing_per_payment
+also expects the old 290-pixel width and reproduces unchanged on baseline.
+
+Coverage and limits
+Headless workspace tests execute real command methods, Tcl variables, worker
+threads, result queue and workbook service; only widget drawing, dialogs and OS
+launch are substituted. They cover create/refresh, saved inputs, zero override,
+notes, expansion, source preservation, schema/error recovery, cancelled/unsafe
+save, path invalidation, file changes after check, routing and close guard.
+A normal workbook seed also passes workspace finance -> Mapping -> Live Progress
+Rebuild -> workspace finance refresh, with workbook/package integrity checks.
+Native desktop layout/OS launch and Excel recalculation are not proven by these
+tests. No native Desktop Excel is available in this execution environment.
+
+Product Owner acceptance
+Follow docs/FF3_DESKTOP.md, sections A-D. It supplies exact normal application
+entry points, first creation, manual synthetic inputs with expected dated peak
+funding/monthly balances, zero-vs-blank override, save/reopen, refresh/expansion,
+Mapping/Payment/Rebuild return path, and failure/recovery checks.
+Start via python desktop.py, open Finance, Browse a normal saved Progress Studio
+workbook, Check Workbook, Create Finance Workbook, then Open Result.
+The newly created empty finance workbook is intentionally conditional/incomplete;
+enter reconciled project cash and remaining forecasts before relying on it.
+
+Intended commit message (owner operation only)
+feat(finance): integrate financial forecast into desktop workflow
+
+Remaining gates
+- Product Owner application/Desktop Excel acceptance for FF-3.
+- Explicit disposition of the documented unrelated baseline test failure before
+  any claim that the full regression gate is green.
+- Repository integration only by the authorized owner; no commit/push/merge/tag
+  or release is performed by Work.
+
+STOP after FF-3.

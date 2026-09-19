@@ -83,10 +83,24 @@ def _merge_styles(original,generated):
             if key in node.attrib:node.set(key,str(mapping[int(node.get(key))]))
         fmt=int(node.get('numFmtId','0'));node.set('numFmtId',str(formats.get(fmt,fmt)))
         return node
+    # Excel can retain cellXfs that reference a valid source cellStyleXf which
+    # openpyxl does not serialize into the generated intermediate workbook.
+    # Remember the source boundary before merging generated style XFs so those
+    # references can remain attached to their original source style.
+    source_style_xf_count=len(group(old,'cellStyleXfs'))
     xfs=merge('cellStyleXfs',xf)
     def cellxf(node):
         node=xf(node)
-        if 'xfId' in node.attrib:node.set('xfId',str(xfs[int(node.get('xfId'))]))
+        if 'xfId' in node.attrib:
+            source_id=int(node.get('xfId'))
+            if source_id in xfs:
+                node.set('xfId',str(xfs[source_id]))
+            elif source_id < source_style_xf_count:
+                # The generated workbook dropped this source style XF, but the
+                # reference is still valid in the package we are preserving.
+                node.set('xfId',str(source_id))
+            else:
+                raise ValueError('Finance style references missing cellStyleXf: '+str(source_id))
         return node
     styles=merge('cellXfs',cellxf)
     return _bytes(old),styles

@@ -40,3 +40,4 @@ current operational guide.
 
 - [Financial Forecast calculation contract](FINANCIAL_FORECAST_CONTRACT.md) — FF-1 source-neutral cash model, timing, reconciliation, defaults and limits.
 - [Finance workbook](FF2_WORKBOOK.md) — FF-2 persistent inputs, live formulas, commands and Desktop Excel acceptance.
+- [Financial Forecast desktop](FF3_DESKTOP.md) — normal application create/refresh workflow and FF-3 Product Owner acceptance procedure.

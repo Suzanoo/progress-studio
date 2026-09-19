@@ -11,6 +11,7 @@ from progress_studio.infrastructure.excel.finance_input_workbook import (
 )
 from progress_studio.infrastructure.excel.financial_forecast_workbook import build_finance_view
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
+from progress_studio.infrastructure.excel.finance_package import _merge_styles
 from progress_studio.services.financial_forecast_workbook_service import FinancialForecastWorkbookService
 from progress_studio.services.financial_forecast_deriver import FinancialForecastDeriver, FinanceValidationError
 
@@ -120,3 +121,25 @@ def test_refresh_after_excel_style_table_renumbering(tmp_path):
         tables=[ET.fromstring(z.read(n)).get('name') for n in z.namelist() if n.startswith('xl/tables/') and n.endswith('.xml')]
         assert len(tables)==len(set(tables))==3
     result=load_workbook(output);assert read_finance_inputs(result)==read_finance_inputs(w)
+
+def test_style_merge_preserves_valid_source_xfid_dropped_by_generated_roundtrip():
+    ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    def styles(style_xfs, cell_xfid):
+        root=ET.Element('{'+ns+'}styleSheet')
+        for name,count in [('numFmts',0),('fonts',1),('fills',1),('borders',1)]:
+            group=ET.SubElement(root,'{'+ns+'}'+name,count=str(count))
+            for _ in range(count):ET.SubElement(group,'{'+ns+'}'+name[:-1])
+        sx=ET.SubElement(root,'{'+ns+'}cellStyleXfs',count=str(style_xfs))
+        for _ in range(style_xfs):ET.SubElement(sx,'{'+ns+'}xf',numFmtId='0',fontId='0',fillId='0',borderId='0')
+        cx=ET.SubElement(root,'{'+ns+'}cellXfs',count='1')
+        ET.SubElement(cx,'{'+ns+'}xf',numFmtId='0',fontId='0',fillId='0',borderId='0',xfId=str(cell_xfid))
+        return ET.tostring(root,encoding='utf-8',xml_declaration=True)
+
+    # Desktop Excel source owns style XF 2. The openpyxl-generated workbook can
+    # collapse cellStyleXfs to 0/1 while a cellXf still carries xfId=2. Refresh
+    # must preserve that valid source reference rather than raising KeyError(2).
+    merged,_=_merge_styles(styles(3,2),styles(2,2))
+    root=ET.fromstring(merged)
+    cell_xfs=root.find('{'+ns+'}cellXfs')
+    assert cell_xfs is not None
+    assert any(xf.get('xfId')=='2' for xf in cell_xfs)
