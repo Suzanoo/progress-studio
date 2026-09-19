@@ -4,6 +4,19 @@ Active documentation is intentionally small. If two active documents
 disagree, `ARCHITECTURE.md` owns technical architecture and the
 implementation/tests own executable behavior.
 
+## Collaboration roles
+
+- [Coordinator Contract](COORDINATOR_CONTRACT.md) — product discussion, prompts,
+  review, current agent assignments and authorized Git operations.
+- [Engineer Contract](ENGINEER_CONTRACT.md) — engineering scope, ownership,
+  acceptance and handoff boundaries.
+- [Engineer Workflow](ENGINEER_WORKFLOW.md) — targeted investigation,
+  implementation, verification and delivery procedure.
+
+These role-based documents replace `CHATGPT_CONTRACT.md`, `WORK_CONTRACT.md`
+and `WORK_SKILL.md`, respectively. Historical records may use the previous names
+and agent assignments.
+
 ## Start here
 
 -   [Repository README](../README.md) --- what Progress Studio is,

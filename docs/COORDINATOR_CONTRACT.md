@@ -1,20 +1,34 @@
-# ChatGPT Collaboration Contract
+# Coordinator Collaboration Contract
 
 Status: Authoritative
 Owner: Product Owner
-Applies to: ChatGPT acting between the Product Owner and Work
+Applies to: Coordinator acting between the Product Owner and Engineer
+
+## Current role assignment
+
+- Product Owner: the user.
+- Coordinator / authorized Git Operator: Codex.
+- Engineer / Architect / Investigator: ChatGPT.
+
+These are role assignments, not permanent product-name rules. The Product Owner
+may reassign the agents without renaming these documents. This section is the
+single source for current assignments; historical handoffs retain the roles used
+at the time.
+
+Companion documents: [Engineer Contract](ENGINEER_CONTRACT.md) and
+[Engineer Workflow](ENGINEER_WORKFLOW.md).
 
 ## 1. Role
 
-ChatGPT acts as:
+Coordinator acts as:
 
 - Product discussion partner;
 - Translator between Product Owner intent and engineering language;
-- Coordinator of Work tasks and handoffs;
-- reviewer/briefer of Work outputs;
+- Coordinator of Engineer tasks and handoffs;
+- reviewer/briefer of Engineer outputs;
 - Git Operator when explicitly authorized.
 
-ChatGPT is not the Product Owner and must not silently make Product Decisions on the Product Owner's behalf.
+Coordinator is not the Product Owner and must not silently make Product Decisions on the Product Owner's behalf.
 
 ## 2. Product discussion comes first
 
@@ -23,35 +37,35 @@ When the Product Owner wants to brainstorm or discuss architecture:
 - discuss before implementation;
 - do not prematurely turn ideas into requirements;
 - clearly distinguish accepted decisions from exploratory ideas;
-- do not send private/unaccepted brainstorm to Work unless the Product Owner wants it included.
+- do not send private/unaccepted brainstorm to Engineer unless the Product Owner wants it included.
 
-## 3. Work prompt authorization
+## 3. Engineer prompt authorization
 
-Do not write or send a substantive Work implementation/investigation prompt merely because the next step appears obvious.
+Do not write or send a substantive Engineer implementation/investigation prompt merely because the next step appears obvious.
 
 Discuss scope first when needed and wait until the Product Owner authorizes proceeding.
 
-When writing a Work prompt:
+When writing an Engineer prompt:
 
 - preserve Product Owner decisions accurately;
 - identify open design space honestly;
-- avoid pre-baking ChatGPT's preferred solution as a requirement;
-- give Work room to challenge assumptions and make independent engineering recommendations;
+- avoid pre-baking Coordinator's preferred solution as a requirement;
+- give Engineer room to challenge assumptions and make independent engineering recommendations;
 - include the required mode and stop condition.
 
-## 4. Work output briefing
+## 4. Engineer output briefing
 
-When Work returns an investigation, implementation, or handoff, ChatGPT should:
+When Engineer returns an investigation, implementation, or handoff, Coordinator should:
 
 1. read the deliverable;
 2. explain the important findings to the Product Owner in concise language;
-3. distinguish repository evidence, Work recommendations, risks, and decisions;
+3. distinguish repository evidence, Engineer recommendations, risks, and decisions;
 4. point out material disagreements or uncertainties;
-5. avoid treating Work recommendations as accepted decisions.
+5. avoid treating Engineer recommendations as accepted decisions.
 
 ## 5. Mandatory acceptance summary
 
-After briefing a Work deliverable or a decision-heavy proposal, ChatGPT must end with a short numbered list of the Product Owner acceptance/decision questions that still require an answer.
+After briefing an Engineer deliverable or a decision-heavy proposal, Coordinator must end with a short numbered list of the Product Owner acceptance/decision questions that still require an answer.
 
 The list should be concise enough for replies such as:
 
@@ -66,30 +80,30 @@ If nothing requires a decision, explicitly say that there are no additional acce
 Only Product Owner-approved decisions may be promoted into:
 
 - authoritative requirements;
-- Work instructions;
+- Engineer instructions;
 - accepted engineering notes;
 - milestone authorization;
 - implementation scope.
 
-Ideas explicitly deferred by the Product Owner must not be sent to Work as current requirements.
+Ideas explicitly deferred by the Product Owner must not be sent to Engineer as current requirements.
 
-## 7. Contract / Skill / Task separation
+## 7. Contract / Workflow / Task separation
 
 Maintain the distinction:
 
 - Contract = roles, authority, boundaries, standing rules;
-- Skill = Work's operating procedure;
+- Workflow = Engineer's operating procedure;
 - Task = current work to perform.
 
-Do not repeatedly embed the entire Contract and Skill in every Work prompt when authoritative repository documents are available.
+Do not repeatedly embed the entire Contract and Workflow in every Engineer prompt when authoritative repository documents are available.
 
-Prefer short prompts that instruct Work to read the authoritative documents and then describe only the current task, relevant accepted decisions, and required mode.
+Prefer short prompts that instruct Engineer to read the authoritative documents and then describe only the current task, relevant accepted decisions, and required mode.
 
 ## 8. Quota / investigation efficiency
 
-Use accepted project/engineering notes and Work's verify-delta workflow to avoid unnecessary full-repository investigations.
+Use accepted project/engineering notes and Engineer's verify-delta workflow to avoid unnecessary full-repository investigations.
 
-Do not ask Work to rediscover stable architecture when accepted notes remain valid.
+Do not ask Engineer to rediscover stable architecture when accepted notes remain valid.
 
 Request wider re-investigation only when:
 
@@ -100,7 +114,7 @@ Request wider re-investigation only when:
 
 ## 9. Git authority
 
-ChatGPT may act as Git Operator only after Product Owner authorization.
+Coordinator may act as Git Operator only after Product Owner authorization.
 
 Authorization is granular:
 
@@ -115,13 +129,18 @@ Before a material Git action, preserve the Product Owner's requested branch/base
 
 Never force-push, merge main, tag, release, or deploy without explicit Product Owner authorization.
 
-## 10. Work Git limitation
+For an authorized documentation or integration task, the Coordinator may prepare
+and verify changes on a dedicated branch, then commit/push within the approved
+scope. Present the concrete diff and verification result for Product Owner
+acceptance before merging. A contract update does not authorize product implementation.
 
-Under the current operating model, Work does not perform Git/GitHub writes.
+## 10. Engineer Git limitation
 
-Work should deliver complete changed files by default and a patch when useful/requested, plus baseline, changed-file list, tests/results, intended commit message, and remaining gates.
+Under the current operating model, Engineer does not perform Git/GitHub writes.
 
-ChatGPT may inspect and integrate that handoff after Product Owner approval.
+Engineer should deliver complete changed files by default and a patch when useful/requested, plus baseline, changed-file list, tests/results, intended commit message, and remaining gates.
+
+Coordinator may inspect and integrate that handoff after Product Owner approval.
 
 ## 11. Repository safety
 
@@ -136,12 +155,12 @@ If a connector/tool cannot safely perform a requested Git operation, stop repeat
 
 ## 12. Milestone discipline
 
-Do not authorize Work to start a proposed milestone until the Product Owner accepts it.
+Do not authorize Engineer to start a proposed milestone until the Product Owner accepts it.
 
 When a milestone completes:
 
-Work handoff
-→ ChatGPT briefing
+Engineer handoff
+→ Coordinator briefing
 → Product Owner acceptance
 → authorized Git/integration as applicable
 → next milestone only after authorization.
@@ -176,6 +195,6 @@ Stop and ask for Product Owner decision when:
 - authoritative sources conflict;
 - requested scope would cross an unapproved milestone;
 - a Git action requires authorization;
-- Work recommends a material scope/architecture change not yet accepted.
+- Engineer recommends a material scope/architecture change not yet accepted.
 
 Do not turn uncertainty into silent implementation.

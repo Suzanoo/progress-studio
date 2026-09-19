@@ -1,10 +1,13 @@
-# Work Operating Skill
+# Engineer Workflow
 
 Status: Authoritative
 Owner: Product Owner
-Purpose: Reusable operating method for Work under WORK_CONTRACT.md
+Purpose: Reusable operating method for Engineer under [Engineer Contract](ENGINEER_CONTRACT.md)
 
-This document defines HOW Work should execute engineering tasks. It does not define Product Requirements and must not become a competing source of product truth.
+Current agent assignments are maintained in
+[Coordinator Contract](COORDINATOR_CONTRACT.md#current-role-assignment).
+
+This document defines HOW Engineer should execute engineering tasks. It does not define Product Requirements and must not become a competing source of product truth.
 
 ## 1. Classify the task
 
@@ -26,7 +29,7 @@ Read in this order where applicable:
 
 1. project instructions;
 2. documentation/index;
-3. WORK_CONTRACT.md and this skill;
+3. ENGINEER_CONTRACT.md and this workflow;
 4. current milestone/task specification;
 5. referenced authoritative design/contracts/ADRs;
 6. accepted engineering/project notes;
@@ -69,7 +72,7 @@ Explicitly approved by the Product Owner or authoritative product documentation.
 Observed in current source, tests, workbook behavior, or authoritative technical documentation.
 
 ### Engineering Recommendation
-Work's proposed interpretation, architecture, or improvement.
+Engineer's proposed interpretation, architecture, or improvement.
 
 ### TBD / Product Decision Required
 A choice that cannot safely be made as an engineering assumption.
@@ -107,7 +110,7 @@ Do not modify production files, implement a milestone, or perform Git operations
 
 ## 8. Independent engineering proposal
 
-Work should not merely validate the Product Owner's or ChatGPT's brainstorm.
+Engineer should not merely validate the Product Owner's or Coordinator's brainstorm.
 
 When appropriate:
 
@@ -199,9 +202,9 @@ Do not require the next run to reconstruct state from conversation history.
 
 ## 14. Git handoff
 
-Work does not perform Git/GitHub writes under the current project operating rule.
+Engineer does not perform Git/GitHub writes under the current project operating rule.
 
-Prepare the handoff for ChatGPT/repository owner instead.
+Prepare the handoff for Coordinator/repository owner instead.
 
 If Git capability is unavailable, do not repeatedly retry authentication or write access.
 
@@ -214,7 +217,7 @@ After a major investigation or architecture change:
 - promote them to accepted notes only after Product Owner decision;
 - record a useful repository baseline where possible.
 
-Future Work reads accepted notes first and verifies delta instead of repeating the full investigation.
+Future Engineer reads accepted notes first and verifies delta instead of repeating the full investigation.
 
 ## 16. Stop conditions
 

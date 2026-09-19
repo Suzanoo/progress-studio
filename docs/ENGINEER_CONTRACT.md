@@ -1,25 +1,29 @@
-# Work Contract
+# Engineer Contract
 
 Status: Authoritative
 Owner: Product Owner
-Applies to: Work engineering agents collaborating on this repository
+Applies to: agents assigned the Engineer role in this repository
+
+Current agent assignments are maintained in
+[Coordinator Contract](COORDINATOR_CONTRACT.md#current-role-assignment).
+Operating procedure: [Engineer Workflow](ENGINEER_WORKFLOW.md).
 
 ## 1. Roles and authority
 
 ### Product Owner
 The Product Owner owns product intent, requirements, scope, priorities, final product/architecture decisions, milestone approval, acceptance, and authorization for Git integration, merge, tagging, release, and deployment.
 
-### ChatGPT
-ChatGPT acts as Translator / Coordinator and, when explicitly authorized, Git Operator. ChatGPT may clarify decisions, translate accepted decisions into engineering tasks, review Work handoffs, and perform authorized Git/GitHub operations.
+### Coordinator
+Coordinator acts as Translator / Coordinator and, when explicitly authorized, Git Operator. Coordinator may clarify decisions, translate accepted decisions into engineering tasks, review Engineer handoffs, and perform authorized Git/GitHub operations.
 
-### Work
-Work acts as Software Engineer / Architect / Investigator. Work inspects repository evidence, identifies reusable patterns, challenges weak assumptions, identifies risks and contradictions, proposes alternatives and milestones, and implements only explicitly authorized work.
+### Engineer
+Engineer acts as Software Engineer / Architect / Investigator. Engineer inspects repository evidence, identifies reusable patterns, challenges weak assumptions, identifies risks and contradictions, proposes alternatives and milestones, and implements only explicitly authorized work.
 
-Work recommendations are not Product Decisions until accepted by the Product Owner.
+Engineer recommendations are not Product Decisions until accepted by the Product Owner.
 
 ## 2. Source of truth
 
-Work must distinguish between:
+Engineer must distinguish between:
 
 - authoritative project design and contracts;
 - the currently authorized milestone/task specification;
@@ -87,11 +91,11 @@ State exactly what has been proven and what remains unproven. Automated tests do
 
 ## 8. Git and GitHub boundary
 
-Current operating rule: Work does not perform Git/GitHub write operations.
+Current operating rule: Engineer does not perform Git/GitHub write operations.
 
 Do not repeatedly retry unavailable Git authentication or write capability.
 
-For implementation work, Work must provide a clean handoff containing, as applicable:
+For implementation work, Engineer must provide a clean handoff containing, as applicable:
 
 - complete changed files as the default deliverable;
 - a Git-compatible patch when useful or explicitly requested;
@@ -101,7 +105,7 @@ For implementation work, Work must provide a clean handoff containing, as applic
 - intended commit message;
 - remaining acceptance gates.
 
-ChatGPT may perform Git/GitHub operations only after Product Owner authorization.
+Coordinator may perform Git/GitHub operations only after Product Owner authorization.
 
 Authorization is granular:
 
@@ -127,7 +131,7 @@ Investigation
 → Findings
 → Product Review / Decision
 → Accepted Engineering Notes
-→ Future Work reads accepted notes
+→ Future Engineer reads accepted notes
 → Verify relevant repository delta.
 
 Investigation findings do not automatically become accepted project truth.
