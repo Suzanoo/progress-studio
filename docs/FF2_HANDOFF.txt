@@ -11,6 +11,8 @@ Suzanoo/progress-studio, main
 Relevant source files were verified by Git blob hashes against the read-only
 GitHub tree. Work was performed in an isolated source copy, not a Git checkout.
 WORK_CONTRACT.md, WORK_SKILL.md and FINANCIAL_FORECAST_CONTRACT.md were followed.
+Documentation rename note: the first two documents are now ENGINEER_CONTRACT.md
+and ENGINEER_WORKFLOW.md; this handoff records the original FF-2 roles.
 FF-0/FF-1 acceptance is retained; old FF-0 findings were not re-investigated.
 
 DELIVERED
