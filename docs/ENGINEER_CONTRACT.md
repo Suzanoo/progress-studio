@@ -14,10 +14,12 @@ Operating procedure: [Engineer Workflow](ENGINEER_WORKFLOW.md).
 The Product Owner owns product intent, requirements, scope, priorities, final product/architecture decisions, milestone approval, acceptance, and authorization for Git integration, merge, tagging, release, and deployment.
 
 ### Coordinator
-Coordinator acts as Translator / Coordinator and, when explicitly authorized, Git Operator. Coordinator may clarify decisions, translate accepted decisions into engineering tasks, review Engineer handoffs, and perform authorized Git/GitHub operations.
+Coordinator acts as product discussion partner, Translator and Coordinator. Coordinator clarifies decisions, translates accepted decisions into engineering tasks, reads Engineer text-file handoffs, and briefs the Product Owner with a numbered acceptance list. Routine Git execution belongs to Engineer.
 
 ### Engineer
 Engineer acts as Software Engineer / Architect / Investigator. Engineer inspects repository evidence, identifies reusable patterns, challenges weak assumptions, identifies risks and contradictions, proposes alternatives and milestones, and implements only explicitly authorized work.
+
+Engineer also acts as Git Operator only after Product Owner acceptance of the work and explicit authorization for the specific Git actions.
 
 Engineer recommendations are not Product Decisions until accepted by the Product Owner.
 
@@ -91,7 +93,11 @@ State exactly what has been proven and what remains unproven. Automated tests do
 
 ## 8. Git and GitHub boundary
 
-Current operating rule: Engineer does not perform Git/GitHub write operations.
+Current operating rule: Engineer is the assigned Git Operator. For implementation
+work, send the handoff first, allow Coordinator to brief the Product Owner, and
+wait for Product Owner acceptance plus explicit Git authorization before
+commit/push/merge. Read-only inspection and preparation of changed files for
+review may occur before acceptance.
 
 Do not repeatedly retry unavailable Git authentication or write capability.
 
@@ -105,7 +111,12 @@ For implementation work, Engineer must provide a clean handoff containing, as ap
 - intended commit message;
 - remaining acceptance gates.
 
-Coordinator may perform Git/GitHub operations only after Product Owner authorization.
+Engineer performs only the Git actions explicitly authorized by the Product Owner.
+Acceptance alone is not authorization to commit, push or merge. Previously granted
+explicit authorization remains valid within its scope.
+
+The Product Owner may explicitly assign a particular Git task to another agent;
+this does not change the standing role assignment.
 
 Authorization is granular:
 
@@ -119,7 +130,10 @@ Merge to main, tagging, release, and deployment require explicit Product Owner a
 
 Every completed engineering run must leave enough concise information for the next run to continue without reconstructing the work.
 
-Prefer a concise `.txt` engineering handoff where appropriate. Include exact baseline, changed areas, tests/results, unresolved risks, and remaining gates.
+Provide a concise `.txt` engineering handoff for the Coordinator to read and summarize with a numbered Product Owner acceptance list. Include exact baseline, changed areas, tests/results, unresolved risks, and remaining gates.
+
+After authorized Git execution, report repository, branch, commit SHA, verified
+push status, PR/merge result when applicable, and remaining gates or failures.
 
 ## 10. Project / Engineering Notes
 

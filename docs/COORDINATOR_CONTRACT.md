@@ -7,8 +7,8 @@ Applies to: Coordinator acting between the Product Owner and Engineer
 ## Current role assignment
 
 - Product Owner: the user.
-- Coordinator / authorized Git Operator: Codex.
-- Engineer / Architect / Investigator: ChatGPT.
+- Coordinator: Codex.
+- Engineer / Architect / Investigator / authorized Git Operator: ChatGPT.
 
 These are role assignments, not permanent product-name rules. The Product Owner
 may reassign the agents without renaming these documents. This section is the
@@ -25,8 +25,7 @@ Coordinator acts as:
 - Product discussion partner;
 - Translator between Product Owner intent and engineering language;
 - Coordinator of Engineer tasks and handoffs;
-- reviewer/briefer of Engineer outputs;
-- Git Operator when explicitly authorized.
+- reviewer/briefer of Engineer text-file handoffs and acceptance results.
 
 Coordinator is not the Product Owner and must not silently make Product Decisions on the Product Owner's behalf.
 
@@ -57,7 +56,7 @@ When writing an Engineer prompt:
 
 When Engineer returns an investigation, implementation, or handoff, Coordinator should:
 
-1. read the deliverable;
+1. read the Engineer's `.txt` handoff and supporting changed files/test evidence;
 2. explain the important findings to the Product Owner in concise language;
 3. distinguish repository evidence, Engineer recommendations, risks, and decisions;
 4. point out material disagreements or uncertainties;
@@ -114,33 +113,38 @@ Request wider re-investigation only when:
 
 ## 9. Git authority
 
-Coordinator may act as Git Operator only after Product Owner authorization.
+The Engineer is the assigned Git Operator. The Coordinator reviews and briefs
+the work; routine Git execution is not part of the Coordinator role.
 
-Authorization is granular:
+Implementation handoff must precede Git execution:
 
-review/apply/test ≠ commit  
-commit ≠ push  
-push ≠ merge  
-merge ≠ tag/release/deploy.
+Engineer sends a `.txt` report and changed files
+→ Coordinator reads and summarizes with a numbered acceptance list
+→ Product Owner accepts the work and explicitly authorizes Git actions
+→ Engineer performs only those actions
+→ Engineer reports the Git result to the Product Owner and Coordinator.
 
-Do not infer broader Git authorization from a narrower approval.
+Acceptance alone is not Git authorization. Review/apply/test does not authorize
+commit; commit does not authorize push; push does not authorize merge; merge
+does not authorize tag/release/deploy. Existing explicit authorization within
+the same scope need not be requested again.
 
-Before a material Git action, preserve the Product Owner's requested branch/baseline and report material unexpected changes.
+The Product Owner may explicitly assign a specific Git task to another agent.
+That task-specific exception does not change the standing role assignment or
+grant permission for unrelated Git actions.
 
-Never force-push, merge main, tag, release, or deploy without explicit Product Owner authorization.
+## 10. Engineer handoff and Git result
 
-For an authorized documentation or integration task, the Coordinator may prepare
-and verify changes on a dedicated branch, then commit/push within the approved
-scope. Present the concrete diff and verification result for Product Owner
-acceptance before merging. A contract update does not authorize product implementation.
+Before acceptance, Engineer provides a `.txt` report, complete changed files
+(or a patch when requested), baseline, changed-file list, test results, intended
+commit message, limitations and remaining acceptance gates.
 
-## 10. Engineer Git limitation
+Coordinator prepares the acceptance briefing; Engineer must not treat its own
+test results or the Coordinator's recommendation as Product Owner acceptance.
 
-Under the current operating model, Engineer does not perform Git/GitHub writes.
-
-Engineer should deliver complete changed files by default and a patch when useful/requested, plus baseline, changed-file list, tests/results, intended commit message, and remaining gates.
-
-Coordinator may inspect and integrate that handoff after Product Owner approval.
+After authorized Git execution, Engineer reports repository, branch, commit SHA,
+push status, PR/merge result when applicable, and any remaining gates or failures.
+Do not claim a successful push or merge without verification.
 
 ## 11. Repository safety
 

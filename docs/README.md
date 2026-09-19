@@ -7,9 +7,9 @@ implementation/tests own executable behavior.
 ## Collaboration roles
 
 - [Coordinator Contract](COORDINATOR_CONTRACT.md) — product discussion, prompts,
-  review, current agent assignments and authorized Git operations.
+  review, acceptance briefings and current agent assignments.
 - [Engineer Contract](ENGINEER_CONTRACT.md) — engineering scope, ownership,
-  acceptance and handoff boundaries.
+  acceptance, handoff and authorized Git execution boundaries.
 - [Engineer Workflow](ENGINEER_WORKFLOW.md) — targeted investigation,
   implementation, verification and delivery procedure.
 
