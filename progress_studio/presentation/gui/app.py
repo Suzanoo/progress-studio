@@ -16,6 +16,7 @@ from progress_studio.config import SETTINGS
 from progress_studio.infrastructure.layout_preferences import LayoutPreferences, LayoutPreferencesRepository
 from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
 from progress_studio.presentation.gui.payment import PaymentFrame
+from progress_studio.presentation.gui.finance import FinanceFrame
 from progress_studio.presentation.gui.rebuild import RebuildFrame
 from progress_studio.presentation.gui.strings import tr
 from progress_studio.presentation.gui.theme import FONT_MONO, PALETTE, configure_styles
@@ -56,6 +57,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         ("import", "⇩", "Create Progress Bar"),
         ("mapping", "▦", "Mapping"),
         ("payment", "$", "Payment"),
+        ("finance", "¤", "Finance"),
         ("ai", "✦", "AI Helper"),
         ("rebuild", "↻", "Rebuild"),
         ("settings", "⚙", "Settings"),
@@ -135,6 +137,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._build_mapping_workspace()
         self._build_ai_workspace()
         self._build_payment_workspace()
+        self._build_finance_workspace()
         self._build_rebuild_workspace()
         self._build_settings_workspace()
 
@@ -171,6 +174,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         tools_menu = tk.Menu(menu, tearoff=False)
         tools_menu.add_command(label="Import Workspace", command=lambda: self._show_workspace("import"))
         tools_menu.add_command(label="Payment Workspace", command=lambda: self._show_workspace("payment"))
+        tools_menu.add_command(label="Financial Forecast Workspace", command=lambda: self._show_workspace("finance"))
         tools_menu.add_command(label="Rebuild Workspace", command=lambda: self._show_workspace("rebuild"))
         menu.add_cascade(label="Tools", menu=tools_menu)
 
@@ -273,6 +277,8 @@ class ProgressStudioDesktopApp(tk.Tk):
             wraplength=900,
         ).pack(anchor="w", pady=(6, 0))
 
+        ttk.Button(note, text="Open Financial Forecast", command=lambda: self._show_workspace("finance")).pack(anchor="w", pady=(10, 0))
+
     def _build_import_workspace(self) -> None:
         frame = self._new_workspace("import")
         frame.columnconfigure(0, weight=1)
@@ -315,6 +321,11 @@ class ProgressStudioDesktopApp(tk.Tk):
         frame = self._new_workspace("rebuild")
         self.rebuild_workspace = RebuildFrame(frame)
         self.rebuild_workspace.pack(fill="both", expand=True)
+
+    def _build_finance_workspace(self) -> None:
+        frame = self._new_workspace("finance")
+        self.finance_workspace = FinanceFrame(frame)
+        self.finance_workspace.pack(fill="both", expand=True)
 
     def _build_settings_workspace(self) -> None:
         frame = self._new_workspace("settings")
@@ -437,6 +448,9 @@ class ProgressStudioDesktopApp(tk.Tk):
             pass
 
     def _close_application(self) -> None:
+        if self.finance_workspace.busy:
+            messagebox.showwarning("Financial Forecast", "Wait for the finance operation to finish before closing.")
+            return
         self._save_layout_preferences()
         self.destroy()
 
