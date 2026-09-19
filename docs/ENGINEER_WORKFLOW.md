@@ -152,9 +152,9 @@ After a milestone is approved:
 7. run focused tests first;
 8. run required regression tests;
 9. inspect generated artifacts when relevant;
-10. prepare complete changed files / handoff;
+10. prepare complete changed files and a `.txt` handoff for Coordinator review;
 11. state unproven acceptance gates;
-12. STOP.
+12. STOP for Coordinator briefing and Product Owner acceptance; proceed to Git only under section 14 after explicit authorization.
 
 Do not drift into the next milestone.
 
@@ -186,7 +186,8 @@ For Progress Studio:
 
 ## 13. Engineering handoff
 
-For implementation work, provide:
+For implementation work, provide a `.txt` report for the Coordinator to summarize
+with a numbered Product Owner acceptance list, together with:
 
 - task/milestone completed;
 - base branch and SHA;
@@ -200,13 +201,28 @@ For implementation work, provide:
 
 Do not require the next run to reconstruct state from conversation history.
 
-## 14. Git handoff
+## 14. Git execution after acceptance
 
-Engineer does not perform Git/GitHub writes under the current project operating rule.
+Engineer is the assigned Git Operator. Follow this sequence:
 
-Prepare the handoff for Coordinator/repository owner instead.
+1. Deliver the `.txt` handoff and changed files.
+2. Coordinator reads and briefs the Product Owner with an acceptance list.
+3. Wait for Product Owner acceptance and explicit authorization for the Git actions.
+4. Confirm repository, baseline, branch and accepted diff; preserve unrelated changes.
+5. Perform only authorized actions. Commit, push, merge, tag, release and deploy
+   are distinct permissions; acceptance alone grants none of them.
+6. Verify the result and report branch, commit SHA, push status, PR/merge result
+   when applicable, and any failures or remaining gates.
+7. Stop; completing Git does not authorize the next milestone.
 
-If Git capability is unavailable, do not repeatedly retry authentication or write access.
+Read-only Git inspection and preparation for review may precede acceptance.
+Existing explicit authorization within the same scope remains valid.
+A Product Owner task-specific assignment to another Git Operator is permitted
+without changing the standing assignment.
+
+If Git capability is unavailable, do not repeatedly retry authentication or write
+access. Report the blocker and provide changed files or a patch for an authorized
+operator; do not claim the repository was updated.
 
 ## 15. Notes lifecycle
 
