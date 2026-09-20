@@ -36,6 +36,7 @@ class DesktopRunOptions:
     amount_per_activity: float = 1.0  # retained for positional API compatibility; Create computes weights
     distribution_method: str = "auto"
     weight_basis: str = "equal"
+    amount_field: str | None = None
 
 
 class DesktopRunner:
@@ -59,11 +60,14 @@ class DesktopRunner:
         from progress_studio.services.weighting import validate_weight_basis
         basis = validate_weight_basis(options.weight_basis)
 
+        if basis == "amount" and not options.amount_field:
+            raise ValueError("Select an XML Amount field before Create.")
         context = PipelineContext(
             source_xml=source,
             cutoff_day=options.cutoff_day,
             amount_per_activity=1.0,
             weight_basis=basis,
+            amount_field=options.amount_field if basis == "amount" else None,
         )
         return self._pipeline_factory(options.distribution_method).run(context, observer=observer)
 

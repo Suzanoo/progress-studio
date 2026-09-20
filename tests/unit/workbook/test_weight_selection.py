@@ -48,12 +48,12 @@ def test_msp_duration_parser(value,expected):
     assert ScheduleXmlReader._duration_hours(value)==expected
 
 
-def test_desktop_default_and_amount_unavailable(tmp_path):
+def test_desktop_default_and_amount_requires_selection(tmp_path):
     xml=tmp_path/'a.xml';xml.write_text('<Project/>')
     runner=DesktopRunner(lambda _:Pipeline([]))
     assert runner.run(DesktopRunOptions(xml,'5')).weight_basis=='equal'
     assert runner.run(DesktopRunOptions(xml,'5',weight_basis='duration')).weight_basis=='duration'
-    with pytest.raises(ValueError,match='unavailable'):
+    with pytest.raises(ValueError,match='Select an XML Amount field'):
         runner.run(DesktopRunOptions(xml,'5',weight_basis='amount'))
     with pytest.raises(ValueError,match='basis'):
         validate_weight_basis('bogus')

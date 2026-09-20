@@ -41,6 +41,7 @@ class ProgressStudioApplication:
                 cutoff_day=cutoff_day,
                 amount_per_activity=1.0,
                 weight_basis=options.weight_basis,
+                amount_field=options.amount_field,
             )
             result = self._pipeline.run(context)
             if result.output_workbook:

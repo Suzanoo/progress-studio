@@ -14,6 +14,7 @@ class CliOptions:
     cutoff_day: str | None
     amount: float
     weight_basis: str = "equal"
+    amount_field: str | None = None
 
 
 class CommandLineInterface:
@@ -41,12 +42,13 @@ class CommandLineInterface:
             default=self._settings.default_activity_amount,
             help="Deprecated compatibility option; Equal/Duration calculate their own non-monetary weights.",
         )
-        parser.add_argument("--weight-basis", choices=["equal", "duration"], default="equal", help="Create weighting; Amount is unavailable until MS-2.")
+        parser.add_argument("--weight-basis", choices=["equal", "duration", "amount"], default="equal", help="Create weight basis; Amount requires --amount-field.")
+        parser.add_argument("--amount-field", help="Explicit numeric XML field identity, e.g. p6:udf:<ObjectId> or msp:field:<FieldID>.")
         return parser
 
     def parse(self, argv: Sequence[str] | None = None) -> CliOptions:
         args = self.build_parser().parse_args(argv)
-        return CliOptions(args.input, args.cutoff_day, args.amount, args.weight_basis)
+        return CliOptions(args.input, args.cutoff_day, args.amount, args.weight_basis, args.amount_field)
 
     @staticmethod
     def select_xml_file() -> Path | None:

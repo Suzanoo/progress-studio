@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from .amount_field import AmountField
+
 
 @dataclass(frozen=True)
 class NormalizedProject:
@@ -33,9 +35,9 @@ class NormalizedWbs:
 class NormalizedActivity:
     """One source-neutral schedule activity.
 
-    Real Amount is intentionally absent in MS-1. Adapters normalize working
-    duration to hours and preserve explicit milestone identity; Create assigns
-    Equal/Duration calculation weights separately from schedule normalization.
+    Adapters retain raw custom numeric fields alongside working duration and
+    explicit milestone identity. Create selects and validates one field only
+    in Amount mode; normalization itself never assigns monetary weights.
     """
 
     source_order: int
@@ -51,6 +53,7 @@ class NormalizedActivity:
     physical_percent_complete: float | None = None
     duration_hours: float | None = None
     is_milestone: bool = False
+    amount_field_values: tuple[tuple[str, str | None], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -60,3 +63,4 @@ class NormalizedSchedule:
     project: NormalizedProject
     wbs: tuple[NormalizedWbs, ...]
     activities: tuple[NormalizedActivity, ...]
+    amount_fields: tuple[AmountField, ...] = ()

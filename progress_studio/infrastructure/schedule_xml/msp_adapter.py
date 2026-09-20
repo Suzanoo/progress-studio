@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
+import xml.etree.ElementTree as ET
+
+from progress_studio.domain.amount_field import AmountField
 
 from progress_studio.domain import (
     NormalizedActivity,
@@ -38,6 +42,27 @@ class MspXmlAdapter:
             )
 
         project_name, rows = self._reader.read(xml_file)
+        root = ET.parse(xml_file).getroot()
+        ns = root.tag.split("}")[0] + "}"
+        amount_fields = tuple(
+            AmountField("msp:field:" + node.findtext(ns + "FieldID", "").strip(),
+                        node.findtext(ns + "Alias", "").strip() or node.findtext(ns + "FieldName", "").strip(),
+                        "MSP", "Number" if node.findtext(ns + "CFType") == "5" else "Numeric",
+                        node.findtext(ns + "FieldName", "").strip())
+            for node in root.findall(f"{ns}ExtendedAttributes/{ns}ExtendedAttribute")
+            if node.findtext(ns + "FieldID", "").strip()
+            and (node.findtext(ns + "CFType", "").strip() == "5"
+                 or re.fullmatch(r"(?:Number|Cost)\d+", node.findtext(ns + "FieldName", "").strip()))
+        )
+        eligible = {field.identity for field in amount_fields}
+        # Same source-order traversal as the existing reader; no second ID resolver.
+        nodes = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1] in {"Task", "Activity"}]
+        def amount_values(row):
+            return tuple(
+                ("msp:field:" + item.findtext(ns + "FieldID", "").strip(), item.findtext(ns + "Value"))
+                for item in nodes[row.source_order].findall(ns + "ExtendedAttribute")
+                if "msp:field:" + item.findtext(ns + "FieldID", "").strip() in eligible
+            )
         wbs_rows = [row for row in rows if row.is_summary and row.wbs]
         activity_rows = [row for row in rows if not row.is_summary]
 
@@ -67,6 +92,7 @@ class MspXmlAdapter:
                 physical_percent_complete=row.physical_percent_complete,
                 duration_hours=row.duration_hours,
                 is_milestone=row.is_milestone,
+                amount_field_values=amount_values(row),
             )
             for row in activity_rows
         )
@@ -80,7 +106,7 @@ class MspXmlAdapter:
             plan_finish=max(plan_finishes) if plan_finishes else None,
         )
 
-        return NormalizedSchedule(project=project, wbs=wbs, activities=activities)
+        return NormalizedSchedule(project=project, wbs=wbs, activities=activities, amount_fields=amount_fields)
 
     @staticmethod
     def _parent_wbs_code(wbs_code: str) -> str | None:

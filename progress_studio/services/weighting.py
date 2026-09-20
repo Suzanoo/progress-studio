@@ -7,15 +7,15 @@ from progress_studio.domain import Activity
 
 def validate_weight_basis(basis: str) -> str:
     basis = basis.strip().lower()
-    if basis == "amount":
-        raise ValueError("Amount weighting is unavailable until MS-2. Choose Equal or Duration.")
-    if basis not in {"equal", "duration"}:
-        raise ValueError("Weight basis must be Equal or Duration.")
+    if basis not in {"equal", "duration", "amount"}:
+        raise ValueError("Weight basis must be Equal, Duration or Amount.")
     return basis
 
 
 def assign_dummy_weights(rows: list[Activity], basis: str) -> None:
     basis = validate_weight_basis(basis)
+    if basis == "amount":
+        raise ValueError("Amount requires an explicitly selected XML field; dummy weighting cannot be used.")
     assignments = []
     errors = []
     for row in rows:

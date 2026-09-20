@@ -13,6 +13,8 @@ from progress_studio.domain import (
     NormalizedWbs,
 )
 
+from progress_studio.domain.amount_field import AmountField
+
 from .format_detector import ScheduleXmlFormat, ScheduleXmlFormatDetector
 
 
@@ -35,8 +37,8 @@ class P6XmlAdapter:
     the canonical WBS path expected by Progress Studio (for example ``2.1.1``),
     deliberately excluding the P6 project prefix (for example ``007``).
 
-    Amount/cost fields are intentionally ignored.  Fake Amount remains a later
-    Create Progress concern, matching the existing MSP workflow.
+    Native cost data is untouched. Declared numeric Activity UDFs are exposed
+    as raw values; Create must explicitly select a field before using Amount.
     """
 
     def __init__(self, detector: ScheduleXmlFormatDetector | None = None) -> None:
@@ -56,6 +58,19 @@ class P6XmlAdapter:
         project = self._first_direct_child(root, "Project", namespace)
         if project is None:
             raise ValueError("Primavera P6 XML does not contain a Project element.")
+
+        # Definitions own identity/type; titles are display names, never auto-selection.
+        numeric_types = {"double": "DoubleValue", "integer": "IntegerValue", "cost": "CostValue"}
+        amount_fields = tuple(
+            AmountField("p6:udf:" + self._text(node, "ObjectId", namespace),
+                        self._text(node, "Title", namespace) or self._text(node, "ObjectId", namespace),
+                        "P6", self._text(node, "DataType", namespace))
+            for node in root.iter(f"{{{namespace}}}UDFType")
+            if self._text(node, "SubjectArea", namespace).lower() == "activity"
+            and self._text(node, "DataType", namespace).lower() in numeric_types
+            and self._text(node, "ObjectId", namespace)
+        )
+        field_types = {field.identity: numeric_types[field.data_type.lower()] for field in amount_fields}
 
         separator = self._text(project, "WBSCodeSeparator", namespace) or "."
         project_id = self._text(project, "Id", namespace) or None
@@ -137,6 +152,12 @@ class P6XmlAdapter:
                     source_order=source_order,
                     activity_id=activity_id,
                     activity_name=self._text(activity, "Name", namespace),
+                    amount_field_values=tuple(
+                        ("p6:udf:" + self._text(udf, "TypeObjectId", namespace),
+                         self._text(udf, field_types["p6:udf:" + self._text(udf, "TypeObjectId", namespace)], namespace))
+                        for udf in self._direct_children(activity, "UDF", namespace)
+                        if "p6:udf:" + self._text(udf, "TypeObjectId", namespace) in field_types
+                    ),
                     wbs_code=resolve_code(wbs_object_id),
                     outline_level=resolve_level(wbs_object_id) + 1,
                     duration_hours=self._float(activity, "PlannedDuration", namespace),
@@ -165,6 +186,7 @@ class P6XmlAdapter:
             project=normalized_project,
             wbs=tuple(normalized_wbs),
             activities=tuple(normalized_activities),
+            amount_fields=amount_fields,
         )
 
     def _read_wbs(self, project: ET.Element, namespace: str) -> list[_P6WbsSource]:

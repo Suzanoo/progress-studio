@@ -17,8 +17,10 @@ workbook.
 The initial workbook includes weekly `main`, monthly `main_monthly`,
 Dashboard and internal/helper data required by the selected workflow.
 
-Choose **Equal** (default) or **Duration** as the Weight basis. Amount is visible
-but unavailable until MS-2. No fallback amount needs to be entered.
+Choose **Equal** (default), **Duration**, or **Amount** as the Weight basis.
+For Amount, choose **Select Amount field / Preview...**, select the intended
+numeric custom field, review its raw values/counts/total, and confirm the selection.
+No field is chosen automatically. No fallback amount needs to be entered.
 
 Equal gives each ordinary activity one calculation unit. Duration uses the
 source working duration normalized to hours (P6 PlannedDuration / MSP Duration),
@@ -26,7 +28,10 @@ not elapsed Start–Finish time. Milestones stay in the workbook with zero weigh
 summary/WBS rows roll up activity weights. Invalid ordinary duration stops
 Duration creation with the affected Activity IDs; it never switches to Equal.
 
-These dummy weights are not Contract Value, actual cost or cash flow. The workbook
+Equal/Duration dummy weights are not Contract Value, actual cost or cash flow.
+Amount uses real monetary values from the selected XML field; this does not
+supply actual cost or Finance cash data. Missing, invalid or negative ordinary
+Amount and an unusable total block creation; individual zeros are retained. The workbook
 README identifies the basis; Info preserves it through Save/Reopen and Rebuild.
 BOQ Mapping still owns real amount allocation and updates the current-basis label.
 Weight is independent of the existing auto/flat/front/back/bell Plan distribution.
