@@ -24,3 +24,4 @@ class Activity:
     amount: float | None
     duration_hours: float | None = None
     is_milestone: bool = False
+    amount_field_values: tuple[tuple[str, str | None], ...] = ()

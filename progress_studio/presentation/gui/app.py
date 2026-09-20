@@ -84,6 +84,10 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.xml_var = tk.StringVar()
         self.cutoff_var = tk.StringVar(value="5 - Friday")
         self.weight_basis_var = tk.StringVar(value="equal")
+        self.amount_field = None
+        self.amount_source_digest = None
+        self.amount_field_label = tk.StringVar(value="No Amount field selected")
+        self.xml_var.trace_add("write", self._reset_amount_field)
         self.distribution_var = tk.StringVar(value="auto")
         self.status_var = tk.StringVar(value="Ready")
         self.step_var = tk.StringVar(value="Select an XML schedule file to begin.")
@@ -371,9 +375,12 @@ class ProgressStudioDesktopApp(tk.Tk):
         ttk.Label(left, text="Weight basis").grid(row=3, column=0, sticky="w", pady=(8, 0))
         weights = ttk.Frame(left, style="Surface.TFrame")
         weights.grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
-        for label, value in (("Equal", "equal"), ("Duration", "duration"), ("Amount (unavailable)", "amount")):
+        for label, value in (("Equal", "equal"), ("Duration", "duration"), ("Amount", "amount")):
             ttk.Radiobutton(weights, text=label, variable=self.weight_basis_var, value=value,
-                            state="disabled" if value == "amount" else "normal").pack(anchor="w")
+                            command=self._weight_changed).pack(anchor="w")
+        self.amount_controls = ttk.Frame(weights)
+        ttk.Button(self.amount_controls, text="Select Amount field / Preview...", command=self._choose_amount_field).pack(anchor="w", pady=(4, 0))
+        ttk.Label(self.amount_controls, textvariable=self.amount_field_label, wraplength=270).pack(anchor="w")
         ttk.Label(left, text="Plan distribution").grid(row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(left, textvariable=self.distribution_var, state="readonly", values=("auto", "flat", "front", "back", "bell")).grid(row=4, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
         self.run_button = ttk.Button(left, text="Create Progress Workbook", style="Accent.TButton", command=self._start)
@@ -464,6 +471,32 @@ class ProgressStudioDesktopApp(tk.Tk):
         except tk.TclError:
             self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
 
+    def _reset_amount_field(self, *_args):
+        self.amount_field = None
+        self.amount_source_digest = None
+        self.amount_field_label.set("No Amount field selected")
+
+    def _weight_changed(self):
+        if self.weight_basis_var.get() == "amount":
+            self.amount_controls.pack(anchor="w", fill="x")
+        else:
+            self.amount_controls.pack_forget()
+
+    def _choose_amount_field(self):
+        from .amount_field_dialog import AmountFieldDialog
+        try:
+            source = Path(self.xml_var.get().strip()).expanduser().resolve()
+            if not source.is_file() or source.suffix.lower() != ".xml":
+                raise ValueError("Select a schedule XML file first.")
+            dialog = AmountFieldDialog(self, source)
+            self.wait_window(dialog)
+            if dialog.result is not None:
+                self.amount_field = dialog.result
+                self.amount_source_digest = dialog.source_digest
+                self.amount_field_label.set(dialog.result.label)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("XML Amount field", str(exc))
+
     def _browse_xml(self) -> None:
         selected = filedialog.askopenfilename(title="Select Schedule XML", filetypes=[("Schedule XML", "*.xml"), ("All files", "*.*")])
         if selected:
@@ -477,9 +510,16 @@ class ProgressStudioDesktopApp(tk.Tk):
             xml = Path(self.xml_var.get().strip())
             from progress_studio.services.weighting import validate_weight_basis
             basis = validate_weight_basis(self.weight_basis_var.get())
+            if basis == "amount":
+                import hashlib
+                if self.amount_field is None:
+                    raise ValueError("Select an XML Amount field and review its preview before Create.")
+                if hashlib.sha256(xml.expanduser().read_bytes()).hexdigest() != self.amount_source_digest:
+                    self._reset_amount_field()
+                    raise ValueError("The XML file changed. Select the Amount field and review its preview again.")
             cutoff = self.cutoff_var.get().split(" ", 1)[0]
-            options = DesktopRunOptions(xml, cutoff, distribution_method=self.distribution_var.get(), weight_basis=basis)
-        except ValueError as exc:
+            options = DesktopRunOptions(xml, cutoff, distribution_method=self.distribution_var.get(), weight_basis=basis, amount_field=self.amount_field.identity if basis == "amount" else None)
+        except (ValueError, OSError) as exc:
             messagebox.showerror("Invalid input", str(exc))
             return
         self.output_file = None

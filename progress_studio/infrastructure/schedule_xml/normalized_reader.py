@@ -34,6 +34,10 @@ class NormalizedScheduleXmlReader:
         self._validator = validator or NormalizedScheduleValidator()
 
     def read(self, xml_file: Path) -> tuple[str, list[Activity]]:
+        project, rows, _ = self.read_with_amount_fields(xml_file)
+        return project, rows
+
+    def read_with_amount_fields(self, xml_file: Path):
         xml_file = Path(xml_file)
         detected = self._detector.detect(xml_file)
         if detected is ScheduleXmlFormat.MSP_XML:
@@ -48,7 +52,7 @@ class NormalizedScheduleXmlReader:
 
         schedule = self._validator.validate(schedule)
         rows = self._to_legacy_rows(schedule, preserve_source_order=detected is ScheduleXmlFormat.MSP_XML)
-        return schedule.project.project_name, rows
+        return schedule.project.project_name, rows, schedule.amount_fields
 
     @staticmethod
     def _summary_row(row) -> Activity:
@@ -90,6 +94,7 @@ class NormalizedScheduleXmlReader:
             physical_percent_complete=row.physical_percent_complete,
             duration_hours=row.duration_hours,
             is_milestone=row.is_milestone,
+            amount_field_values=row.amount_field_values,
             total_slack_minutes=None,
             amount=None,
         )

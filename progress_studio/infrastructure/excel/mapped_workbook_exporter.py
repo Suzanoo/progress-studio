@@ -101,8 +101,9 @@ class MappedWorkbookExporter:
         source_workbook = load_workbook(progress_file, read_only=False, data_only=False)
         try:
             validate_progress_workbook_contract(source_workbook)
-            from progress_studio.infrastructure.excel.weight_basis import creation_basis, set_creation_basis
+            from progress_studio.infrastructure.excel.weight_basis import creation_basis, set_creation_basis, creation_field, set_creation_field
             source_creation_basis = creation_basis(source_workbook)
+            source_amount_field = creation_field(source_workbook)
             can_generate = (
                 bool(working_tree_nodes)
                 and self._supports_main_rebuild(source_workbook)
@@ -164,6 +165,8 @@ class MappedWorkbookExporter:
                         )
                 if source_creation_basis is not None:
                     set_creation_basis(workbook, source_creation_basis)
+                if source_amount_field is not None:
+                    set_creation_field(workbook, source_amount_field)
                 self._write_amount_mapping(workbook, totals)
                 self._write_extension_sheet(workbook, activities, totals, supplemental_wbs or [])
                 mapping_rows = self._write_mapping_sheet(workbook, boq_rows, allocations)

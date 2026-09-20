@@ -61,19 +61,26 @@ Supported XML paths in the current normalizer:
 -   Microsoft Project XML.
 -   Primavera P6 XML.
 
-Amount/cost is deliberately not normalized from schedule XML in MS-1.
-Adapters expose working duration in hours and an explicit milestone flag.
-Create assigns non-monetary weights before the existing Amount Mapping pipeline:
-Equal (default) assigns 1 to ordinary activities; Duration uses source duration;
-both assign 0 to milestones and exclude WBS nodes from duplicate weighting.
-Duration validation never substitutes elapsed dates or Equal weights.
-BOQ Mapping continues to own real amount allocation.
+Adapters expose working duration in hours, explicit milestone identity and raw
+numeric custom fields with source-qualified identities. Native P6/MSP costs are
+not changed. Normalization never chooses an Amount field or assigns its values.
+Create assigns weights before the existing Amount Mapping pipeline: Equal
+(default) assigns 1 to ordinary activities; Duration uses source duration; Amount
+validates one explicitly selected custom numeric XML field. All modes retain
+milestones with zero weight and exclude WBS nodes from duplicate weighting.
+Duration and Amount validation never substitute another weighting mode.
+Amount preview uses Decimal/raw XML strings; the accepted workbook engine uses
+float numeric values without deliberate pre-rounding. BOQ Mapping continues to
+own BOQ allocation and can replace the initial XML monetary amounts.
 
 Creation Weight Basis is a key/value entry in the existing Info sheet, already
 preserved by Rebuild. Mapping generation explicitly carries this provenance into
-new workbooks. Excel presentation helpers explain dummy units without renaming
+new workbooks. Amount also stores the selected field's identity, display name,
+source, type and native name in Info. Mapping regeneration carries this original
+field provenance while displaying BOQ Mapping as the current amount basis.
+Excel presentation helpers explain monetary/dummy units without renaming
 engine-recognized Amount headers or introducing fixed cells in domain/services.
-See docs/WEIGHT_SELECTION.md for the MS-1 lifecycle contract.
+See docs/WEIGHT_SELECTION.md for the Create weighting lifecycle contract.
 
 ### After workbook creation
 

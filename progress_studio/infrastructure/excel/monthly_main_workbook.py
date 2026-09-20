@@ -14,6 +14,8 @@ from progress_studio.infrastructure.excel.progress_workbook import (
     WBS_ACTUAL_FILL,
     WBS_PLAN_FILL,
     add_progress_conditional_formatting,
+    add_percent_complete_formulas,
+    build_plan_rows,
     clear_progress_conditional_formatting,
     clear_timescale_direct_fills,
 )
@@ -128,6 +130,27 @@ def _write_year_headers(ws, first_col: int, buckets: list[tuple[tuple[int, int],
 
 def _quote_sheet(name: str) -> str:
     return "'" + name.replace("'", "''") + "'"
+
+
+def refresh_monthly_percent_complete(ws) -> None:
+    """Rebind copied weekly totals to rendered M periods, excluding X margins."""
+    headers = _header_map(ws)
+    required = ("row type", "p/a", "outline level", "% complete")
+    if not all(name in headers for name in required):
+        return  # Legacy workbooks can omit the optional % Complete column.
+    reporting_cols = [
+        col for col in _timescale_columns(ws)
+        if (label := str(ws.cell(3, col).value or "").strip().upper()).startswith("M")
+        and label[1:].isdigit()
+    ]
+    if not reporting_cols:
+        return
+    plan_rows = build_plan_rows(
+        ws, headers["row type"], headers["p/a"], headers["outline level"]
+    )
+    add_percent_complete_formulas(
+        ws, plan_rows, reporting_cols, headers["p/a"], headers["% complete"]
+    )
 
 
 def build_monthly_main_view(
@@ -296,6 +319,9 @@ def build_monthly_main_view(
                     cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
             else:
                 cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
+
+    if not snapshot:
+        refresh_monthly_percent_complete(monthly)
 
     _write_year_headers(monthly, first_timescale_col, buckets)
 

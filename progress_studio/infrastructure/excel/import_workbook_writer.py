@@ -10,7 +10,7 @@ from progress_studio.domain import Activity, ActivityWbsSequencer
 
 
 class ImportWorkbookWriter:
-    def write(self, output_file: Path, source_file: Path, project_name: str, rows: list[Activity], *, weight_basis: str | None = None) -> None:
+    def write(self, output_file: Path, source_file: Path, project_name: str, rows: list[Activity], *, weight_basis: str | None = None, amount_field=None) -> None:
         wb = Workbook()
         ws = wb.active
         ws.title = WORKBOOK_SCHEMA.main_sheet
@@ -89,5 +89,8 @@ class ImportWorkbookWriter:
         if weight_basis is not None:
             from progress_studio.infrastructure.excel.weight_basis import set_creation_basis
             set_creation_basis(wb, weight_basis)
+        if amount_field is not None:
+            from progress_studio.infrastructure.excel.weight_basis import set_creation_field
+            set_creation_field(wb, amount_field)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_file)

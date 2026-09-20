@@ -8,6 +8,7 @@ from datetime import date, datetime
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
+from progress_studio.infrastructure.excel.monthly_main_workbook import refresh_monthly_percent_complete
 from progress_studio.domain.main_dataset import MainDataset
 from progress_studio.domain.monthly_cache import MonthlyCache
 from progress_studio.infrastructure.excel.timescale_workbook import (
@@ -206,6 +207,8 @@ def build_live_monthly_view(
                 # Full-live baseline intentionally uses the same straightforward
                 # formula for Project/WBS/Activity Plan and Actual rows.
                 cell.value = f'=IF(COUNT({source_range})=0,"",SUM({source_range}))'
+
+    refresh_monthly_percent_complete(monthly)
 
     # Match main exactly: blank timescale cells have no fill; populated cells
     # are colored by the same Project/WBS/Activity Plan/Actual CF rules.
