@@ -20,12 +20,12 @@ def test_monthly_uses_main_timescale_conditional_formatting_contract() -> None:
     assert "EEF5FA" not in source
 
 
-def test_payment_label_is_doubled() -> None:
+def test_payment_label_visual_polish() -> None:
     theme = load_payment_line_theme()
-    assert theme.label.width_px == 290
-    assert theme.label.height_px == 52
-    assert theme.label.font_size == 24
-    assert theme.label.corner_radius_px == 12
+    assert theme.label.width_px == 150
+    assert theme.label.height_px == 30
+    assert theme.label.font_size == 14
+    assert theme.label.corner_radius_px == 6
 
 
 def test_payment_timescale_copies_activity_data_fill() -> None:
