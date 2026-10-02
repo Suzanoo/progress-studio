@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from progress_studio.infrastructure.excel.ev_monetary_inputs import ACTIVITY, BOQ, resolve_inputs
 from datetime import date, datetime
 from pathlib import Path
 import os
@@ -75,13 +76,13 @@ def _as_datetime(value: object) -> datetime | None:
 class EarnedValueRebuildService:
     """Standalone EV extension used by the Rebuild workspace.
 
-    EV reads current ``main`` progress values and embedded BOQ/mapping provenance.
+    EV reads current ``main`` progress and an explicitly selected monetary source.
     Rebuild does not infer an EV view from Actual progress or reporting cutoff.
     An existing EV view is preserved; first creation uses the latest canonical
     monthly reporting point (or latest main reporting date as fallback).
     The service mutates only
     EV-owned workbook presentation:
-    ``Earned Value`` and ``EV_Data``.
+    ``Earned Value``, ``EV Table`` and ``EV_Data``.
 
     The source workbook is copied to a temporary output, opened once as a normal
     workbook, EV-owned sheets are added/refreshed, the proven overlay transparency
@@ -102,9 +103,9 @@ class EarnedValueRebuildService:
         self.deriver = deriver or EarnedValueDeriver()
         self.renderer = renderer
 
-    def analyze(self, workbook_path: Path) -> EarnedValueRebuildAnalysis:
+    def analyze(self, workbook_path: Path, *, monetary_source: str = BOQ) -> EarnedValueRebuildAnalysis:
         path = self._validate_path(workbook_path)
-        result, cutoff, activity_count, boq_count, allocation_count = self._derive(path)
+        result, cutoff, activity_count, boq_count, allocation_count = self._derive(path, monetary_source)
         return EarnedValueRebuildAnalysis(
             workbook=path,
             cutoff_date=cutoff,
@@ -119,6 +120,7 @@ class EarnedValueRebuildService:
         self,
         source_workbook: Path,
         output_workbook: Path,
+        *, monetary_source: str = BOQ,
     ) -> EarnedValueRebuildResult:
         source = self._validate_path(source_workbook)
         output = Path(output_workbook).expanduser().resolve()
@@ -131,7 +133,7 @@ class EarnedValueRebuildService:
                 "Earned Value output must be a new workbook path."
             )
 
-        result, cutoff, activity_count, boq_count, allocation_count = self._derive(source)
+        result, cutoff, activity_count, boq_count, allocation_count = self._derive(source, monetary_source)
 
         output.parent.mkdir(parents=True, exist_ok=True)
         fd, temp_name = tempfile.mkstemp(
@@ -152,7 +154,7 @@ class EarnedValueRebuildService:
                 keep_vba=keep_vba,
             )
             try:
-                # EV owns only its two sheets. Existing Progress/Payment/Dashboard
+                # EV owns only its three generated sheets. Existing Progress/Payment/Dashboard
                 # builders are deliberately not called here.
                 self.renderer(workbook, result)
 
@@ -184,17 +186,22 @@ class EarnedValueRebuildService:
     def _derive(
         self,
         path: Path,
+        monetary_source: str = BOQ,
     ) -> tuple[EarnedValueResult, datetime, int, int, int]:
         try:
-            embedded = self.input_reader.read(path)
+            if monetary_source not in (ACTIVITY, BOQ):
+                raise ValueError('Select Activity Amount or BOQ Mapping explicitly.')
             dataset = self.main_reader.read_main_dataset(path)
+            dataset, embedded, milestones = self._resolve_inputs(path, dataset, monetary_source)
             cutoff = self._view_date_seed(path, dataset)
             result = self.deriver.derive(
                 dataset,
                 embedded.boq_rows,
                 embedded.allocations,
                 cutoff_date=cutoff,
+                **({"milestones": milestones} if milestones else {}),
             )
+            result = replace(result, monetary_source=monetary_source, milestones=milestones)
         except (
             EarnedValueWorkbookInputError,
             RebuildWorkbookReadError,
@@ -222,6 +229,9 @@ class EarnedValueRebuildService:
             len(embedded.boq_rows),
             len(embedded.allocations),
         )
+
+    def _resolve_inputs(self, path, dataset, monetary_source):
+        return resolve_inputs(path, dataset, monetary_source, self.input_reader)
 
     @classmethod
     def _view_date_seed(cls, path: Path, dataset) -> datetime:

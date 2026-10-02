@@ -112,8 +112,10 @@ def test_ev_l3_dataset_reads_plan_actual_live_from_main() -> None:
     assert workbook.defined_names["EV_View_Date"].attr_text == "'Earned Value'!$M$3"
 
     # Project chart values are formulas over current main progress, not EV-1 values.
-    assert "SUMIFS(main!" in data["B2"].value
-    assert "SUMIFS(main!" in data["C2"].value
+    assert "SUMIFS($BX$" in data["B2"].value
+    assert "SUMPRODUCT(main!" in data["BX2"].value
+    assert "SUMIFS($BY$" in data["C2"].value
+    assert "SUMPRODUCT(main!" in data["BY2"].value
     assert "MIN(" not in data["C2"].value
     assert "Dashboard!" not in data["C2"].value
 
@@ -178,7 +180,7 @@ def test_ev_l3_actual_is_live_through_view_date_and_independent_from_dashboard_c
     assert data["G4"].value is None
 
     # Project Actual curve is likewise independent from Dashboard cutoff.
-    assert "SUMIFS(main!" in data["C4"].value
+    assert "SUMIFS($BY$" in data["C4"].value
     assert "MIN(" not in data["C4"].value
     assert "Dashboard!" not in data["C4"].value
 
@@ -193,14 +195,14 @@ def test_ev_l4_all_visible_views_share_live_m3_dataset() -> None:
     table = workbook[EV_TABLE_SHEET]
 
     # KPI cards read the live chart interface through the semantic view date.
-    assert "EV_Data!$B$2:$B$" in ev["D6"].value
-    assert "EV_View_Date" in ev["D6"].value
+    assert "EV_Data!BH2:BH" in ev["D6"].value
+    assert "EV_View_Date" in data["BF2"].value
     assert "$M$3" not in ev["D6"].value
-    assert "EV_Data!$D$2:$D$" in ev["G6"].value
-    assert "EV_View_Date" in ev["G6"].value
+    assert "EV_Data!BI2:BI" in ev["G6"].value
+    assert "EV_View_Date" in data["BG2"].value
     assert "$M$3" not in ev["G6"].value
     assert ev["J6"].value == "=G6-D6"
-    assert ev["M6"].value == '=IF(D6=0,0,G6/D6)'
+    assert ev["M6"].value == '=IF(D6=0,"",G6/D6)'
 
     # WBS dashboard cells still use the stable J:S interface, whose values are
     # formulas over the live Activity layer rather than Python date snapshots.
@@ -219,7 +221,7 @@ def test_ev_l4_all_visible_views_share_live_m3_dataset() -> None:
     assert "EV_Data!$AG$2:$AG$" in table["G6"].value
     assert "EV_Data!$AH$2:$AH$" in table["H6"].value
     assert table["I6"].value == "=H6-G6"
-    assert table["J6"].value == "=IF(G6=0,0,H6/G6)"
+    assert table["J6"].value == '=IF(G6=0,"",H6/G6)'
 
 
 @pytest.mark.unit

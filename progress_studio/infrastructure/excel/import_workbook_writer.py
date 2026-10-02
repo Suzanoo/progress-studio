@@ -92,5 +92,7 @@ class ImportWorkbookWriter:
         if amount_field is not None:
             from progress_studio.infrastructure.excel.weight_basis import set_creation_field
             set_creation_field(wb, amount_field)
+        from progress_studio.infrastructure.excel.ev_monetary_inputs import seed_import
+        seed_import(wb, rows, weight_basis, amount_field)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_file)

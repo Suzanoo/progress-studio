@@ -104,6 +104,17 @@ class MappedWorkbookExporter:
             from progress_studio.infrastructure.excel.weight_basis import creation_basis, set_creation_basis, creation_field, set_creation_field
             source_creation_basis = creation_basis(source_workbook)
             source_amount_field = creation_field(source_workbook)
+            from progress_studio.infrastructure.excel.ev_monetary_inputs import SHEET as EV_INPUTS, write_inputs
+            monetary_records = None
+            monetary_source = source_workbook
+            if edited_workbook is not None:
+                monetary_source = load_workbook(edited_workbook, data_only=False)
+            try:
+                if EV_INPUTS in monetary_source.sheetnames:
+                    monetary_records = [tuple(row) for row in monetary_source[EV_INPUTS].iter_rows(min_row=4,max_col=6,values_only=True) if row[0]]
+            finally:
+                if monetary_source is not source_workbook:
+                    monetary_source.close()
             can_generate = (
                 bool(working_tree_nodes)
                 and self._supports_main_rebuild(source_workbook)
@@ -120,6 +131,11 @@ class MappedWorkbookExporter:
         temp_file = Path(temp_name)
         try:
             totals = self._allocation_totals(boq_rows, allocations)
+            # Monetary BOQ allocation remains intact in the embedded mapping;
+            # Progress weighting excludes explicit milestones.
+            for record in monetary_records or ():
+                if record[3] is True or record[3] == 1:
+                    totals[str(record[0]).strip().upper()] = 0.0
             activities = activities or []
             if can_generate:
                 source = WorkingTreeScheduleSource(progress_file, working_tree_nodes or [], totals)
@@ -161,8 +177,15 @@ class MappedWorkbookExporter:
                         )
                     else:
                         amount_rows = self._write_main_amounts(
-                            workbook, totals, validation.allocated_amount
+                            workbook, totals, sum(totals.values())
                         )
+                if monetary_records is not None:
+                    current_ids = {a.activity_id: a.description for a in main_dataset_from_workbook(workbook).activities}
+                    preserved = [r for r in monetary_records if str(r[0]) in current_ids]
+                    found = {str(r[0]) for r in preserved}
+                    preserved.extend((key, description, None, False, None, None)
+                                     for key, description in current_ids.items() if key not in found)
+                    write_inputs(workbook, preserved)
                 if source_creation_basis is not None:
                     set_creation_basis(workbook, source_creation_basis)
                 if source_amount_field is not None:

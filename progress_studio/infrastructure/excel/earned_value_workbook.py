@@ -611,6 +611,58 @@ def _boq_metadata_from_mapping(workbook) -> dict[str, tuple[str, str, str, str, 
     return metadata
 
 
+def _detail_items(result):
+    return result.activities if result.monetary_source == "Activity Amount" else result.boq_items
+
+
+def _detail_key(item):
+    return item.activity_id if hasattr(item, "activity_id") else item.boq_key
+
+
+def _detail_id(item):
+    return item.activity_id if hasattr(item, "activity_id") else item.stable_id
+
+
+def _activity_live_formula(result, activity, live, actual, date_ref):
+    for identity, _, _, row in result.milestones:
+        if identity == activity.activity_id:
+            col = "F" if actual else "E"
+            ref = f"'EV Monetary Inputs'!${col}${row}"
+            return f'IF(ISNUMBER({ref}),IF(INT({ref})<={date_ref},1,0),0)'
+    source = live.activity_rows.get(activity.activity_id, (None, None))[int(actual)]
+    return _main_progress_formula(live, source, date_ref)
+
+
+def _write_project_period_values(ws, workbook, result, live):
+    # O(main rows + periods) helper: monetary BAC aligned to each main row.
+    # Each period sums ordinary activity money once. Milestone events are
+    # added separately from their explicit live completion dates.
+    last = workbook['main'].max_row
+    milestone_ids = {m[0] for m in result.milestones}
+    for row in range(1, last + 1):
+        ws.cell(row, 69, 0)
+        ws.cell(row, 70, 0)
+    for activity in result.activities:
+        if activity.activity_id in milestone_ids:
+            continue
+        plan, actual = live.activity_rows[activity.activity_id]
+        if plan:
+            ws.cell(plan, 69, activity.bac)
+        if actual:
+            ws.cell(actual, 70, activity.bac)
+    for index, activity in enumerate(result.activities, 2):
+        event = next((m for m in result.milestones if m[0] == activity.activity_id), None)
+        ws.cell(index, 71, activity.bac if event else 0)
+        for col, source in ((72,'E'),(73,'F')):
+            ws.cell(index, col, f"=IF(ISNUMBER('EV Monetary Inputs'!{source}{event[3]}),INT('EV Monetary Inputs'!{source}{event[3]}),0)" if event else 0)
+    for row, col in enumerate(range(live.first_period_col, live.last_period_col+1),2):
+        letter = get_column_letter(col)
+        ws.cell(row,75, f'=main!{letter}{live.header_row}')
+        ws.cell(row,76, f'=SUMPRODUCT(main!{letter}1:{letter}{last},$BQ$1:$BQ${last})')
+        ws.cell(row,77, f'=SUMPRODUCT(main!{letter}1:{letter}{last},$BR$1:$BR${last})')
+    return live.last_period_col-live.first_period_col+2
+
+
 def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLayout) -> None:
     """Render the EV-6 BOQ table driven by the dashboard Status Date.
 
@@ -637,10 +689,11 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
     ws["A3"] = "Status Date"
     ws["B3"] = f"={EV_VIEW_DATE_NAME}"
     ws["B3"].number_format = "dd-mmm-yyyy"
-    ws["D3"] = "BOQ Items"
-    ws["E3"] = len(result.boq_items)
+    ws["D3"] = "Activities" if result.monetary_source == "Activity Amount" else "BOQ Items"
+    ws["E3"] = len(_detail_items(result))
     ws["G3"] = "Basis"
-    ws["H3"] = "Mapped BOQ"
+    ws["H3"] = result.monetary_source
+    ws["A4"] = "Monetary BAC: Allocated Contract Value"
     for coord in ("A3", "D3", "G3"):
         ws[coord].font = Font(name=_FONT, size=10, bold=True, color=_MUTED)
     for coord in ("B3", "E3", "H3"):
@@ -656,6 +709,8 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
 
     header_row = 5
     headers = ("BOQ ID", "WBS-2", "WBS-3", "WBS-4", "BOQ / WORK", "BAC", "PV", "EV", "SV", "SPI")
+    if result.monetary_source == "Activity Amount":
+        headers = ("Activity ID", "WBS", "", "", "Activity", "BAC", "PV", "EV", "SV", "SPI")
     for column, header in enumerate(headers, start=1):
         cell = ws.cell(header_row, column, header)
         cell.fill = _solid(_NAVY)
@@ -663,11 +718,11 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = _thin_border()
 
-    metadata = _boq_metadata_from_mapping(workbook)
+    metadata = _boq_metadata_from_mapping(workbook) if result.monetary_source == "BOQ Mapping" else {}
     rows = []
-    for boq in result.boq_items:
-        mapped = metadata.get(boq.boq_key, ("", "", "", "", ""))
-        boq_id = mapped[0] or boq.stable_id or boq.boq_key
+    for boq in _detail_items(result):
+        mapped = metadata.get(_detail_key(boq), ("", getattr(boq, "wbs", ""), "", "", ""))
+        boq_id = mapped[0] or _detail_id(boq) or _detail_key(boq)
         description = mapped[4] or boq.description or boq_id
         rows.append((mapped[1], mapped[2], mapped[3], description, boq_id, boq))
     rows.sort(key=lambda item: (item[0].lower(), item[1].lower(), item[2].lower(), item[3].lower(), item[4].lower()))
@@ -680,7 +735,7 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
             ws.cell(row, column, value)
         # Hidden stable key keeps the visible table readable while formulas use
         # the same BOQ identity as EV-1 reverse aggregation.
-        ws.cell(row, 11, boq.boq_key)
+        ws.cell(row, 11, _detail_key(boq))
         pv = (
             f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$AG$2:$AG${snapshot_last},'
             f'{EV_DATA_SHEET}!$AF$2:$AF${snapshot_last},$K{row},'
@@ -694,7 +749,7 @@ def _render_ev_table(workbook, result: EarnedValueResult, data_layout: _EVDataLa
         ws.cell(row, 7, pv)
         ws.cell(row, 8, ev)
         ws.cell(row, 9, f'=H{row}-G{row}')
-        ws.cell(row, 10, f'=IF(G{row}=0,0,H{row}/G{row})')
+        ws.cell(row, 10, f'=IF(G{row}=0,"",H{row}/G{row})')
         for column in range(1, 11):
             cell = ws.cell(row, column)
             cell.border = _thin_border()
@@ -746,7 +801,7 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     ws.sheet_view.showGridLines = False
 
     live = _main_live_contract(workbook, result)
-    allocations = _mapping_allocations(workbook)
+    allocations = _mapping_allocations(workbook) if result.monetary_source == "BOQ Mapping" else ()
 
     # EV View Date is the only live EV reporting control. Dashboard cutoff and
     # the rebuild cutoff never constrain post-rebuild Plan/Actual calculation.
@@ -763,21 +818,17 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     ws.cell(1, 29, "PV @ Status Date")
     ws.cell(1, 30, "EV @ Status Date")
 
+    period_last = _write_project_period_values(ws, workbook, result, live) if live else 2
     for row_index, point in enumerate(chart_points, start=2):
         ws.cell(row_index, 1, point.reporting_date)
-        if live is not None and live.project_plan_row is not None:
-            plan_progress = _main_progress_formula(live, live.project_plan_row, f"A{row_index}")
-            ws.cell(row_index, 2, f"={float(result.project_bac or 0.0)}*({plan_progress})")
+        if live is not None:
+            event_last = max(2, len(result.activities)+1)
+            for column, total_col, event_col in ((2,"BX","BT"),(3,"BY","BU")):
+                ws.cell(row_index, column,
+                    f'=SUMIFS(${total_col}$2:${total_col}${period_last},$BW$2:$BW${period_last},"<="&A{row_index})'
+                    f'+SUMIFS($BS$2:$BS${event_last},${event_col}$2:${event_col}${event_last},">0",${event_col}$2:${event_col}${event_last},"<="&A{row_index})')
         else:
             ws.cell(row_index, 2, point.planned_value)
-        if live is not None and live.project_actual_row is not None:
-            actual_progress = _main_progress_formula(
-                live,
-                live.project_actual_row,
-                f"A{row_index}",
-            )
-            ws.cell(row_index, 3, f"={float(result.project_bac or 0.0)}*({actual_progress})")
-        else:
             ws.cell(row_index, 3, point.earned_value)
         # Render cumulative Actual through the selected view date. Empty future
         # Actual periods add nothing, so EV carries forward naturally without a
@@ -835,12 +886,8 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
         source_rows = None if live is None else live.activity_rows.get(activity.activity_id)
         if source_rows is not None:
             plan_row, actual_row = source_rows
-            plan_formula = _main_progress_formula(live, plan_row, EV_VIEW_DATE_NAME)
-            actual_formula = _main_progress_formula(
-                live,
-                actual_row,
-                EV_VIEW_DATE_NAME,
-            )
+            plan_formula = _activity_live_formula(result, activity, live, False, EV_VIEW_DATE_NAME)
+            actual_formula = _activity_live_formula(result, activity, live, True, EV_VIEW_DATE_NAME)
             ws.cell(row, activity_start_col + 5, f"={plan_formula}")
             ws.cell(row, activity_start_col + 6, f"={actual_formula}")
             ws.cell(row, activity_start_col + 7, f"={get_column_letter(activity_start_col + 4)}{row}*{get_column_letter(activity_start_col + 5)}{row}")
@@ -885,7 +932,7 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
         ws.cell(row, 16, f'=SUMIFS(${act_pv_col}$2:${act_pv_col}${activity_last_row},${act_wbs_col}$2:${act_wbs_col}${activity_last_row},M{row})')
         ws.cell(row, 17, f'=SUMIFS(${act_ev_col}$2:${act_ev_col}${activity_last_row},${act_wbs_col}$2:${act_wbs_col}${activity_last_row},M{row})')
         ws.cell(row, 18, f'=Q{row}-P{row}')
-        ws.cell(row, 19, f'=IF(P{row}=0,0,Q{row}/P{row})')
+        ws.cell(row, 19, f'=IF(P{row}=0,"",Q{row}/P{row})')
         ws.cell(row, 12, f'=IF(P{row}<=0,"",COUNTIF($P$2:P{row},">0"))')
         ws.cell(row, 10, f'=IF(L{row}="","",TEXT(K{row},"yyyymmdd")&"|"&L{row})')
         ws.cell(row, 11).number_format = "dd-mmm-yyyy"
@@ -926,11 +973,14 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     mapping_pv_col = get_column_letter(mapping_start_col + 3)
     mapping_ev_col = get_column_letter(mapping_start_col + 4)
     boq_first_row = 2
-    for offset, boq in enumerate(result.boq_items):
+    for offset, boq in enumerate(_detail_items(result)):
         row = boq_first_row + offset
         ws.cell(row, 31, f"={EV_VIEW_DATE_NAME}")
-        ws.cell(row, 32, boq.boq_key)
-        if allocations:
+        ws.cell(row, 32, _detail_key(boq))
+        if result.monetary_source == "Activity Amount":
+            ws.cell(row, 33, f'=BH{row}')
+            ws.cell(row, 34, f'=BI{row}')
+        elif allocations:
             ws.cell(row, 33, f'=SUMIFS(${mapping_pv_col}$2:${mapping_pv_col}${mapping_last_row},${mapping_boq_col}$2:${mapping_boq_col}${mapping_last_row},AF{row})')
             ws.cell(row, 34, f'=SUMIFS(${mapping_ev_col}$2:${mapping_ev_col}${mapping_last_row},${mapping_boq_col}$2:${mapping_boq_col}${mapping_last_row},AF{row})')
         else:
@@ -938,18 +988,18 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
             ws.cell(row, 33, None if status is None else status.planned_value)
             ws.cell(row, 34, None if status is None else status.earned_value)
         ws.cell(row, 35, f'=AH{row}-AG{row}')
-        ws.cell(row, 36, f'=IF(AG{row}=0,0,AH{row}/AG{row})')
+        ws.cell(row, 36, f'=IF(AG{row}=0,"",AH{row}/AG{row})')
         # Unique ascending negative rank; row-order breaks exact SV ties.
-        ws.cell(row, 37, f'=IF(AI{row}>=0,"",COUNTIF($AI$2:$AI${max(2, len(result.boq_items)+1)},"<"&AI{row})+COUNTIF($AI$2:AI{row},AI{row}))')
+        ws.cell(row, 37, f'=IF(AI{row}>=0,"",COUNTIF($AI$2:$AI${max(2, len(_detail_items(result))+1)},"<"&AI{row})+COUNTIF($AI$2:AI{row},AI{row}))')
         ws.cell(row, 31).number_format = "dd-mmm-yyyy"
         for col in (33, 34, 35):
             ws.cell(row, col).number_format = "#,##0.00"
         ws.cell(row, 36).number_format = "0.00"
-    boq_snapshot_last_row = max(2, len(result.boq_items) + 1)
+    boq_snapshot_last_row = max(2, len(_detail_items(result)) + 1)
 
     # Top-10 interface T:Z stays stable, but now looks up the live BOQ ranking.
-    activity_ids_by_boq = _activity_ids_by_boq_from_mapping(workbook)
-    metadata = _boq_metadata_from_mapping(workbook)
+    activity_ids_by_boq = _activity_ids_by_boq_from_mapping(workbook) if result.monetary_source == "BOQ Mapping" else {}
+    metadata = _boq_metadata_from_mapping(workbook) if result.monetary_source == "BOQ Mapping" else {}
     for col, header in enumerate(
         ("Lookup Key", "Snapshot Date", "Rank", "Activity ID", "BOQ / Work", "SV", "SPI"),
         start=20,
@@ -973,13 +1023,16 @@ def _write_ev_data(workbook, result: EarnedValueResult) -> _EVDataLayout:
     # BO:BP provide BOQ Activity ID / display label aligned with AE:AK rows.
     ws["BO1"] = "Activity ID"
     ws["BP1"] = "BOQ / Work"
-    for offset, boq in enumerate(result.boq_items):
+    for offset, boq in enumerate(_detail_items(result)):
         row = boq_first_row + offset
-        mapped = metadata.get(boq.boq_key, ("", "", "", "", ""))
-        ws.cell(row, 67, activity_ids_by_boq.get(boq.boq_key, ""))
-        ws.cell(row, 68, mapped[4] or boq.description or boq.stable_id or boq.boq_key)
+        mapped = metadata.get(_detail_key(boq), ("", getattr(boq, "wbs", ""), "", "", ""))
+        ws.cell(row, 67, activity_ids_by_boq.get(_detail_key(boq), _detail_key(boq) if result.monetary_source == "Activity Amount" else ""))
+        ws.cell(row, 68, mapped[4] or boq.description or _detail_id(boq) or _detail_key(boq))
 
     negative_last_row = 11
+    if result.monetary_source == "Activity Amount":
+        ws['BP1'] = 'Activity'
+        ws['X1'] = 'Activity'
     return _EVDataLayout(
         chart_last_row,
         status_top,
@@ -1043,20 +1096,23 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
             cell.fill = _solid(_NAVY)
 
     ws["A3"] = "PROJECT PERFORMANCE"
+    ws["A4"] = f"{result.monetary_source} — BAC: Allocated Contract Value"
+    ws["A4"].font = Font(name=_FONT, size=9, color=_MUTED)
     ws["A3"].font = Font(name=_FONT, size=11, bold=True, color=_NAVY)
     _add_view_date_dropdown(workbook, ws, result)
 
     chart_last_row = data_layout.chart_last_row
     # KPI values use the same semantic view date as the chart so layout changes
     # cannot leave stale or coordinate-bound calculation paths behind.
-    pv_formula = f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$B$2:$B${chart_last_row},{EV_DATA_SHEET}!$A$2:$A${chart_last_row},EV_View_Date),0)'
-    ev_formula = f'=IFERROR(SUMIFS({EV_DATA_SHEET}!$D$2:$D${chart_last_row},{EV_DATA_SHEET}!$A$2:$A${chart_last_row},EV_View_Date),0)'
+    activity_last = max(2, len(result.activities)+1)
+    pv_formula = f'=SUM({EV_DATA_SHEET}!BH2:BH{activity_last})'
+    ev_formula = f'=SUM({EV_DATA_SHEET}!BI2:BI{activity_last})'
     kpis = (
         ("BAC", result.project_bac, "#,##0.00", "Budget"),
         ("PV", pv_formula, "#,##0.00", "Planned"),
         ("EV", ev_formula, "#,##0.00", "Earned"),
         ("SV", "=G6-D6", "#,##0.00", '=IF(ROUND(J6,2)=0,"On Plan",IF(J6<0,"Behind","Ahead"))'),
-        ("SPI", '=IF(D6=0,0,G6/D6)', "0.00", '=IF(D6=0,"N/A",IF(ROUND(M6,2)=1,"On Plan",IF(M6<1,"Behind","Ahead")))'),
+        ("SPI", '=IF(D6=0,"",G6/D6)', "0.00", '=IF(D6=0,"N/A",IF(ROUND(M6,2)=1,"On Plan",IF(M6<1,"Behind","Ahead")))'),
     )
     starts = (1, 4, 7, 10, 13)
     for (label, value, number_format, note), col in zip(kpis, starts):
@@ -1322,7 +1378,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
     ws["I30"].font = Font(name=_FONT, size=11, bold=True, color=_NAVY)
     variance_headers = (
         (9, 9, "ACTIVITY ID"),
-        (10, 12, "BOQ / WORK"),
+        (10, 12, "Activity" if result.monetary_source == "Activity Amount" else "BOQ / WORK"),
         (13, 14, "SV"),
         (15, 15, "SPI"),
     )
@@ -1364,7 +1420,7 @@ def render_earned_value_sheet(workbook, result: EarnedValueResult, *, include_ch
         ws.cell(excel_row, 15).number_format = "0.00"
 
     detail_row = max(last_wbs_row, table_row + 10) + 2
-    ws.cell(detail_row, 1, "Detailed BOQ analysis → EV Table")
+    ws.cell(detail_row, 1, f"{result.monetary_source} detail → EV Table")
     ws.cell(detail_row, 1).font = Font(name=_FONT, size=9, italic=True, color=_BLUE, underline="single")
     ws.cell(detail_row, 1).hyperlink = f"#'{EV_TABLE_SHEET}'!A1"
 

@@ -23,6 +23,7 @@ and agent assignments.
     inputs, outputs and product flow.
 -   [User Workflow](USER_WORKFLOW.md) --- Create, Mapping, Payment,
     Excel and Rebuild workflow.
+-   [EV monetary sources](EV_MONETARY_SOURCES.md) — explicit Activity Amount / BOQ BAC, milestone earning and live refresh.
 -   [Weight Selection](WEIGHT_SELECTION.md) --- Equal/Duration/Amount creation and monetary versus dummy-weight semantics.
 -   [Payment Breakdown](PAYMENT_BREAKDOWN.md) --- exact-name grouping,
     calculation, workbook ownership and output contract.

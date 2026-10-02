@@ -1,5 +1,9 @@
 # Progress Studio — Earned Value Live Workbook Contract
 
+The PO-authorized [EV monetary source extension](docs/EV_MONETARY_SOURCES.md)
+supersedes BOQ-only readiness and detail, Project Summary weighting, and zero-PV
+SPI behavior. All other live/date/ownership boundaries below remain applicable.
+
 ## Scope
 
 This document is the frozen contract for the live Earned Value workbook.

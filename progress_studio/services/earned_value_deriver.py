@@ -44,7 +44,7 @@ class EarnedValueDeriver:
     def __init__(self, *, allocation_tolerance: float = 0.01) -> None:
         self._allocation_tolerance = float(allocation_tolerance)
 
-    def derive(self, dataset: MainDataset, boq_rows, allocations, *, cutoff_date: datetime | None) -> EarnedValueResult:
+    def derive(self, dataset: MainDataset, boq_rows, allocations, *, cutoff_date: datetime | None, milestones=()) -> EarnedValueResult:
         plan_rows = tuple(dataset.activities)
         plan_by_id = {_identity(row): row for row in plan_rows}
         actual_by_id: dict[str, MainRow] = {}
@@ -61,13 +61,18 @@ class EarnedValueDeriver:
             allocation_by_boq[record.boq_key].append(record)
         self._validate_full_allocation(tuple(boq_rows), allocation_by_boq)
 
-        reporting_periods = self._reporting_periods(dataset, plan_rows)
+        reporting_periods = tuple(dataset.periods) if milestones else self._reporting_periods(dataset, plan_rows)
         activity_progress = self._derive_activity_progress(
             periods=reporting_periods,
             plan_rows=plan_rows,
             actual_by_id=actual_by_id,
             cutoff_date=cutoff_date,
         )
+        for identity, planned, actual, _ in milestones:
+            activity_progress[identity] = (
+                [float(p.reporting_date is not None and p.reporting_date >= planned) for p in reporting_periods],
+                [float(actual is not None and p.reporting_date is not None and p.reporting_date >= actual) for p in reporting_periods],
+            )
         activities: list[ActivityEarnedValue] = []
         for plan in plan_rows:
             activity_id = _identity(plan)

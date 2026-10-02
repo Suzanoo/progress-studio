@@ -96,10 +96,10 @@ def test_ev5_dashboard_kpis_are_formula_driven_by_status_date() -> None:
     assert ws["A1"].value == "EARNED VALUE"
     assert ws["M3"].value == datetime(2026, 2, 13)
     assert ws["A6"].value == pytest.approx(10_000_000.0)
-    assert ws["D6"].value.startswith("=IFERROR(SUMIFS(EV_Data!$B$")
-    assert ws["G6"].value.startswith("=IFERROR(SUMIFS(EV_Data!$D$")
+    assert ws["D6"].value.startswith("=SUM(EV_Data!BH")
+    assert ws["G6"].value.startswith("=SUM(EV_Data!BI")
     assert ws["J6"].value == "=G6-D6"
-    assert ws["M6"].value == "=IF(D6=0,0,G6/D6)"
+    assert ws["M6"].value == '=IF(D6=0,"",G6/D6)'
     assert ws["J8"].value.startswith("=IF(")
     assert ws["M8"].value.startswith("=IF(")
 
@@ -332,7 +332,7 @@ def test_ev6_renders_live_boq_table_with_native_filter_and_mapping_metadata() ->
     assert "EV_View_Date" in ws["G6"].value
     assert ws["H6"].value.startswith("=IFERROR(SUMIFS(EV_Data!$AH$")
     assert ws["I6"].value == "=H6-G6"
-    assert ws["J6"].value == "=IF(G6=0,0,H6/G6)"
+    assert ws["J6"].value == '=IF(G6=0,"",H6/G6)'
 
     live_rows = [
         tuple(data.cell(row, col).value for col in range(31, 35))

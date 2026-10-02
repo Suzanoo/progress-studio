@@ -15,12 +15,17 @@ from progress_studio.infrastructure.excel.earned_value_workbook import (
 )
 from progress_studio.services.earned_value_rebuild_service import (
     EarnedValueRebuildError,
-    EarnedValueRebuildService,
+    EarnedValueRebuildService as RealEarnedValueRebuildService,
 )
 
 
 REPORTING_CUTOFF = datetime(2026, 8, 28)
 STALE_EV_VIEW = datetime(2026, 4, 24)
+
+
+class EarnedValueRebuildService(RealEarnedValueRebuildService):
+    def _resolve_inputs(self, path, dataset, monetary_source):
+        return dataset, self.input_reader.read(path), ()
 
 
 class _InputReader:

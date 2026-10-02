@@ -39,3 +39,5 @@ class EarnedValueResult:
     project_points: tuple[EarnedValuePoint, ...]
     activities: tuple[ActivityEarnedValue, ...]
     boq_items: tuple[BOQEarnedValue, ...]
+    monetary_source: str = "BOQ Mapping"
+    milestones: tuple[tuple[str, datetime, datetime | None, int], ...] = ()

@@ -11,11 +11,16 @@ from openpyxl.chart import LineChart, Reference
 from progress_studio.domain.earned_value import EarnedValuePoint, EarnedValueResult
 from progress_studio.services.earned_value_rebuild_service import (
     EarnedValueRebuildError,
-    EarnedValueRebuildService,
+    EarnedValueRebuildService as RealEarnedValueRebuildService,
 )
 
 
 CUTOFF = datetime(2026, 8, 28)
+
+
+class EarnedValueRebuildService(RealEarnedValueRebuildService):
+    def _resolve_inputs(self, path, dataset, monetary_source):
+        return dataset, self.input_reader.read(path), ()
 
 
 class StubInputReader:

@@ -45,11 +45,12 @@ class RebuildFrame(ttk.Frame):
         )
         self.result_var = tk.StringVar(value="")
 
+        self.ev_source_var = tk.StringVar(value="BOQ Mapping")
         self.ev_status_var = tk.StringVar(
             value="Select a workbook to check Earned Value readiness."
         )
         self.ev_detail_var = tk.StringVar(
-            value="Requires current main progress + embedded 100% BOQ mapping."
+            value="Select EV monetary source. Activity Amount uses Allocated Contract Value."
         )
 
         self._validated_path: Path | None = None
@@ -273,7 +274,7 @@ class RebuildFrame(ttk.Frame):
             card,
             text=(
                 "Generate / Refresh the Earned Value view from current main progress "
-                "and embedded BOQ mapping. Progress and Payment sheets are not rebuilt."
+                "and the selected monetary source. BAC changes require EV refresh."
             ),
             style="Muted.TLabel",
             wraplength=760,
@@ -282,6 +283,11 @@ class RebuildFrame(ttk.Frame):
         actions = ttk.Frame(card, style="Surface.TFrame")
         actions.grid(row=2, column=1, sticky="w")
 
+        selector = ttk.Combobox(actions, textvariable=self.ev_source_var,
+                                values=("Activity Amount", "BOQ Mapping"), state="readonly", width=20)
+        selector.pack(side="left", padx=(0,8))
+        selector.bind("<<ComboboxSelected>>", lambda event: self._analyze_ev(Path(self.workbook_var.get())) if self.workbook_var.get() else None)
+        ttk.Button(actions, text="Prepare monetary inputs", command=self._prepare_ev_inputs).pack(side="left", padx=(0,8))
         self.ev_generate_button = ttk.Button(
             actions,
             text="Generate / Refresh EV",
@@ -420,7 +426,7 @@ class RebuildFrame(ttk.Frame):
         self._ev_validated_path = None
         self.ev_generate_button.configure(state="disabled")
         try:
-            analysis = self.ev_service.analyze(path)
+            analysis = self.ev_service.analyze(path, monetary_source=self.ev_source_var.get())
         except EarnedValueRebuildError as exc:
             self.ev_status_var.set(f"Not ready — {exc}")
             self.ev_detail_var.set(
@@ -432,11 +438,13 @@ class RebuildFrame(ttk.Frame):
         action = "Refresh" if analysis.existing_earned_value_sheet else "Generate"
         self.ev_status_var.set(
             f"Ready • {analysis.activity_count:,} activities • "
-            f"{analysis.boq_count:,} BOQ items"
+            f"{self.ev_source_var.get()}"
         )
         self.ev_detail_var.set(
             f"{action} Earned Value • BAC {analysis.project_bac:,.2f} • "
-            f"{analysis.allocation_count:,} embedded allocations."
+            f"Allocated Contract Value. {analysis.allocation_count:,} BOQ allocations."
+            if self.ev_source_var.get() == "BOQ Mapping" else
+            f"{action} Earned Value • Allocated Contract Value {analysis.project_bac:,.2f}."
         )
         self.ev_generate_button.configure(state="normal")
 
@@ -486,6 +494,23 @@ class RebuildFrame(ttk.Frame):
         )
         self._worker.start()
 
+    def _prepare_ev_inputs(self) -> None:
+        from progress_studio.infrastructure.excel.ev_monetary_inputs import prepare_inputs
+        source = Path(self.workbook_var.get())
+        if not source.is_file():
+            messagebox.showwarning("Earned Value", "Select a workbook first.")
+            return
+        output = filedialog.asksaveasfilename(title="Prepare EV monetary inputs", defaultextension=source.suffix,
+                                             initialfile=f"{source.stem}_ev_inputs{source.suffix}")
+        if not output:
+            return
+        try:
+            prepare_inputs(source, Path(output))
+        except Exception as exc:
+            messagebox.showerror("Earned Value", str(exc))
+            return
+        messagebox.showinfo("Earned Value", "Open the new workbook and fill EV Monetary Inputs with allocated Contract Values. Mark milestones and enter their dates. Save, select this workbook, and refresh EV.")
+
     def _generate_ev(self) -> None:
         source = self._ev_validated_path
         if source is None:
@@ -512,7 +537,7 @@ class RebuildFrame(ttk.Frame):
 
         self._worker = threading.Thread(
             target=self._worker_generate_ev,
-            args=(source, Path(output)),
+            args=(source, Path(output), self.ev_source_var.get()),
             daemon=True,
         )
         self._worker.start()
@@ -556,12 +581,12 @@ class RebuildFrame(ttk.Frame):
             return
         self.after(0, lambda: self._done(output, summary))
 
-    def _worker_generate_ev(self, source: Path, output: Path) -> None:
+    def _worker_generate_ev(self, source: Path, output: Path, monetary_source: str = "BOQ Mapping") -> None:
         try:
-            result = self.ev_service.generate(source, output)
+            result = self.ev_service.generate(source, output, monetary_source=monetary_source)
             summary = (
                 f"Created {output.name} • Earned Value refreshed • "
-                f"{result.boq_count:,} BOQ items • BAC {result.project_bac:,.2f}"
+                f"{monetary_source} • BAC {result.project_bac:,.2f}"
             )
         except Exception as exc:
             self.after(0, lambda: self._ev_failed(exc))

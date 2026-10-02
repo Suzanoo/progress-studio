@@ -48,7 +48,7 @@ def preview_amounts(rows, fields, selected_field: str | None) -> AmountPreview:
         raw = values[0] if len(values) == 1 else None
         if row.is_milestone:
             milestones += 1
-            previews.append(AmountValuePreview(row.activity_id, row.name, raw, Decimal(0), "Milestone: zero weight; source value ignored"))
+            previews.append(AmountValuePreview(row.activity_id, row.name, raw, Decimal(0), "Milestone: zero Progress Weight; source value retained for EV validation"))
             continue
         ordinary += 1
         value = None
