@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from progress_studio.presentation.gui.strings import tr
+
 import os
 import sys
 import threading
@@ -31,18 +33,18 @@ class PaymentFrame(ttk.Frame):
 
         self.workbook_var = tk.StringVar()
         self.workbook_status_var = tk.StringVar(
-            value="Select an exported Progress Studio workbook."
+            value=tr('Select an exported Progress Studio workbook.')
         )
 
         self.periods_var = tk.IntVar(value=1)
         self.period_hint_var = tk.StringVar(
-            value="Default is calculated from Project Start / Finish."
+            value=tr('Default is calculated from Project Start / Finish.')
         )
         self.result_var = tk.StringVar(
-            value="Prepare or reconcile the persistent Payment Input sheet."
+            value=tr('Prepare or reconcile the persistent Payment Input sheet.')
         )
         self.breakdown_result_var = tk.StringVar(
-            value="Build Payment-Breakdown from repeated exact Activity Names in main."
+            value=tr('Build Payment-Breakdown from repeated exact Activity Names in main.')
         )
 
         self._validated_workbook: Path | None = None
@@ -63,7 +65,7 @@ class PaymentFrame(ttk.Frame):
 
         ttk.Label(
             panel,
-            text="Payment",
+            text=tr('Payment'),
             style="Title.TLabel",
         ).grid(
             row=0,
@@ -73,8 +75,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(
             panel,
             text=(
-                "Prepare Payment Input or derive Payment-Breakdown here. "
-                "Use Rebuild when you want to regenerate Payment lines."
+                tr('Prepare Payment Input or derive Payment-Breakdown here. Use Rebuild when you want to regenerate Payment lines.')
             ),
             style="Muted.TLabel",
             wraplength=850,
@@ -119,7 +120,7 @@ class PaymentFrame(ttk.Frame):
         )
         ttk.Label(
             card,
-            text="Workbook",
+            text=tr('Workbook'),
             style="Section.TLabel",
         ).grid(
             row=0,
@@ -129,8 +130,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(
             card,
             text=(
-                "Select the workbook that will receive Payment Input "
-                "or a derived Payment-Breakdown snapshot."
+                tr('Select the workbook that will receive Payment Input or a derived Payment-Breakdown snapshot.')
             ),
             style="Muted.TLabel",
             wraplength=760,
@@ -151,7 +151,7 @@ class PaymentFrame(ttk.Frame):
         )
         ttk.Button(
             card,
-            text="Browse...",
+            text=tr('Browse...'),
             command=self._browse_workbook,
         ).grid(
             row=2,
@@ -201,7 +201,7 @@ class PaymentFrame(ttk.Frame):
         )
         ttk.Label(
             card,
-            text="Prepare Payment Input",
+            text=tr('Prepare Payment Input'),
             style="Section.TLabel",
         ).grid(
             row=0,
@@ -211,9 +211,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(
             card,
             text=(
-                "Existing user percentages are preserved by Activity ID. "
-                "New Activities receive suggested fake requirements. "
-                "Payment Date is not an input."
+                tr('Existing user percentages are preserved by Activity ID. New Activities receive suggested fake requirements. Payment Date is not an input.')
             ),
             style="Muted.TLabel",
             wraplength=780,
@@ -237,7 +235,7 @@ class PaymentFrame(ttk.Frame):
         )
         ttk.Label(
             period_row,
-            text="Payment periods",
+            text=tr('Payment periods'),
             style="Surface.TLabel",
         ).pack(side="left")
 
@@ -273,7 +271,7 @@ class PaymentFrame(ttk.Frame):
 
         self.prepare_button = ttk.Button(
             actions,
-            text="Prepare Payment Input",
+            text=tr('Prepare Payment Input'),
             style="Accent.TButton",
             command=self._prepare,
             state="disabled",
@@ -282,7 +280,7 @@ class PaymentFrame(ttk.Frame):
 
         self.open_button = ttk.Button(
             actions,
-            text="Open Result",
+            text=tr('Open Result'),
             command=self._open_result,
             state="disabled",
         )
@@ -333,7 +331,7 @@ class PaymentFrame(ttk.Frame):
         )
         ttk.Label(
             card,
-            text="Payment Breakdown",
+            text=tr('Payment Breakdown'),
             style="Section.TLabel",
         ).grid(
             row=0,
@@ -343,9 +341,7 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(
             card,
             text=(
-                "Derive repeated exact Activity Names from current main. "
-                "Each source Activity keeps its own progress first; "
-                "the combined row is Amount-weighted."
+                tr('Derive repeated exact Activity Names from current main. Each source Activity keeps its own progress first; the combined row is Amount-weighted.')
             ),
             style="Muted.TLabel",
             wraplength=780,
@@ -371,7 +367,7 @@ class PaymentFrame(ttk.Frame):
 
         self.breakdown_button = ttk.Button(
             actions,
-            text="Build Payment Breakdown",
+            text=tr('Build Payment Breakdown'),
             style="Accent.TButton",
             command=self._prepare_breakdown,
             state="disabled",
@@ -380,7 +376,7 @@ class PaymentFrame(ttk.Frame):
 
         self.breakdown_open_button = ttk.Button(
             actions,
-            text="Open Result",
+            text=tr('Open Result'),
             command=self._open_breakdown_result,
             state="disabled",
         )
@@ -404,7 +400,7 @@ class PaymentFrame(ttk.Frame):
 
     def _browse_workbook(self) -> None:
         selected = filedialog.askopenfilename(
-            title="Select Progress Studio workbook",
+            title=tr('Select Progress Studio workbook'),
             filetypes=[
                 ("Excel workbook", "*.xlsx *.xlsm"),
                 ("All files", "*.*"),
@@ -430,7 +426,7 @@ class PaymentFrame(ttk.Frame):
         try:
             result = self.service.validate_workbook(source)
         except PaymentWorkbookError as exc:
-            self.workbook_status_var.set(f"Not ready — {exc}")
+            self.workbook_status_var.set(tr('Not ready — {value1}', value1=exc))
             return
 
         existing_periods = None
@@ -448,22 +444,19 @@ class PaymentFrame(ttk.Frame):
 
         if existing_periods is not None:
             self.period_hint_var.set(
-                f"Existing Payment Input • {existing_periods} periods • "
-                f"{existing_requirements:,} requirements."
+                tr('Existing Payment Input • {value1} periods • {value2:,} requirements.', value1=existing_periods, value2=existing_requirements)
             )
         elif result.project_start and result.project_finish:
             self.period_hint_var.set(
-                f"Default {result.default_payment_periods} periods from "
-                f"{result.project_start:%d-%b-%y} to "
-                f"{result.project_finish:%d-%b-%y}."
+                tr('Default {value1} periods from {value2:%d-%b-%y} to {value3:%d-%b-%y}.', value1=result.default_payment_periods, value2=result.project_start, value3=result.project_finish)
             )
         else:
             self.period_hint_var.set(
-                "Review the period count before preparing."
+                tr('Review the period count before preparing.')
             )
 
         self.workbook_status_var.set(
-            f"Ready • main found • {result.activity_rows:,} activities"
+            tr('Ready • main found • {value1:,} activities', value1=result.activity_rows)
         )
         self.period_spinbox.configure(state="normal")
         self.prepare_button.configure(state="normal")
@@ -473,8 +466,8 @@ class PaymentFrame(ttk.Frame):
         source = self._validated_workbook
         if source is None:
             messagebox.showwarning(
-                "Payment",
-                "Select a valid workbook first.",
+                tr('Payment'),
+                tr('Select a valid workbook first.'),
             )
             return
 
@@ -482,21 +475,21 @@ class PaymentFrame(ttk.Frame):
             periods = int(self.periods_var.get())
         except (TypeError, ValueError, tk.TclError):
             messagebox.showwarning(
-                "Payment",
-                "Payment periods must be a whole number.",
+                tr('Payment'),
+                tr('Payment periods must be a whole number.'),
             )
             return
 
         if periods < 1 or periods > 120:
             messagebox.showwarning(
-                "Payment",
-                "Payment periods must be between 1 and 120.",
+                tr('Payment'),
+                tr('Payment periods must be between 1 and 120.'),
             )
             return
 
         suffix = source.suffix.lower()
         output = filedialog.asksaveasfilename(
-            title="Save workbook with Payment Input",
+            title=tr('Save workbook with Payment Input'),
             defaultextension=suffix,
             initialdir=str(source.parent),
             initialfile=f"{source.stem}_payment_input{suffix}",
@@ -510,7 +503,7 @@ class PaymentFrame(ttk.Frame):
 
         self.prepare_button.configure(state="disabled")
         self.open_button.configure(state="disabled")
-        self.result_var.set("Preparing Payment Input...")
+        self.result_var.set(tr('Preparing Payment Input...'))
 
         self._worker = threading.Thread(
             target=self._prepare_worker,
@@ -550,9 +543,7 @@ class PaymentFrame(ttk.Frame):
     ) -> None:
         self._output_path = output
         self.result_var.set(
-            f"Created {output.name} • {stats['periods']} periods • "
-            f"{stats['activities']:,} activities • "
-            f"{stats['preserved']:,} preserved"
+            tr('Created {value1} • {value2} periods • {value3:,} activities • {value4:,} preserved', value1=output.name, value2=stats['periods'], value3=stats['activities'], value4=stats['preserved'])
         )
         self.prepare_button.configure(state="normal")
         self.open_button.configure(state="normal")
@@ -560,25 +551,25 @@ class PaymentFrame(ttk.Frame):
     def _failed(self, error: Exception) -> None:
         self.prepare_button.configure(state="normal")
         self.result_var.set(
-            "Payment Input preparation failed."
+            tr('Payment Input preparation failed.')
         )
         messagebox.showerror(
-            "Payment",
-            str(error),
+            tr('Payment'),
+            tr("error.details", error=str(error)),
         )
 
     def _prepare_breakdown(self) -> None:
         source = self._validated_workbook
         if source is None:
             messagebox.showwarning(
-                "Payment",
-                "Select a valid workbook first.",
+                tr('Payment'),
+                tr('Select a valid workbook first.'),
             )
             return
 
         suffix = source.suffix.lower()
         output = filedialog.asksaveasfilename(
-            title="Save workbook with Payment Breakdown",
+            title=tr('Save workbook with Payment Breakdown'),
             defaultextension=suffix,
             initialdir=str(source.parent),
             initialfile=f"{source.stem}_payment_breakdown{suffix}",
@@ -593,7 +584,7 @@ class PaymentFrame(ttk.Frame):
         self.breakdown_button.configure(state="disabled")
         self.breakdown_open_button.configure(state="disabled")
         self.breakdown_result_var.set(
-            "Building Payment Breakdown..."
+            tr('Building Payment Breakdown...')
         )
 
         self._worker = threading.Thread(
@@ -635,10 +626,7 @@ class PaymentFrame(ttk.Frame):
     ) -> None:
         self._breakdown_output_path = output
         self.breakdown_result_var.set(
-            f"Created {output.name} • "
-            f"{len(snapshot.activities):,} derived activities • "
-            f"{snapshot.eligible_source_count:,} eligible source activities • "
-            f"{len(snapshot.skipped_activity_ids):,} skipped"
+            tr('Created {value1} • {value2:,} derived activities • {value3:,} eligible source activities • {value4:,} skipped', value1=output.name, value2=len(snapshot.activities), value3=snapshot.eligible_source_count, value4=len(snapshot.skipped_activity_ids))
         )
         self.breakdown_button.configure(state="normal")
         self.breakdown_open_button.configure(state="normal")
@@ -649,11 +637,11 @@ class PaymentFrame(ttk.Frame):
     ) -> None:
         self.breakdown_button.configure(state="normal")
         self.breakdown_result_var.set(
-            "Payment Breakdown build failed."
+            tr('Payment Breakdown build failed.')
         )
         messagebox.showerror(
-            "Payment",
-            str(error),
+            tr('Payment'),
+            tr("error.details", error=str(error)),
         )
 
     def _open_result(self) -> None:
@@ -688,6 +676,6 @@ class PaymentFrame(ttk.Frame):
                 )
         except Exception as exc:
             messagebox.showerror(
-                "Payment",
-                f"Could not open workbook:\n{exc}",
+                tr('Payment'),
+                tr('Could not open workbook:\n{value1}', value1=exc),
             )

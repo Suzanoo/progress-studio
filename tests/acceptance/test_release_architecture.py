@@ -54,8 +54,13 @@ class Ms6AcceptanceTests(unittest.TestCase):
         for path in (ROOT / "progress_studio").rglob("*.py"):
             self.assertNotIn("subprocess", path.read_text(encoding="utf-8"), str(path))
 
-    def test_no_thai_in_source(self):
+    def test_thai_is_confined_to_presentation_resources(self):
         for path in (ROOT / "progress_studio").rglob("*.py"):
+            if path.relative_to(ROOT).as_posix() in {
+                "progress_studio/presentation/gui/strings.py",
+                "progress_studio/presentation/gui/translations.py",
+            }:
+                continue  # V1.1 authorizes bilingual presentation resources.
             text = path.read_text(encoding="utf-8")
             self.assertFalse(any("\u0e00" <= ch <= "\u0e7f" for ch in text), str(path))
 

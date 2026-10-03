@@ -15,8 +15,8 @@ def test_project_command_bar_contract():
 
 def test_user_facing_project_language_replaces_session_language():
     mapping = (ROOT / "progress_studio/presentation/gui/amount_mapping.py").read_text(encoding="utf-8")
-    assert 'title="Save Progress Studio project"' in mapping
-    assert '"Recent Projects"' in mapping
+    assert "title=tr('Save Progress Studio project')" in mapping
+    assert "Recent Projects" in mapping
     assert 'text="Save Session"' not in mapping
 
 

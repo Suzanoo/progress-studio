@@ -1,6 +1,6 @@
 # Progress Studio — Earned Value Live Workbook Contract
 
-The PO-authorized [EV monetary source extension](docs/EV_MONETARY_SOURCES.md)
+The PO-authorized [EV monetary source extension](EV_MONETARY_SOURCES.md)
 supersedes BOQ-only readiness and detail, Project Summary weighting, and zero-PV
 SPI behavior. All other live/date/ownership boundaries below remain applicable.
 
@@ -21,14 +21,14 @@ structural derivation at Rebuild; Excel owns live Plan/Actual reporting from
 A successful EV Rebuild freezes the structural EV topology until the next
 EV Rebuild:
 
-- BOQ identity and BOQ amount / BAC authority.
-- BOQ → Activity mapping relationship.
-- Mapping share and allocated amount.
+- Selected Activity Amount or BOQ Mapping monetary source and BAC authority.
+- BOQ identity/relationships, mapping share and allocation when BOQ Mapping is selected.
 - Activity identity and WBS binding used by EV.
 - Project, Activity and BOQ BAC values.
 
-The existing EV-1 mapping-completeness rule is unchanged. A positive-amount
-BOQ that is not fully allocated still hard-stops EV Rebuild.
+In BOQ Mapping mode, a positive-amount BOQ that is not fully allocated still
+hard-stops EV Rebuild. Activity Amount mode does not require BOQ Mapping;
+its explicit input validation remains governed by EV_MONETARY_SOURCES.md.
 
 ### Live / Excel owned
 
@@ -47,11 +47,11 @@ F9 / Save, without EV Rebuild:
 - SPI.
 - Project KPI values.
 - WBS performance.
-- Top negative BOQ variance.
+- Top negative BOQ or Activity variance, according to the selected source.
 - EV Table values.
 - Project PV / EV chart values.
 
-User edits to BOQ Amount, mapping topology, mapping share, or allocated BAC
+User edits to Activity Amount/BOQ BAC, source selection, mapping topology or share
 remain outside the live contract and require EV Rebuild.
 
 ## EV View Date
@@ -158,7 +158,8 @@ All visible Earned Value views consume the same live contract:
 - Project chart: PV and EV are cumulative live curves from `main`; the selected
   Status Date only masks / marks the view.
 - Active WBS Performance: aggregates the live Activity layer.
-- Top 10 Negative Variance: ranks the live BOQ SV / SPI layer.
+- Top 10 Negative Variance: ranks BOQ detail in BOQ Mapping mode and Activity detail
+  in Activity Amount mode.
 - EV Table: BAC is structural; PV / EV / SV / SPI are live.
 
 No visible view may fall back to a Python PV / EV / SV / SPI snapshot after a
@@ -202,7 +203,8 @@ The implementation is accepted only when all of the following remain true:
    `EV_View_Date`.
 6. EV formulas reference `EV_View_Date` semantically rather than depending on
    the physical `$M$3` coordinate.
-7. Mapping incompleteness continues to hard-stop EV Rebuild.
+7. Mapping incompleteness continues to hard-stop BOQ Mapping EV Rebuild; Activity
+   Amount uses its own validation and does not silently fall back to another source.
 
 ## Out of scope
 

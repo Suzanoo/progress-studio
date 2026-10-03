@@ -126,30 +126,32 @@ class Ms7ReleaseTests(unittest.TestCase):
 
     def test_release_documents_are_current(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
-        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        architecture = (ROOT / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
         workflow = (ROOT / "docs/USER_WORKFLOW.md").read_text(encoding="utf-8")
 
         self.assertIn("Product flow", readme)
         self.assertIn("main", readme)
         self.assertIn("Ownership matrix", architecture)
-        self.assertIn("P11 Production Release", roadmap)
+        self.assertIn("MS-3 Planning Overview / Mini Gantt", roadmap)
         self.assertIn("Rebuild", workflow)
         self.assertNotIn("Current release: `2.3.0`", readme)
         self.assertNotIn("README_ROADMAP.md", readme)
 
-    def test_no_thai_in_application_or_active_release_docs(self):
+    def test_thai_is_centralized_in_presentation_resources(self):
         paths = list((ROOT / "progress_studio").rglob("*.py"))
         paths.extend([
             ROOT / "README.md",
-            ROOT / "ARCHITECTURE.md",
-            ROOT / "ROADMAP.md",
-            ROOT / "RELEASE_CHECKLIST.md",
+            ROOT / "docs/ARCHITECTURE.md",
+            ROOT / "docs/ROADMAP.md",
+            ROOT / "docs/RELEASE_CHECKLIST.md",
             ROOT / "docs/README.md",
             ROOT / "docs/USER_WORKFLOW.md",
             ROOT / "docs/DEVELOPMENT.md",
         ])
         for path in paths:
+            if path.name in {"translations.py", "strings.py"}:
+                continue  # V1.1 expressly authorizes Thai presentation resources.
             text = path.read_text(encoding="utf-8")
             self.assertFalse(any("\u0e00" <= ch <= "\u0e7f" for ch in text), str(path))
 

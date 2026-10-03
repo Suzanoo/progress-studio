@@ -24,7 +24,7 @@ def test_lw0_mapping_export_is_owned_by_mapping_workspace_only() -> None:
     end = source.index("    def _build_mapping_workspace", start)
     create_block = source[start:end]
     assert "Export Mapped Workbook" not in create_block
-    assert 'text="Go to Mapping"' in create_block
+    assert "text=tr('Go to Mapping')" in create_block
 
     command_start = source.index("    def _build_command_bar")
     command_end = source.index("    def _new_workspace", command_start)
@@ -44,9 +44,9 @@ def test_lw0_rebuild_ui_separates_output_mode_from_scope() -> None:
     assert "Output Mode" in source
     assert "Snapshot Workbook" in source
     assert "Live Workbook" in source
-    assert "Rebuild Scope" in source
-    assert 'text="Progress"' in source
-    assert 'text="Payment"' in source
+    assert "Target" in source
+    assert "text=tr('Progress')" in source
+    assert "text=tr('Payment')" in source
     assert "output_mode_var" in source
     assert "mode_var" in source
 

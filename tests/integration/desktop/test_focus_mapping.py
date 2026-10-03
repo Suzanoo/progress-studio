@@ -10,6 +10,6 @@ def test_focus_mapping_contract_is_present():
         "def _toggle_sidebar", "def _set_sidebar_collapsed",
         "def _toggle_focus_mapping", "def _exit_focus_mapping",
         'self.bind("<F11>"', 'self.bind("<Escape>"',
-        'label="Focus Mapping"',
+        "label=tr('Focus Mapping')",
     ):
         assert required in source

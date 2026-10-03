@@ -6,6 +6,7 @@ import sys
 import threading
 import tkinter as tk
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -18,7 +19,8 @@ from progress_studio.presentation.gui.amount_mapping import AmountMappingFrame
 from progress_studio.presentation.gui.payment import PaymentFrame
 from progress_studio.presentation.gui.finance import FinanceFrame
 from progress_studio.presentation.gui.rebuild import RebuildFrame
-from progress_studio.presentation.gui.strings import tr
+from progress_studio.presentation.gui.strings import tr, set_language
+from progress_studio.presentation.gui.quick_guide import build_home, build_help
 from progress_studio.presentation.gui.theme import FONT_MONO, PALETTE, configure_styles
 
 STEP_LABELS = {
@@ -54,17 +56,23 @@ class ProgressStudioDesktopApp(tk.Tk):
 
     WORKSPACES = (
         ("home", "⌂", "Home"),
-        ("import", "⇩", "Create Progress Bar"),
+        ("import", "⇩", "Create"),
         ("mapping", "▦", "Mapping"),
         ("payment", "$", "Payment"),
         ("finance", "¤", "Finance"),
         ("ai", "✦", "AI Helper"),
         ("rebuild", "↻", "Rebuild"),
         ("settings", "⚙", "Settings"),
+        ("help", "?", "Help / Quick Guide"),
     )
+    VISIBLE_WORKSPACES = ("home", "import", "mapping", "payment", "rebuild", "settings", "help")
 
     def __init__(self, runner: DesktopRunner | None = None) -> None:
         super().__init__()
+        self.layout_repository = LayoutPreferencesRepository()
+        self.layout_preferences = self.layout_repository.load()
+        set_language(self.layout_preferences.language)
+        self.language_var = tk.StringVar(value={"en": "ENG", "th": "THA"}[self.layout_preferences.language])
         self.runner = runner or DesktopRunner()
         self.messages: queue.Queue[tuple[str, object]] = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -73,6 +81,9 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.current_workspace = "home"
 
         self.title(f"{SETTINGS.title} Desktop {SETTINGS.version}")
+        brand_png = Path(__file__).resolve().parents[2] / "assets" / "brand" / "progress_studio_icon.png"
+        self._brand_image = tk.PhotoImage(file=str(brand_png))
+        self.iconphoto(True, self._brand_image)
         if sys.platform.startswith("win"):
             brand_icon = Path(__file__).resolve().parents[2] / "assets" / "brand" / "progress_studio.ico"
             if brand_icon.is_file():
@@ -86,13 +97,13 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.weight_basis_var = tk.StringVar(value="equal")
         self.amount_field = None
         self.amount_source_digest = None
-        self.amount_field_label = tk.StringVar(value="No Amount field selected")
+        self.amount_field_label = tk.StringVar(value=tr('No Amount field selected'))
         self.xml_var.trace_add("write", self._reset_amount_field)
         self.distribution_var = tk.StringVar(value="auto")
-        self.status_var = tk.StringVar(value="Ready")
-        self.step_var = tk.StringVar(value="Select an XML schedule file to begin.")
+        self.status_var = tk.StringVar(value=tr('Ready'))
+        self.step_var = tk.StringVar(value=tr('Select an XML schedule file to begin.'))
         self.progress_var = tk.DoubleVar(value=0)
-        self.workspace_title_var = tk.StringVar(value="Mapping Workspace")
+        self.workspace_title_var = tk.StringVar(value=tr('Mapping Workspace'))
         self.project_title_var = tk.StringVar(value="Local Workspace")
 
         self.layout_repository = LayoutPreferencesRepository()
@@ -116,7 +127,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         shell.rowconfigure(0, weight=1)
         self.shell = shell
 
-        self.sidebar = ttk.Frame(shell, style="Sidebar.TFrame", width=176)
+        self.sidebar = ttk.Frame(shell, style="Sidebar.TFrame", width=210)
         self.sidebar.grid(row=0, column=0, sticky="nsw")
         self.sidebar.grid_propagate(False)
         self._build_sidebar(self.sidebar)
@@ -144,67 +155,72 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._build_finance_workspace()
         self._build_rebuild_workspace()
         self._build_settings_workspace()
+        build_help(self._new_workspace("help"), self._show_workspace)
 
         self.status_bar = ttk.Frame(main, style="StatusBar.TFrame", padding=(6, 2))
         self.status_bar.grid(row=3, column=0, sticky="ew")
-        ttk.Label(self.status_bar, text="●  Ready", style="StatusReady.TLabel").pack(side="left")
-        ttk.Label(self.status_bar, text=f"Progress Studio {SETTINGS.version}  |  Local database", style="Status.TLabel").pack(side="right")
+        ttk.Label(self.status_bar, textvariable=self.status_var, style="StatusReady.TLabel").pack(side="left")
+        ttk.Label(self.status_bar, text=tr('Progress Studio {value1}', value1=SETTINGS.version), style="Status.TLabel").pack(side="right")
 
         self._show_workspace("home")
 
     def _build_menu(self) -> None:
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=False)
-        file_menu.add_command(label="Open Project...", command=self._defer_mapping("open_project"), accelerator="Ctrl+O")
-        file_menu.add_command(label="Recent Projects", command=self._defer_mapping("open_recent_project"))
+        file_menu.add_command(label=tr('Open Project...'), command=self._defer_mapping("open_project"), accelerator="Ctrl+O")
+        file_menu.add_command(label=tr('Recent Projects'), command=self._defer_mapping("open_recent_project"))
         file_menu.add_separator()
-        file_menu.add_command(label="Save", command=self._defer_mapping("save_project"), accelerator="Ctrl+S")
-        file_menu.add_command(label="Save As...", command=self._defer_mapping("save_project_as"), accelerator="Ctrl+Shift+S")
+        file_menu.add_command(label=tr('Save'), command=self._defer_mapping("save_project"), accelerator="Ctrl+S")
+        file_menu.add_command(label=tr('Save As...'), command=self._defer_mapping("save_project_as"), accelerator="Ctrl+Shift+S")
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self._close_application)
-        menu.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label=tr('Exit'), command=self._close_application)
+        menu.add_cascade(label=tr('File'), menu=file_menu)
 
         edit_menu = tk.Menu(menu, tearoff=False)
-        edit_menu.add_command(label="Undo", command=self._defer_mapping("undo_mapping"), accelerator="Ctrl+Z")
-        edit_menu.add_command(label="Map Selection", command=self._defer_mapping("map_selection"))
-        edit_menu.add_command(label="Unmap Selection", command=self._defer_mapping("unmap_selection"), accelerator="Delete")
-        menu.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label=tr('Undo'), command=self._defer_mapping("undo_mapping"), accelerator="Ctrl+Z")
+        edit_menu.add_command(label=tr('Map Selection'), command=self._defer_mapping("map_selection"))
+        edit_menu.add_command(label=tr('Unmap Selection'), command=self._defer_mapping("unmap_selection"), accelerator="Delete")
+        menu.add_cascade(label=tr('Edit'), menu=edit_menu)
 
         view_menu = tk.Menu(menu, tearoff=False)
-        view_menu.add_command(label="Toggle Sidebar", command=self._toggle_sidebar)
-        view_menu.add_command(label="Focus Mapping", command=self._toggle_focus_mapping, accelerator="F11")
-        menu.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label=tr('Toggle Sidebar'), command=self._toggle_sidebar)
+        view_menu.add_command(label=tr('Focus Mapping'), command=self._toggle_focus_mapping, accelerator="F11")
+        menu.add_cascade(label=tr('View'), menu=view_menu)
 
         tools_menu = tk.Menu(menu, tearoff=False)
-        tools_menu.add_command(label="Import Workspace", command=lambda: self._show_workspace("import"))
-        tools_menu.add_command(label="Payment Workspace", command=lambda: self._show_workspace("payment"))
-        tools_menu.add_command(label="Financial Forecast Workspace", command=lambda: self._show_workspace("finance"))
-        tools_menu.add_command(label="Rebuild Workspace", command=lambda: self._show_workspace("rebuild"))
-        menu.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label=tr('Import Workspace'), command=lambda: self._show_workspace("import"))
+        tools_menu.add_command(label=tr('Payment Workspace'), command=lambda: self._show_workspace("payment"))
+        tools_menu.add_command(label=tr('Rebuild Workspace'), command=lambda: self._show_workspace("rebuild"))
+        menu.add_cascade(label=tr('Tools'), menu=tools_menu)
 
         help_menu = tk.Menu(menu, tearoff=False)
-        help_menu.add_command(label="About Progress Studio", command=lambda: messagebox.showinfo("Progress Studio", f"Progress Studio {SETTINGS.version}"))
-        menu.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label=tr("guide.title"), command=lambda: self._show_workspace("help"))
+        help_menu.add_command(label=tr('About Progress Studio'), command=lambda: messagebox.showinfo(tr('Progress Studio'), tr('Progress Studio {value1}', value1=SETTINGS.version)))
+        menu.add_cascade(label=tr('Help'), menu=help_menu)
         self.configure(menu=menu)
 
     def _build_sidebar(self, sidebar: ttk.Frame) -> None:
-        ttk.Label(sidebar, text="  PS  Progress Studio", style="SidebarTitle.TLabel").pack(fill="x", pady=(17, 20))
+        self._sidebar_image = self._brand_image.subsample(8, 8)
+        ttk.Label(sidebar, image=self._sidebar_image, style="Sidebar.TLabel").pack(pady=(20, 8))
+        ttk.Label(sidebar, text=tr('Progress Studio'), style="SidebarTitle.TLabel").pack(pady=(0, 16))
         self.sidebar_buttons: dict[str, ttk.Button] = {}
         for key, icon, label in self.WORKSPACES:
+            if key not in self.VISIBLE_WORKSPACES:
+                continue
             if key == "settings":
                 ttk.Frame(sidebar, style="Sidebar.TFrame").pack(fill="both", expand=True)
-            button = ttk.Button(sidebar, text=f"{icon}   {label}", style="Sidebar.TButton", command=lambda name=key: self._show_workspace(name))
+            button = ttk.Button(sidebar, text=f"{icon}   {tr(label)}", style="Sidebar.TButton", command=lambda name=key: self._show_workspace(name))
             button.pack(fill="x", padx=8, pady=2)
             self.sidebar_buttons[key] = button
-        ttk.Label(sidebar, text=f"Local Workspace\nVersion {SETTINGS.version}", style="SidebarMuted.TLabel").pack(fill="x", padx=14, pady=14)
 
     def _build_header(self, main: ttk.Frame) -> None:
         self.topbar = ttk.Frame(main, style="Surface.TFrame", padding=(12, 8))
         self.topbar.grid(row=0, column=0, sticky="ew")
         ttk.Button(self.topbar, text="☰", width=3, command=self._toggle_sidebar).pack(side="left", padx=(0, 10))
         ttk.Label(self.topbar, textvariable=self.workspace_title_var, style="WorkspaceTitle.TLabel").pack(side="left")
-        ttk.Label(self.topbar, textvariable=self.project_title_var, style="Muted.TLabel").pack(side="right", padx=(12, 0))
-        ttk.Label(self.topbar, text="Project", style="Muted.TLabel").pack(side="right")
+        selector = ttk.Combobox(self.topbar, textvariable=self.language_var, values=("ENG", "THA"), state="readonly", width=6)
+        selector.pack(side="right")
+        selector.bind("<<ComboboxSelected>>", self._language_changed)
 
     def _build_command_bar(self, main: ttk.Frame) -> None:
         self.command_bar = ttk.Frame(main, style="CommandBar.TFrame", padding=(10, 6))
@@ -217,10 +233,10 @@ class ProgressStudioDesktopApp(tk.Tk):
             if index in (3, 4):
                 ttk.Separator(self.command_bar, orient="vertical").pack(side="left", fill="y", padx=8)
             style = "Accent.TButton" if label == "Map" else "TButton"
-            ttk.Button(self.command_bar, text=label, style=style, command=self._defer_mapping(method)).pack(side="left", padx=(0, 4))
+            ttk.Button(self.command_bar, text=tr(label), style=style, command=self._defer_mapping(method)).pack(side="left", padx=(0, 4))
         ttk.Button(
             self.command_bar,
-            text="Export Mapped Workbook",
+            text=tr('Export Mapped Workbook'),
             command=self._defer_mapping("export_workbook"),
         ).pack(side="right")
 
@@ -231,57 +247,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         return frame
 
     def _build_home_workspace(self) -> None:
-        frame = self._new_workspace("home")
-
-        hero = ttk.Frame(frame, style="Surface.TFrame", padding=(28, 24))
-        hero.pack(fill="x")
-        ttk.Label(hero, text="Progress Studio", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(
-            hero,
-            text="Create the progress workbook first, then use only the workspaces your project needs.",
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(8, 4))
-        ttk.Label(
-            hero,
-            text="Mapping and Payment are optional. Rebuild refreshes an edited workbook.",
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(0, 16))
-
-        workflow = ttk.Frame(frame, style="Card.TFrame", padding=(18, 18))
-        workflow.pack(fill="x", pady=(12, 0))
-        for column in range(4):
-            workflow.columnconfigure(column, weight=1, uniform="workflow")
-
-        steps = (
-            ("1", "Create Progress", "MSP / P6 XML → Progress Workbook", "import"),
-            ("2", "Mapping", "BOQ → Activity Amount", "mapping"),
-            ("3", "Payment", "Prepare and render payment stages", "payment"),
-            ("4", "Rebuild", "Edited Workbook → Updated Workbook", "rebuild"),
-        )
-        for col, (number, title, description, workspace) in enumerate(steps):
-            card = ttk.Frame(workflow, style="Surface.TFrame", padding=(16, 14))
-            card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 6, 0 if col == 3 else 6))
-            ttk.Label(card, text=number, style="Section.TLabel").pack(anchor="w")
-            ttk.Label(card, text=title, style="WorkspaceTitle.TLabel").pack(anchor="w", pady=(6, 4))
-            ttk.Label(card, text=description, style="Muted.TLabel", wraplength=210).pack(anchor="w")
-            ttk.Button(
-                card,
-                text=f"Open {title}",
-                style="Accent.TButton" if workspace == "import" else "TButton",
-                command=lambda key=workspace: self._show_workspace(key),
-            ).pack(anchor="w", pady=(14, 0))
-
-        note = ttk.Frame(frame, style="Surface.TFrame", padding=(18, 14))
-        note.pack(fill="x", pady=(12, 0))
-        ttk.Label(note, text="Typical flow", style="Section.TLabel").pack(anchor="w")
-        ttk.Label(
-            note,
-            text="Create Progress → Mapping and/or Payment → edit the workbook → Rebuild when you need refreshed derived views.",
-            style="Muted.TLabel",
-            wraplength=900,
-        ).pack(anchor="w", pady=(6, 0))
-
-        ttk.Button(note, text="Open Financial Forecast", command=lambda: self._show_workspace("finance")).pack(anchor="w", pady=(10, 0))
+        build_home(self._new_workspace("home"), self._show_workspace)
 
     def _build_import_workspace(self) -> None:
         frame = self._new_workspace("import")
@@ -289,8 +255,8 @@ class ProgressStudioDesktopApp(tk.Tk):
         frame.rowconfigure(1, weight=1)
         heading = ttk.Frame(frame, style="Surface.TFrame")
         heading.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        ttk.Label(heading, text="Create Progress Workbook", style="WorkspaceTitle.TLabel").pack(side="left")
-        ttk.Button(heading, text="Go to Mapping", command=lambda: self._show_workspace("mapping")).pack(side="right", padx=(0, 8))
+        ttk.Label(heading, text=tr('Create Progress Workbook'), style="WorkspaceTitle.TLabel").pack(side="left")
+        ttk.Button(heading, text=tr('Go to Mapping'), command=lambda: self._show_workspace("mapping")).pack(side="right", padx=(0, 8))
 
         body = ttk.Panedwindow(frame, orient="horizontal")
         body.grid(row=1, column=0, sticky="nsew")
@@ -299,7 +265,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         body.add(generator, weight=4)
         body.add(log_panel, weight=7)
         self._build_generator_panel(generator)
-        ttk.Label(log_panel, text="Activity Log", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        ttk.Label(log_panel, text=tr('Activity Log'), style="Section.TLabel").pack(anchor="w", pady=(0, 6))
         self.log = tk.Text(log_panel, wrap="word", font=(FONT_MONO, 9), borderwidth=0, bg=PALETTE.console_bg, fg=PALETTE.console_fg, insertbackground="white")
         scrollbar = ttk.Scrollbar(log_panel, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=scrollbar.set)
@@ -333,7 +299,17 @@ class ProgressStudioDesktopApp(tk.Tk):
 
     def _build_settings_workspace(self) -> None:
         frame = self._new_workspace("settings")
-        self._placeholder(frame, "Settings", "Theme colors are loaded from progress_studio/config/theme.json.")
+        self._placeholder(frame, tr("Settings"), tr("language.help"))
+
+    def _language_changed(self, _event=None) -> None:
+        language = {"ENG": "en", "THA": "th"}[self.language_var.get()]
+        try:
+            self.layout_repository.save(replace(self.layout_repository.load(), language=language))
+        except OSError as exc:
+            messagebox.showerror(tr("Settings"), tr("language.save_failed", error=str(exc)))
+            self.language_var.set({"en": "ENG", "th": "THA"}[self.layout_repository.load().language])
+            return
+        messagebox.showinfo(tr("Settings"), tr("language.restart"))
 
     @staticmethod
     def _placeholder(frame: ttk.Frame, title: str, description: str) -> None:
@@ -352,7 +328,7 @@ class ProgressStudioDesktopApp(tk.Tk):
         frame.tkraise()
         self.current_workspace = key
         title = next(label for name, _icon, label in self.WORKSPACES if name == key)
-        self.workspace_title_var.set(f"{title} Workspace" if key not in {"home", "settings"} else title)
+        self.workspace_title_var.set(tr(title))
         for name, button in self.sidebar_buttons.items():
             button.configure(style="SidebarActive.TButton" if name == key else "Sidebar.TButton")
         # Mapping commands belong only to the Mapping workspace.
@@ -367,27 +343,27 @@ class ProgressStudioDesktopApp(tk.Tk):
 
     def _build_generator_panel(self, left: ttk.Frame) -> None:
         left.columnconfigure(1, weight=1)
-        ttk.Label(left, text="Schedule XML", style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(left, text=tr('Schedule XML'), style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
         ttk.Entry(left, textvariable=self.xml_var).grid(row=1, column=0, sticky="ew", pady=(8, 0))
-        ttk.Button(left, text="Browse...", command=self._browse_xml).grid(row=1, column=1, padx=(8, 0), pady=(8, 0))
-        ttk.Label(left, text="Weekly cutoff day").grid(row=2, column=0, sticky="w", pady=(12, 0))
+        ttk.Button(left, text=tr('Browse...'), command=self._browse_xml).grid(row=1, column=1, padx=(8, 0), pady=(8, 0))
+        ttk.Label(left, text=tr('Weekly cutoff day')).grid(row=2, column=0, sticky="w", pady=(12, 0))
         ttk.Combobox(left, textvariable=self.cutoff_var, state="readonly", values=tuple(f"{number} - {name}" for number, name in DAYS)).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(12, 0))
-        ttk.Label(left, text="Weight basis").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(left, text=tr('Weight basis')).grid(row=3, column=0, sticky="w", pady=(8, 0))
         weights = ttk.Frame(left, style="Surface.TFrame")
         weights.grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
         for label, value in (("Equal", "equal"), ("Duration", "duration"), ("Amount", "amount")):
-            ttk.Radiobutton(weights, text=label, variable=self.weight_basis_var, value=value,
+            ttk.Radiobutton(weights, text=tr(label), variable=self.weight_basis_var, value=value,
                             command=self._weight_changed).pack(anchor="w")
         self.amount_controls = ttk.Frame(weights)
-        ttk.Button(self.amount_controls, text="Select Amount field / Preview...", command=self._choose_amount_field).pack(anchor="w", pady=(4, 0))
+        ttk.Button(self.amount_controls, text=tr('Select Amount field / Preview...'), command=self._choose_amount_field).pack(anchor="w", pady=(4, 0))
         ttk.Label(self.amount_controls, textvariable=self.amount_field_label, wraplength=270).pack(anchor="w")
-        ttk.Label(left, text="Plan distribution").grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(left, text=tr('Plan distribution')).grid(row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(left, textvariable=self.distribution_var, state="readonly", values=("auto", "flat", "front", "back", "bell")).grid(row=4, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
-        self.run_button = ttk.Button(left, text="Create Progress Workbook", style="Accent.TButton", command=self._start)
+        self.run_button = ttk.Button(left, text=tr('Create Progress Workbook'), style="Accent.TButton", command=self._start)
         self.run_button.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(18, 0))
-        self.open_file_button = ttk.Button(left, text="Open output workbook", command=self._open_output, state="disabled")
+        self.open_file_button = ttk.Button(left, text=tr('Open output workbook'), command=self._open_output, state="disabled")
         self.open_file_button.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(8, 0))
-        self.open_folder_button = ttk.Button(left, text="Open output folder", command=self._open_folder, state="disabled")
+        self.open_folder_button = ttk.Button(left, text=tr('Open output folder'), command=self._open_folder, state="disabled")
         self.open_folder_button.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         ttk.Separator(left).grid(row=8, column=0, columnspan=2, sticky="ew", pady=18)
         ttk.Label(left, textvariable=self.step_var, style="Muted.TLabel", wraplength=350).grid(row=9, column=0, columnspan=2, sticky="w")
@@ -447,6 +423,7 @@ class ProgressStudioDesktopApp(tk.Tk):
     def _save_layout_preferences(self) -> None:
         current = self.layout_repository.load()
         preferences = LayoutPreferences(
+            language=current.language,
             mapping_inputs_collapsed=current.mapping_inputs_collapsed,
             generator_collapsed=True,
             sidebar_collapsed=self.sidebar_collapsed,
@@ -460,7 +437,13 @@ class ProgressStudioDesktopApp(tk.Tk):
 
     def _close_application(self) -> None:
         if self.finance_workspace.busy:
-            messagebox.showwarning("Financial Forecast", "Wait for the finance operation to finish before closing.")
+            messagebox.showwarning(tr('Financial Forecast'), tr('Wait for the finance operation to finish before closing.'))
+            return
+        workers = (getattr(self, "worker", None),
+                   getattr(getattr(self, "payment_workspace", None), "_worker", None),
+                   getattr(getattr(self, "rebuild_workspace", None), "_worker", None))
+        if any(worker and worker.is_alive() for worker in workers):
+            messagebox.showwarning(tr("Progress Studio"), tr("Wait for the current operation to finish before closing."))
             return
         self._save_layout_preferences()
         self.destroy()
@@ -495,13 +478,13 @@ class ProgressStudioDesktopApp(tk.Tk):
                 self.amount_source_digest = dialog.source_digest
                 self.amount_field_label.set(dialog.result.label)
         except (OSError, ValueError) as exc:
-            messagebox.showerror("XML Amount field", str(exc))
+            messagebox.showerror(tr('XML Amount field'), tr("error.details", error=str(exc)))
 
     def _browse_xml(self) -> None:
-        selected = filedialog.askopenfilename(title="Select Schedule XML", filetypes=[("Schedule XML", "*.xml"), ("All files", "*.*")])
+        selected = filedialog.askopenfilename(title=tr('Select Schedule XML'), filetypes=[("Schedule XML", "*.xml"), ("All files", "*.*")])
         if selected:
             self.xml_var.set(selected)
-            self.step_var.set("Input selected. Review options and create the workbook.")
+            self.step_var.set(tr('Input selected. Review options and create the workbook.'))
 
     def _start(self) -> None:
         if self.worker and self.worker.is_alive():
@@ -520,13 +503,13 @@ class ProgressStudioDesktopApp(tk.Tk):
             cutoff = self.cutoff_var.get().split(" ", 1)[0]
             options = DesktopRunOptions(xml, cutoff, distribution_method=self.distribution_var.get(), weight_basis=basis, amount_field=self.amount_field.identity if basis == "amount" else None)
         except (ValueError, OSError) as exc:
-            messagebox.showerror("Invalid input", str(exc))
+            messagebox.showerror(tr('Invalid input'), tr("error.details", error=str(exc)))
             return
         self.output_file = None
         self.project_folder = None
         self.progress_var.set(0)
-        self.status_var.set("Running")
-        self.step_var.set("Starting pipeline...")
+        self.status_var.set(tr('Running'))
+        self.step_var.set(tr('Starting pipeline...'))
         self.run_button.configure(state="disabled")
         self.open_file_button.configure(state="disabled")
         self.open_folder_button.configure(state="disabled")
@@ -556,20 +539,20 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.after(100, self._drain_messages)
 
     def _handle_event(self, event: PipelineEvent) -> None:
-        label = STEP_LABELS.get(event.step_name, event.step_name)
+        label = tr(STEP_LABELS.get(event.step_name, event.step_name))
         self.progress_var.set(event.progress_percent)
         if event.status == "started":
-            self.step_var.set(f"Step {event.step_index}/{event.step_count}: {label}")
-            self.status_var.set("Working...")
+            self.step_var.set(tr('Step {value1}/{value2}: {value3}', value1=event.step_index, value2=event.step_count, value3=label))
+            self.status_var.set(tr('Working...'))
             self._append_log(f"\n[{event.step_index}/{event.step_count}] {label}\n")
         elif event.status == "completed":
-            self.status_var.set(f"Completed step {event.step_index} of {event.step_count}")
+            self.status_var.set(tr('Completed step {value1} of {value2}', value1=event.step_index, value2=event.step_count))
             self._append_log("OK\n")
 
     def _handle_done(self, result: object) -> None:
         self.progress_var.set(100)
-        self.status_var.set("Completed")
-        self.step_var.set("Progress workbook is ready.")
+        self.status_var.set(tr('Completed'))
+        self.step_var.set(tr('Progress workbook is ready.'))
         self.run_button.configure(state="normal")
         output = getattr(result, "output_workbook", None)
         project_folder = getattr(result, "project_folder", None)
@@ -583,14 +566,14 @@ class ProgressStudioDesktopApp(tk.Tk):
         if project_folder:
             self.project_folder = Path(project_folder)
             self.open_folder_button.configure(state="normal")
-        messagebox.showinfo("Completed", f"Output created:\n{self.output_file or project_folder}")
+        messagebox.showinfo(tr('Completed'), tr('Output created:\n{value1}', value1=self.output_file or project_folder))
 
     def _handle_error(self, error: Exception) -> None:
-        self.status_var.set("Failed")
-        self.step_var.set("Pipeline stopped. Review the activity log.")
+        self.status_var.set(tr('Failed'))
+        self.step_var.set(tr('Pipeline stopped. Review the activity log.'))
         self.run_button.configure(state="normal")
         self._append_log(f"\nERROR: {error}\n")
-        messagebox.showerror("Progress Studio", str(error))
+        messagebox.showerror(tr('Progress Studio'), tr("error.details", error=str(error)))
 
     def _append_log(self, text: str) -> None:
         if hasattr(self, "log"):
@@ -613,4 +596,4 @@ class ProgressStudioDesktopApp(tk.Tk):
             else:
                 os.system(f'xdg-open "{path}"')
         except Exception as exc:
-            messagebox.showerror("Open failed", str(exc))
+            messagebox.showerror(tr('Open failed'), tr("error.details", error=str(exc)))

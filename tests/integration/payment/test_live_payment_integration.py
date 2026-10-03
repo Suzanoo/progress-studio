@@ -127,5 +127,7 @@ def test_lw9_in_memory_payment_renderer_is_render_only() -> None:
 def test_lw9_ui_routes_live_payment_to_live_engine() -> None:
     source = Path("progress_studio/presentation/gui/rebuild.py").read_text(encoding="utf-8")
     assert "rebuild_live_payment" in source
-    assert "Live Payment active in LW-9" in source
+    # V1.1 removes engineering milestone names from user-facing copy.
+    assert "Live Payment uses the saved Payment Input and progress data." in source
+    assert "Live Payment active in LW-9" not in source
     assert "Live Payment is not active yet" not in source

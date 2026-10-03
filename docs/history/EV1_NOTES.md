@@ -1,5 +1,8 @@
 # Progress Studio — EV-1 Calculation Engine
 
+Historical derivation notes. Current authority: [EV monetary sources](../EV_MONETARY_SOURCES.md)
+and [EV live contract](../EV_LIVE_CONTRACT.md). BOQ-only assumptions below are historical.
+
 EV-1 is intentionally calculation-only. It does not render an Excel sheet, modify Dashboard, or integrate with standalone Rebuild.
 
 ## Frozen EV-0 contract implemented

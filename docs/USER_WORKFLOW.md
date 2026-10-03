@@ -88,27 +88,15 @@ Payment Breakdown** again from the Payment Workspace.
 See [Payment Breakdown](PAYMENT_BREAKDOWN.md) for the detailed feature
 contract.
 
-## 4. Financial Forecast (optional)
+## 4. V1.1 navigation and help
 
-Open **Finance** in the sidebar or **Tools → Financial Forecast Workspace**.
-Browse to a saved Progress Studio `.xlsx`, or paste its path and click
-**Check Workbook**. On first creation, enter finance Opening date, Actuals through
-and Project currency, then **Create Finance Workbook** to a new file.
+Home shows Create/Rebuild as primary actions and Mapping/Payment as optional.
+Home's View guide and the persistent Help entry open the same first-time/cycle guide.
+Select ENG or THA at the top right. The saved preference applies on the next launch;
+current work is not restarted. Workbook formulas, sheet names and identities stay unchanged.
 
-Use **Open Result** to edit persistent **Finance Input** and inspect **Cash Flow**
-in Excel. Enter reconciled opening cash, transactions and remaining forecasts;
-the app does not infer them from progress. Credit term defaults to 30 days and
-retention to 5%. F9 / Save recalculates the live finance view.
-
-Save/close Excel before returning to the app. Check an existing finance workbook
-and use **Refresh Finance Workbook** when regenerating finance outputs or
-explicitly increasing prepared input rows. Saved settings, notes and overrides
-are retained. Source and existing output files are never overwritten.
-
-For Mapping, Payment or Rebuild, select the latest saved workbook explicitly.
-Those workspaces retain their existing ownership; Finance is not a new
-Progress/Payment Rebuild mode. See [Financial Forecast desktop](FF3_DESKTOP.md)
-for the full procedure and acceptance checks.
+Finance and AI Helper are hidden from normal navigation. Finance's underlying
+implementation is retained; see [retained Finance reference](FF3_DESKTOP.md).
 
 ## 5. Work in Excel
 
@@ -181,3 +169,16 @@ needs regeneration, for example after:
 
 Use **Build Payment Breakdown** instead of Rebuild when only the
 `Payment-Breakdown` output needs to be refreshed.
+
+## V1.1 Rebuild presentation
+
+Select the saved workbook, then Target: Progress, Payment or Earned Value.
+Progress/Payment show their existing Snapshot/Live options. EV shows Live monetary-source
+controls and preparation when applicable. Ordinary EV progress edits need F9/Save;
+structural BAC or source changes need EV refresh. No Rebuild All or Snapshot EV.
+
+## Worksheet protection
+
+The workbook README explains the existing `okmd` password. It protects editing,
+not confidentiality. Manual password changes in Excel can be reset by later
+processing paths applying shared protection. Custom passwords are not a V1.1 feature.

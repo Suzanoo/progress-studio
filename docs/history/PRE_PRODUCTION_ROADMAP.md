@@ -1,5 +1,8 @@
 # Progress Studio Pre-Production Roadmap
 
+ARCHIVED: historical planning, superseded by [current status](../ROADMAP.md).
+Do not interpret the milestones below as current authorization.
+
 The current goal is not to add more features. The goal is to make the existing product understandable, editable, testable, performant and package-ready for Windows and macOS.
 
 ## Current position

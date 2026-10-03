@@ -104,6 +104,18 @@ def build_workbook_guide(workbook) -> None:
     ws.cell(row, 2).alignment = Alignment(wrap_text=True)
     ws.row_dimensions[row].height = 26
 
+    row += 2
+    ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=6)
+    ws.cell(row, 2, "WORKSHEET PROTECTION — unlock password: okmd")
+    ws.cell(row, 2).font = Font(bold=True, color=NAVY)
+    row += 1
+    ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=6)
+    ws.cell(row, 2, "Sheets are protected to prevent accidental formula edits. This protection does not encrypt workbook data. "
+            "You may change a sheet password manually in Excel, but a later Progress Studio processing path "
+            "that applies the shared protection policy may restore the Progress Studio password (okmd).")
+    ws.cell(row, 2).alignment = Alignment(wrap_text=True, vertical="top")
+    ws.row_dimensions[row].height = 48
+
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1

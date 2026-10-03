@@ -1,5 +1,9 @@
 # FF-3 Financial Forecast desktop integration
 
+V1.1 note: Finance is hidden from sidebar, Home and Tools. The implementation and
+calculation contract below are retained; historical navigation instructions are not
+available in normal V1.1 navigation.
+
 Implementation baseline: `main @ 997a815ca51aff08a2f1ab6fd4204e2a9d4fc8c2`.
 Scope: FF-3 desktop integration and regression only.
 
@@ -9,7 +13,7 @@ milestone does not reopen that investigation. The calculation source of truth
 remains [FINANCIAL_FORECAST_CONTRACT.md](FINANCIAL_FORECAST_CONTRACT.md); the
 accepted workbook/input contract remains [FF2_WORKBOOK.md](FF2_WORKBOOK.md).
 
-## Normal application workflow
+## Retained V1 workflow reference (not normal V1.1 navigation)
 
 1. Create a Progress workbook in the application, or use an existing saved
    Progress Studio `.xlsx`. Mapping and Payment remain optional independent

@@ -11,7 +11,8 @@ This checklist is for Release Candidate / production builds. It intentionally do
 
 ## Automated gates
 
-Pre-production shortcut: `./scripts/check-preproduction.ps1` runs the complete behavior-directory gate plus package verification.
+Repository gate: `./scripts/check-preproduction.ps1` retains its compatibility name
+and runs the behavior-directory gate plus package verification.
 
 
 - [ ] Smoke tests pass.
@@ -58,9 +59,17 @@ Pre-production shortcut: `./scripts/check-preproduction.ps1` runs the complete b
 
 ## WIN-1 portable build
 
-- [ ] Run `scripts/build-windows-portable.ps1` on Windows from the PR-1 frozen source.
+- [ ] Run `scripts/build-windows-portable.ps1` on Windows from the intended accepted source.
 - [ ] Confirm `dist/ProgressStudio/ProgressStudio.exe` exists.
 - [ ] Confirm `verify_portable.py` passes, including `--win1-smoke`.
 - [ ] Double-click the portable EXE and verify Home, Create Progress, Mapping, Payment, and Rebuild workspaces open.
 - [ ] Generate one Progress workbook from a known MSP/P6 input.
 - [ ] Do not create an installer or customer release until WIN-2 clean-machine validation passes.
+
+## V1.1 presentation gates
+
+- [ ] Complete [Desktop acceptance](V1_1_PRODUCT_EXPERIENCE.md#po-desktop-acceptance-not-automated-pass).
+- [ ] ENG/THA selection persists and applies only after restart; Thai/DPI/keyboard verified.
+- [ ] Canonical S-curve icon appears in window, EXE, portable and installer.
+- [ ] Finance sidebar/Home/Tools and AI Helper entries are hidden without deleting their engines.
+- [ ] EV Activity Amount and BOQ Mapping remain valid; custom password is not introduced.

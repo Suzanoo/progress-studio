@@ -2,7 +2,7 @@
 
 This file is the technical source of truth for current Progress Studio
 ownership boundaries. Historical milestone documents under
-`docs/history/` describe how the product reached this architecture but
+`history/` describe how the product reached this architecture but
 do not override this contract.
 
 ## 1. End-to-end architecture
@@ -80,7 +80,7 @@ source, type and native name in Info. Mapping regeneration carries this original
 field provenance while displaying BOQ Mapping as the current amount basis.
 Excel presentation helpers explain monetary/dummy units without renaming
 engine-recognized Amount headers or introducing fixed cells in domain/services.
-See docs/WEIGHT_SELECTION.md for the Create weighting lifecycle contract.
+See [Weight Selection](WEIGHT_SELECTION.md) for the Create weighting lifecycle contract.
 
 ### After workbook creation
 
@@ -206,7 +206,8 @@ Finish occurs inside that period.
 
 ## 7. Rebuild workspace contract
 
-Rebuild is an orchestrator with a 2 x 2 user-facing matrix:
+Rebuild presents Workbook → Target → conditional options. Progress/Payment
+retain the following 2 x 2 matrix; Earned Value is a separate Live-only target:
 
   -----------------------------------------------------------------------
   Workbook mode           Progress                Payment
@@ -245,7 +246,8 @@ follows the `X/M` display/reporting contract.
 
 ### Earned Value live-workbook boundary
 
-EV Rebuild owns structural BAC / BOQ / mapping topology. After a successful
+EV Rebuild owns structural BAC and the selected Activity Amount or BOQ Mapping
+source topology. After a successful
 EV build, `main` remains the live authority for Plan and Actual progress.
 
 Earned Value uses one semantic workbook control, `EV_View_Date`, for the
@@ -253,9 +255,9 @@ selected reporting view. PV and EV both accumulate live `main` values through
 that view date. Dashboard cutoff controls are presentation state for Dashboard
 and are not Earned Value calculation inputs.
 
-Plan/Actual edits require only Excel recalculation (F9 / Save). Structural BOQ
-or mapping changes require EV Rebuild. See `EV_LIVE_CONTRACT.md` for the full
-contract.
+Plan/Actual edits require only Excel recalculation (F9 / Save). Structural BAC,
+monetary source or mapping changes require EV Rebuild. See
+[EV live contract](EV_LIVE_CONTRACT.md) and [EV monetary sources](EV_MONETARY_SOURCES.md).
 
 ## 8. Payment Breakdown contract
 
@@ -307,12 +309,17 @@ links.
 
 ## 10. Final Workbook Policy
 
-All user-facing outputs converge on a shared final workbook policy for:
+Create, Mapping, Progress Rebuild and standard Payment paths use a shared final
+workbook policy for:
 
 -   workbook guide / README sheet;
 -   sheet visibility;
 -   sheet protection and intended unlocked inputs;
 -   Excel calculation properties.
+
+Standalone EV and Payment Breakdown use their targeted renderer/save and package
+preservation paths; they do not universally run the shared finalizer. V1.1 does
+not change this behavior or introduce custom-password propagation.
 
 F9 and Save belong to Excel formula recalculation. They do not execute
 Python rebuild logic.

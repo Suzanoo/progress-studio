@@ -1,192 +1,90 @@
+<p align="center"><img src="progress_studio/assets/brand/progress_studio_icon.png" width="88" alt="Progress Studio S-curve icon"></p>
+
 # Progress Studio
 
-Progress Studio is a desktop application for turning construction
-schedule data into an Excel progress workbook, mapping BOQ amounts to
-schedule activities, preparing payment views, and rebuilding derived
-workbook outputs after the workbook has been edited in Excel.
+**Plan in P6 or MSP. Report progress in Excel.**
 
-> Development status: pre-production stabilization. The repository is
-> being cleaned, documented, regression-tested, and packaged before
-> Windows and macOS production releases.
+Progress Studio connects your schedule XML to a practical weekly/monthly Excel
+progress workbook. Keep your scheduling tool and familiar Excel reporting workflow;
+stop rebuilding the same S-curve workbook by hand.
+
+## Why it exists
+
+Planning teams often maintain schedules in Primavera P6 or Microsoft Project,
+then recreate progress tables and S-curves in Excel for reporting. Progress Studio
+bridges that gap. It is a focused desktop reporting tool, not a replacement
+scheduling system or an accounting application.
 
 ## Product flow
 
-``` mermaid
-flowchart LR
-    MSP[MS Project XML] --> CREATE[Create Progress]
-    P6[Primavera P6 XML] --> CREATE
+1. Export **P6 XML** or **MSP XML**.
+2. **Create** an Excel workbook: choose Weight basis, Weekly cutoff and Plan distribution.
+3. Open Excel, review the plan/S-curve and enter progress in editable cells in `main`.
+4. **F9 and Save** recalculate formulas. Use **Rebuild** when generated views or
+   structural inputs need refreshing; it starts from the saved workbook, not XML.
 
-    CREATE --> WB[Progress Workbook]
+**BOQ Mapping** and **Payment** are optional, not mandatory setup steps.
+**Earned Value** is available through Rebuild.
 
-    WB --> MAP[Mapping\noptional]
-    WB --> PAY[Payment\noptional]
-    WB --> EDIT[Edit in Excel]
+## What you can do
 
-    MAP --> EDIT
-    PAY --> EDIT
-    EDIT --> REBUILD[Rebuild]
+- Import P6 and MSP XML without changing source scheduling data.
+- Choose **Equal**, **Duration**, or an explicitly selected numeric **Amount** field.
+- Generate weekly/monthly Plan and Actual reporting, Dashboard and S-curve views.
+- Allocate BOQ amounts to activities with **Mapping**.
+- Prepare persistent **Payment Input** and generate **Payment Breakdown**.
+- Rebuild **Progress** or **Payment** using their existing **Snapshot / Live** workflows.
+- Generate live **Earned Value** using **Activity Amount** or **BOQ Mapping** as the
+  monetary source; retain PV/EV, WBS performance and source-specific detail.
+- Use an **ENG / THA** desktop interface and a short in-app **Help / Quick Guide**.
+  Language changes apply on the next application launch.
 
-    REBUILD --> OUT[Updated Progress Workbook]
-```
+Live does not mean every change needs only F9: structural BAC/source changes
+require EV refresh, and Python-generated snapshots require their owning rebuild.
+Equal/Duration weights are not money. See [EV monetary sources](docs/EV_MONETARY_SOURCES.md).
 
-### Inputs
+## Product status
 
--   Microsoft Project XML.
--   Primavera P6 XML.
--   BOQ workbook when Mapping is used.
--   An existing Progress Studio workbook when Rebuild is used.
+V1 was accepted at `d0db778`, tag `progress-studio-v1-stable`.
+This source includes V1.1 product-experience work; Product Owner Desktop acceptance
+is a separate release gate. Mini Gantt is **cancelled**, not a planned feature.
+Finance implementation is retained for compatibility but hidden from normal V1.1
+navigation. No Finance workflow is advertised here.
 
-### Main outputs
+## Quick start / Windows
 
-A generated workbook can contain:
+For an existing authorized portable build, extract the whole folder and run
+`ProgressStudio.exe` (do not copy the EXE alone).
+For an installer, follow the installation wizard.
 
--   `main` --- editable weekly source of truth after initial workbook
-    creation.
--   `main_monthly` --- monthly presentation derived from weekly
-    progress.
--   `Dashboard` --- KPI, S-curve, cutoff controls, and Activity
-    Progress.
--   `Payment Input` / `Payment` --- when the standard Payment workflow
-    is used.
--   `Payment-Breakdown` --- optional exact-name, Amount-weighted payment
-    progress breakdown generated from current `main`.
--   hidden/internal helper sheets used by Progress Studio.
-
-## Typical workflow
-
-1.  **Create Progress** --- import MSP XML or P6 XML and create the
-    initial workbook.
-2.  **Mapping (optional)** --- allocate BOQ amounts to schedule
-    Activities.
-3.  **Payment (optional)** --- prepare standard Payment requirements or
-    build Payment Breakdown from current `main`.
-4.  **Edit in Excel** --- update the workbook. `main` remains the
-    workbook source of truth.
-5.  **Rebuild** --- regenerate Progress-owned or standard Payment-owned
-    outputs from the edited workbook. Payment Breakdown is refreshed
-    explicitly from the Payment Workspace.
-
-For the detailed user workflow, see
-[docs/USER_WORKFLOW.md](docs/USER_WORKFLOW.md).
-
-## Reporting timescale
-
-Progress Studio distinguishes display margins from reporting periods:
-
-``` text
-X  X  X | W1 W2 W3 ... Wn | X X X
-          project reporting
-
-X | M1 M2 M3 ... Mn | X
-```
-
--   `X` = display-only margin period.
--   `W1...Wn` = weekly reporting periods.
--   `M1...Mn` = monthly reporting periods.
--   Create Progress owns the initial `X/W/M` labels.
--   Rebuild does not renumber the weekly labels in `main`.
-
-Calculation and reporting engines use dates/columns rather than the
-numeric W/M label as business identity.
-
-## Quick start for developers
-
-### Windows PowerShell
-
-``` powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-progress-studio
-```
-
-### macOS / Linux
-
-``` bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-progress-studio
-```
-
-Available entry points:
-
-``` text
-progress-studio            Desktop GUI
-python -m progress_studio  Desktop GUI
-progress-studio-cli        CLI
-python desktop.py          Compatibility desktop launcher
-python main.py             Compatibility CLI launcher
-```
-
-## Repository map
-
-``` text
-progress_studio/   Product code
-  app/             Application composition and desktop pipeline
-  domain/          Source-neutral models and contracts
-  services/        Use cases and orchestration
-  infrastructure/  XML, Excel, filesystem, renderers and persistence
-  presentation/    CLI / GUI presentation
-  pipeline/        Initial Create Progress pipeline steps
-  config/          Workbook and UI configuration
-tests/             Automated tests and fixtures
-docs/              Active documentation + historical records
-scripts/           Test/benchmark utilities
-example/           Small example inputs and golden reference files
-```
+To build from source, use the step-by-step
+[Windows build guide](packaging/windows/WINDOWS_BUILD_GUIDE.md).
+Release artifacts, signing and Desktop acceptance must be verified by the repository
+owner; the documentation does not imply a new downloadable release has been published.
 
 ## Documentation
 
--   [Architecture](ARCHITECTURE.md) --- technical source of truth and
-    ownership boundaries.
--   [User workflow](docs/USER_WORKFLOW.md) --- product workflow and
-    workbook rules.
--   [Payment Breakdown](docs/PAYMENT_BREAKDOWN.md) --- exact-name
-    grouping, calculation and workbook ownership contract.
--   [Development](docs/DEVELOPMENT.md) --- environment, repository rules
-    and performance policy.
--   [Testing](docs/TESTING.md) --- current automated test tiers.
--   [Roadmap](ROADMAP.md) --- pre-production milestones.
--   [Release checklist](RELEASE_CHECKLIST.md) --- release/installer
-    gate.
--   [Changelog](CHANGELOG.md) --- historical changes.
--   [Documentation index](docs/README.md).
+- [User workflow](docs/USER_WORKFLOW.md)
+- [V1.1 desktop experience and acceptance](docs/V1_1_PRODUCT_EXPERIENCE.md)
+- [Weight selection](docs/WEIGHT_SELECTION.md)
+- [Earned Value monetary sources](docs/EV_MONETARY_SOURCES.md)
+- [Payment Breakdown](docs/PAYMENT_BREAKDOWN.md)
+- [Documentation index](docs/README.md)
+- [Changelog](CHANGELOG.md) / [Roadmap and status](docs/ROADMAP.md)
 
-Historical milestone documents and older user guides are preserved under
-`docs/history/`. They are reference material, not current product
-contracts.
+## Development / tests
 
-## Important workbook rules
+Requires Python 3.10+ with Tkinter. Existing compatibility entry points remain:
+`desktop.py`, `main.py`, `progress-studio` and `progress-studio-cli`.
 
--   `main` is the editable workbook source of truth after Create
-    Progress.
--   `main_monthly` and generated dashboards/helpers are derived outputs.
--   F9 / Save recalculates Excel formulas; it does **not** run the
-    Python Rebuild engine.
--   Python-owned snapshots/caches require Progress Studio Rebuild when
-    structural data changes.
--   Standard Payment-only rebuild must preserve Progress-owned outputs.
--   Progress rebuild must preserve Payment-owned/user-owned inputs
-    according to the Rebuild contract.
--   `Payment-Breakdown` is generated explicitly from the Payment
-    Workspace and is not a Rebuild-owned output.
-
-## Tests
-
-Fast local gate:
-
-``` powershell
-python -m pytest -m smoke -q
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python desktop.py
+python -m pytest
 ```
 
-Full release gate:
-
-``` powershell
-python -m pytest -m release
-```
-
-See [docs/TESTING.md](docs/TESTING.md) for the current product test
-profiles and release gates.
+See [Development](docs/DEVELOPMENT.md), [Testing](docs/TESTING.md),
+[Architecture](docs/ARCHITECTURE.md) and [Release checklist](docs/RELEASE_CHECKLIST.md).
+Workbook formulas, sheet names and source identities are not translated.

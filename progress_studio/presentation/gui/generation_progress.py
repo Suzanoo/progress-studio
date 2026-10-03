@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
+from .strings import tr
 
 
 class GenerationProgressDialog(tk.Toplevel):
@@ -25,23 +26,23 @@ class GenerationProgressDialog(tk.Toplevel):
 
     def __init__(self, parent: tk.Misc) -> None:
         super().__init__(parent)
-        self.title("Generating Workbook")
+        self.title(tr("Generating Workbook"))
         self.transient(parent.winfo_toplevel())
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", lambda: None)
 
         body = ttk.Frame(self, padding=18)
         body.pack(fill="both", expand=True)
-        ttk.Label(body, text="Generating Workbook", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(body, text=tr("Generating Workbook"), style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             body,
-            text="Progress Studio is rebuilding the workbook from the working tree.",
+            text=tr("Progress Studio is rebuilding the workbook from the working tree."),
             style="Muted.TLabel",
         ).pack(anchor="w", pady=(4, 14))
 
         self.labels: dict[str, ttk.Label] = {}
         for key, text in self.STEPS:
-            label = ttk.Label(body, text=f"○  {text}")
+            label = ttk.Label(body, text=f"○  {tr(text)}")
             label.pack(anchor="w", pady=2)
             self.labels[key] = label
 
@@ -49,7 +50,7 @@ class GenerationProgressDialog(tk.Toplevel):
             body, mode="determinate", maximum=len(self.STEPS), length=410
         )
         self.progress.pack(fill="x", pady=(16, 6))
-        self.status_var = tk.StringVar(value="Starting...")
+        self.status_var = tk.StringVar(value=tr("Starting..."))
         ttk.Label(body, textvariable=self.status_var, style="Muted.TLabel").pack(anchor="w")
 
         self.completed: set[str] = set()
@@ -67,19 +68,19 @@ class GenerationProgressDialog(tk.Toplevel):
             return
         for key, label in self.labels.items():
             prefix = "✓" if key in self.completed else ("●" if key == step else "○")
-            text = dict(self.STEPS)[key]
+            text = tr(dict(self.STEPS)[key])
             label.configure(text=f"{prefix}  {text}")
-        self.status_var.set(message)
+        self.status_var.set(tr(dict(self.STEPS)[step]))
         self.progress.configure(value=len(self.completed))
         self.update_idletasks()
 
     def complete_step(self, step: str, message: str = "") -> None:
         if step in self.labels:
             self.completed.add(step)
-            self.labels[step].configure(text=f"✓  {dict(self.STEPS)[step]}")
+            self.labels[step].configure(text=f"✓  {tr(dict(self.STEPS)[step])}")
             self.progress.configure(value=len(self.completed))
         if message:
-            self.status_var.set(message)
+            self.status_var.set(tr(dict(self.STEPS).get(step, message)))
         self.update_idletasks()
 
     def fail(self, message: str) -> None:

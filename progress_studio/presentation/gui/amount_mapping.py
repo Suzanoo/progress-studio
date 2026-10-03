@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from progress_studio.presentation.gui.strings import tr
+
 from pathlib import Path
 import queue
 import threading
@@ -43,25 +45,25 @@ class AmountMappingFrame(ttk.Frame):
         self._boq_fingerprint: WorkbookFingerprint | None = None
         self._progress_snapshot: WorkbookSnapshot | None = None
         self._boq_snapshot: WorkbookSnapshot | None = None
-        self.progress_path_var = tk.StringVar(value="No Progress workbook loaded")
-        self.boq_path_var = tk.StringVar(value="No BOQ workbook loaded")
+        self.progress_path_var = tk.StringVar(value=tr('No Progress workbook loaded'))
+        self.boq_path_var = tk.StringVar(value=tr('No BOQ workbook loaded'))
         self.boq_sheet_var = tk.StringVar()
-        self.input_status_var = tk.StringVar(value="Load both workbooks to begin mapping.")
+        self.input_status_var = tk.StringVar(value=tr('Load both workbooks to begin mapping.'))
         self.activity_filter = tk.StringVar()
         self.boq_filter = tk.StringVar()
         self.boq_wbs2_filter = tk.StringVar(value="All")
         self.boq_wbs3_filter = tk.StringVar(value="All")
-        self.summary_var = tk.StringVar(value="Mapped 0.00 / 0.00 | Remaining 0.00 | Items 0/0")
+        self.summary_var = tk.StringVar(value=tr('Mapped 0.00 / 0.00 | Remaining 0.00 | Items 0/0'))
         self.share_var = tk.StringVar(value="100")
-        self.activity_page_var = tk.StringVar(value="Rows 0-0 of 0")
-        self.boq_page_var = tk.StringVar(value="Rows 0-0 of 0")
-        self.boq_selection_var = tk.StringVar(value="Selected 0 items | 0.00")
-        self.boq_mapping_detail_var = tk.StringVar(value="Select a BOQ item to view all mapped activities.")
+        self.activity_page_var = tk.StringVar(value=tr('Rows 0-0 of 0'))
+        self.boq_page_var = tk.StringVar(value=tr('Rows 0-0 of 0'))
+        self.boq_selection_var = tk.StringVar(value=tr('Selected 0 items | 0.00'))
+        self.boq_mapping_detail_var = tk.StringVar(value=tr('Select a BOQ item to view all mapped activities.'))
         self._wbs_header_paths: dict[str, tuple[tuple[str, str], ...]] = {}
-        self.session_status_var = tk.StringVar(value="Project: unsaved")
-        self.operation_status_var = tk.StringVar(value="Ready")
-        self.activity_empty_var = tk.StringVar(value="No Progress workbook loaded")
-        self.boq_empty_var = tk.StringVar(value="No BOQ worksheet loaded")
+        self.session_status_var = tk.StringVar(value=tr('Project: unsaved'))
+        self.operation_status_var = tk.StringVar(value=tr('Ready'))
+        self.activity_empty_var = tk.StringVar(value=tr('No Progress workbook loaded'))
+        self.boq_empty_var = tk.StringVar(value=tr('No BOQ worksheet loaded'))
         self.layout_repository = LayoutPreferencesRepository()
         self.layout_preferences = self.layout_repository.load()
         self.inputs_collapsed = self.layout_preferences.mapping_inputs_collapsed
@@ -77,35 +79,35 @@ class AmountMappingFrame(ttk.Frame):
             inputs_header, command=self._toggle_inputs, width=3
         )
         self.inputs_toggle_button.pack(side="left")
-        ttk.Label(inputs_header, text="Workbook Inputs", font=("Segoe UI", 10, "bold")).pack(
+        ttk.Label(inputs_header, text=tr('Workbook Inputs'), font=("Segoe UI", 10, "bold")).pack(
             side="left", padx=(6, 0)
         )
         ttk.Label(inputs_header, textvariable=self.input_status_var, foreground=PALETTE.muted).pack(
             side="right"
         )
 
-        self.inputs_frame = ttk.LabelFrame(self, text="Mapping Inputs", padding=8)
+        self.inputs_frame = ttk.LabelFrame(self, text=tr('Mapping Inputs'), padding=8)
         self.inputs_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(self.inputs_frame, text="Progress workbook").grid(row=0, column=0, sticky="w")
+        ttk.Label(self.inputs_frame, text=tr('Progress workbook')).grid(row=0, column=0, sticky="w")
         ttk.Entry(self.inputs_frame, textvariable=self.progress_path_var, state="readonly").grid(
             row=0, column=1, sticky="ew", padx=8
         )
-        ttk.Button(self.inputs_frame, text="Load Progress...", command=self._browse_progress).grid(row=0, column=2)
+        ttk.Button(self.inputs_frame, text=tr('Load Progress...'), command=self._browse_progress).grid(row=0, column=2)
 
-        ttk.Label(self.inputs_frame, text="BOQ workbook").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(self.inputs_frame, text=tr('BOQ workbook')).grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(self.inputs_frame, textvariable=self.boq_path_var, state="readonly").grid(
             row=1, column=1, sticky="ew", padx=8, pady=(6, 0)
         )
-        ttk.Button(self.inputs_frame, text="Load BOQ...", command=self._browse_boq).grid(row=1, column=2, pady=(6, 0))
+        ttk.Button(self.inputs_frame, text=tr('Load BOQ...'), command=self._browse_boq).grid(row=1, column=2, pady=(6, 0))
 
-        ttk.Label(self.inputs_frame, text="BOQ worksheet").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(self.inputs_frame, text=tr('BOQ worksheet')).grid(row=2, column=0, sticky="w", pady=(6, 0))
         self.boq_sheet_combo = ttk.Combobox(
             self.inputs_frame, textvariable=self.boq_sheet_var, state="disabled", values=()
         )
         self.boq_sheet_combo.grid(row=2, column=1, sticky="ew", padx=8, pady=(6, 0))
         self.load_sheet_button = ttk.Button(
-            self.inputs_frame, text="Load selected sheet", command=self._load_selected_boq_sheet, state="disabled"
+            self.inputs_frame, text=tr('Load selected sheet'), command=self._load_selected_boq_sheet, state="disabled"
         )
         self.load_sheet_button.grid(row=2, column=2, pady=(6, 0))
 
@@ -121,34 +123,34 @@ class AmountMappingFrame(ttk.Frame):
 
         activity_header = ttk.Frame(left)
         activity_header.pack(fill="x")
-        ttk.Label(activity_header, text="Progress Activities", font=("Segoe UI", 10, "bold")).pack(side="left")
+        ttk.Label(activity_header, text=tr('Progress Activities'), font=("Segoe UI", 10, "bold")).pack(side="left")
 
         # Keep the high-frequency commands visible and group the rest in
         # compact menus.  This remains usable when the Progress pane is made
         # narrow instead of allowing a long fixed button row to be clipped.
-        ttk.Button(activity_header, text="Add WBS", command=self._add_supplemental_wbs).pack(side="left", padx=(8, 0))
-        ttk.Button(activity_header, text="Add Activity", command=self._add_supplemental_activity).pack(side="left", padx=(4, 0))
-        ttk.Button(activity_header, text="Edit", command=self._edit_progress_node).pack(side="left", padx=(4, 0))
-        ttk.Button(activity_header, text="Delete", command=self._delete_progress_node).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text=tr('Add WBS'), command=self._add_supplemental_wbs).pack(side="left", padx=(8, 0))
+        ttk.Button(activity_header, text=tr('Add Activity'), command=self._add_supplemental_activity).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text=tr('Edit'), command=self._edit_progress_node).pack(side="left", padx=(4, 0))
+        ttk.Button(activity_header, text=tr('Delete'), command=self._delete_progress_node).pack(side="left", padx=(4, 0))
 
-        arrange_button = ttk.Menubutton(activity_header, text="Arrange")
+        arrange_button = ttk.Menubutton(activity_header, text=tr('Arrange'))
         arrange_menu = tk.Menu(arrange_button, tearoff=False)
-        arrange_menu.add_command(label="Move Up", command=lambda: self._move_progress_node(-1))
-        arrange_menu.add_command(label="Move Down", command=lambda: self._move_progress_node(1))
+        arrange_menu.add_command(label=tr('Move Up'), command=lambda: self._move_progress_node(-1))
+        arrange_menu.add_command(label=tr('Move Down'), command=lambda: self._move_progress_node(1))
         arrange_menu.add_separator()
-        arrange_menu.add_command(label="Indent", command=self._indent_progress_node)
-        arrange_menu.add_command(label="Outdent", command=self._outdent_progress_node)
-        arrange_menu.add_command(label="Move to WBS...", command=self._reparent_progress_node)
+        arrange_menu.add_command(label=tr('Indent'), command=self._indent_progress_node)
+        arrange_menu.add_command(label=tr('Outdent'), command=self._outdent_progress_node)
+        arrange_menu.add_command(label=tr('Move to WBS...'), command=self._reparent_progress_node)
         arrange_menu.add_separator()
-        arrange_menu.add_command(label="Undo tree edit", command=self._undo_tree_edit)
-        arrange_menu.add_command(label="Redo tree edit", command=self._redo_tree_edit)
+        arrange_menu.add_command(label=tr('Undo tree edit'), command=self._undo_tree_edit)
+        arrange_menu.add_command(label=tr('Redo tree edit'), command=self._redo_tree_edit)
         arrange_button.configure(menu=arrange_menu)
         arrange_button.pack(side="left", padx=(6, 0))
 
-        tree_view_button = ttk.Menubutton(activity_header, text="Tree View")
+        tree_view_button = ttk.Menubutton(activity_header, text=tr('Tree View'))
         tree_view_menu = tk.Menu(tree_view_button, tearoff=False)
-        tree_view_menu.add_command(label="Expand all", command=self._expand_all_wbs)
-        tree_view_menu.add_command(label="Collapse all", command=self._collapse_all_wbs)
+        tree_view_menu.add_command(label=tr('Expand all'), command=self._expand_all_wbs)
+        tree_view_menu.add_command(label=tr('Collapse all'), command=self._collapse_all_wbs)
         tree_view_button.configure(menu=tree_view_menu)
         tree_view_button.pack(side="right")
         self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
@@ -167,25 +169,25 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_tree.bind("<Button-1>", self._activity_click)
         self._build_pager(left, self.activity_page_var, self._activity_prev, self._activity_next)
 
-        ttk.Label(right, text="BOQ Items", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        ttk.Label(right, text=tr('BOQ Items'), font=("Segoe UI", 10, "bold")).pack(anchor="w")
         self.boq_empty_label = ttk.Label(right, textvariable=self.boq_empty_var, style="Empty.TLabel", anchor="center")
         self.boq_empty_label.pack(fill="x", pady=(12, 4))
         filter_row = ttk.Frame(right)
         filter_row.pack(fill="x", pady=(4, 4))
-        ttk.Label(filter_row, text="WBS-2").pack(side="left")
+        ttk.Label(filter_row, text=tr('WBS-2')).pack(side="left")
         self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=24, values=("All",))
         self.boq_wbs2_combo.pack(side="left", padx=(5, 8))
         self.boq_wbs2_combo.bind("<<ComboboxSelected>>", self._on_wbs2_filter)
-        ttk.Label(filter_row, text="WBS-3").pack(side="left")
+        ttk.Label(filter_row, text=tr('WBS-3')).pack(side="left")
         self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=28, values=("All",))
         self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
         self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
         selection_row = ttk.Frame(right)
         selection_row.pack(fill="x", pady=(0, 4))
-        ttk.Button(selection_row, text="Select page", command=self._select_boq_page).pack(side="left")
-        ttk.Button(selection_row, text="Select all filtered", command=self._select_all_filtered_boq).pack(side="left", padx=(4, 0))
-        ttk.Button(selection_row, text="Clear selection", command=self._clear_boq_selection).pack(side="left", padx=(4, 0))
+        ttk.Button(selection_row, text=tr('Select page'), command=self._select_boq_page).pack(side="left")
+        ttk.Button(selection_row, text=tr('Select all filtered'), command=self._select_all_filtered_boq).pack(side="left", padx=(4, 0))
+        ttk.Button(selection_row, text=tr('Clear selection'), command=self._clear_boq_selection).pack(side="left", padx=(4, 0))
         ttk.Label(selection_row, textvariable=self.boq_selection_var, foreground=PALETTE.muted).pack(side="right")
         self.boq_tree = self._tree(
             right,
@@ -202,7 +204,7 @@ class AmountMappingFrame(ttk.Frame):
         self.boq_tree.bind("<Button-1>", self._boq_click)
         mapping_detail = ttk.Frame(right, padding=(0, 4, 0, 0))
         mapping_detail.pack(fill="x")
-        ttk.Label(mapping_detail, text="Mapped activities", font=("Segoe UI", 9, "bold")).pack(side="left")
+        ttk.Label(mapping_detail, text=tr('Mapped activities'), font=("Segoe UI", 9, "bold")).pack(side="left")
         ttk.Label(
             mapping_detail,
             textvariable=self.boq_mapping_detail_var,
@@ -213,17 +215,17 @@ class AmountMappingFrame(ttk.Frame):
 
         actions = ttk.Frame(self)
         actions.pack(fill="x", pady=(6, 0))
-        ttk.Label(actions, text="Share").pack(side="left")
+        ttk.Label(actions, text=tr('Share')).pack(side="left")
         share_entry = ttk.Entry(actions, textvariable=self.share_var, width=8, justify="right")
         share_entry.pack(side="left", padx=(5, 2))
         ttk.Label(actions, text="%").pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text="Map", command=self._map).pack(side="left")
-        ttk.Button(actions, text="Undo", command=self._undo).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text="Unmap", command=self._unmap).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text="Clear all", command=self._clear_all).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text=tr('Map'), command=self._map).pack(side="left")
+        ttk.Button(actions, text=tr('Undo'), command=self._undo).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text=tr('Unmap'), command=self._unmap).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text=tr('Clear all'), command=self._clear_all).pack(side="left", padx=(6, 0))
         ttk.Label(
             actions,
-            text="Share applies to every selected BOQ item.",
+            text=tr('Share applies to every selected BOQ item.'),
             foreground=PALETTE.muted,
         ).pack(side="left", padx=(12, 0))
 
@@ -234,7 +236,7 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Label(self.mapping_status_bar, textvariable=self.summary_var, style="Status.TLabel").pack(side="right")
 
         self.loading_overlay = ttk.Frame(self, style="Loading.TFrame", padding=24)
-        ttk.Label(self.loading_overlay, text="Working...", style="LoadingTitle.TLabel").pack()
+        ttk.Label(self.loading_overlay, text=tr('Working...'), style="LoadingTitle.TLabel").pack()
         self.loading_progress = ttk.Progressbar(self.loading_overlay, mode="indeterminate", length=260)
         self.loading_progress.pack(pady=(10, 0))
 
@@ -260,7 +262,7 @@ class AmountMappingFrame(ttk.Frame):
                 self._write_session(self.session_file, show_message=False)
                 self._notify("Project saved")
             except Exception as exc:
-                messagebox.showerror("Progress Studio", str(exc))
+                messagebox.showerror(tr('Progress Studio'), tr("error.details", error=str(exc)))
         else:
             self.save_project_as()
 
@@ -286,7 +288,7 @@ class AmountMappingFrame(ttk.Frame):
     def rebuild_from_edited_workbook(self) -> None:
         """Rebuild latest structure while migrating user edits from an exported workbook."""
         selected = filedialog.askopenfilename(
-            title="Select edited Progress workbook",
+            title=tr('Select edited Progress workbook'),
             filetypes=[("Excel workbook", "*.xlsx")],
         )
         if not selected:
@@ -325,6 +327,7 @@ class AmountMappingFrame(ttk.Frame):
         return "break"
 
     def _notify(self, message: str, kind: str = "success") -> None:
+        message = tr(message)
         self.operation_status_var.set(message)
         top = self.winfo_toplevel()
         toast = tk.Toplevel(top)
@@ -368,6 +371,7 @@ class AmountMappingFrame(ttk.Frame):
         except (AttributeError, tk.TclError):
             pass
         self.layout_preferences = LayoutPreferences(
+            language=self.layout_repository.load().language,
             mapping_inputs_collapsed=self.inputs_collapsed,
             generator_collapsed=self.layout_preferences.generator_collapsed,
             sidebar_collapsed=self.layout_preferences.sidebar_collapsed,
@@ -393,16 +397,16 @@ class AmountMappingFrame(ttk.Frame):
         elif variable is self.boq_filter:
             self.boq_search_entry = entry
         entry.bind("<Return>", lambda _event: command())
-        ttk.Button(row, text="Search", command=command).pack(side="left", padx=(6, 0))
-        ttk.Button(row, text="Clear", command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text=tr('Search'), command=command).pack(side="left", padx=(6, 0))
+        ttk.Button(row, text=tr('Clear'), command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
 
     @staticmethod
     def _build_pager(parent, variable: tk.StringVar, previous, next_) -> None:
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=(5, 0))
         ttk.Label(row, textvariable=variable).pack(side="left")
-        ttk.Button(row, text="Previous", command=previous).pack(side="right")
-        ttk.Button(row, text="Next", command=next_).pack(side="right", padx=(0, 5))
+        ttk.Button(row, text=tr('Previous'), command=previous).pack(side="right")
+        ttk.Button(row, text=tr('Next'), command=next_).pack(side="right", padx=(0, 5))
 
     @staticmethod
     def _tree(parent, columns, headings, widths):
@@ -414,7 +418,7 @@ class AmountMappingFrame(ttk.Frame):
         y = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=y.set)
         for name, heading, width in zip(columns, headings, widths):
-            tree.heading(name, text=heading)
+            tree.heading(name, text=tr(heading))
             tree.column(name, width=width, minwidth=35, stretch=name not in {"check", "amount", "allocated", "remaining", "status", "mapped"})
         tree.grid(row=0, column=0, sticky="nsew")
         y.grid(row=0, column=1, sticky="ns")
@@ -432,11 +436,11 @@ class AmountMappingFrame(ttk.Frame):
 
     def _detach_session(self) -> None:
         self.session_file = None
-        self.session_status_var.set("Session: not saved")
+        self.session_status_var.set(tr('Session: not saved'))
 
     def _browse_progress(self) -> None:
         selected = filedialog.askopenfilename(
-            title="Select Progress workbook",
+            title=tr('Select Progress workbook'),
             filetypes=[("Excel workbook", "*.xlsx"), ("All files", "*.*")],
         )
         if selected:
@@ -462,13 +466,13 @@ class AmountMappingFrame(ttk.Frame):
             self._progress_fingerprint = None
             self._progress_snapshot = None
             self.progress_path_var.set("No Progress workbook loaded")
-            messagebox.showerror("Amount Mapping", str(exc))
+            messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
         finally:
             self._busy(False)
 
     def _browse_boq(self) -> None:
         selected = filedialog.askopenfilename(
-            title="Select BOQ workbook",
+            title=tr('Select BOQ workbook'),
             filetypes=[("Excel workbook", "*.xlsx"), ("All files", "*.*")],
         )
         if not selected:
@@ -499,17 +503,17 @@ class AmountMappingFrame(ttk.Frame):
             self.boq_sheet_combo.configure(values=(), state="disabled")
             self.boq_sheet_var.set("")
             self.load_sheet_button.configure(state="disabled")
-            messagebox.showerror("Amount Mapping", str(exc))
+            messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
         finally:
             self._busy(False)
 
     def _load_selected_boq_sheet(self) -> None:
         if not self.boq_file:
-            messagebox.showwarning("Amount Mapping", "Load a BOQ workbook first.")
+            messagebox.showwarning(tr('Amount Mapping'), tr('Load a BOQ workbook first.'))
             return
         sheet_name = self.boq_sheet_var.get().strip()
         if not sheet_name:
-            messagebox.showwarning("Amount Mapping", "Select a BOQ worksheet.")
+            messagebox.showwarning(tr('Amount Mapping'), tr('Select a BOQ worksheet.'))
             return
         try:
             self._detach_session()
@@ -524,7 +528,7 @@ class AmountMappingFrame(ttk.Frame):
             self._update_input_status()
             self._set_inputs_collapsed(True)
         except Exception as exc:
-            messagebox.showerror("Amount Mapping", str(exc))
+            messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
         finally:
             self._busy(False)
 
@@ -541,9 +545,10 @@ class AmountMappingFrame(ttk.Frame):
         self.input_status_var.set(f"{progress_text} | {boq_text}")
 
     def _busy(self, active: bool, message: str = "Working...") -> None:
+        self.operation_active = active
         top = self.winfo_toplevel()
         top.configure(cursor="watch" if active else "")
-        self.operation_status_var.set(message if active else "Ready")
+        self.operation_status_var.set(tr(message if active else "Ready"))
         if active:
             self.loading_overlay.place(relx=0.5, rely=0.5, anchor="center")
             self.loading_overlay.lift()
@@ -587,13 +592,13 @@ class AmountMappingFrame(ttk.Frame):
 
     def _add_supplemental_wbs(self) -> None:
         if not self.store.activities_by_id:
-            messagebox.showwarning("Progress tree", "Load a Progress workbook first.")
+            messagebox.showwarning(tr('Progress tree'), tr('Load a Progress workbook first.'))
             return
         parent_path = self._selected_parent_path()
-        code = simpledialog.askstring("Add WBS", "WBS code:", parent=self)
+        code = simpledialog.askstring(tr('Add WBS'), tr('WBS code:'), parent=self)
         if code is None:
             return
-        name = simpledialog.askstring("Add WBS", "WBS name:", parent=self)
+        name = simpledialog.askstring(tr('Add WBS'), tr('WBS name:'), parent=self)
         if name is None:
             return
         try:
@@ -602,20 +607,20 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("WBS created. It is selected for the next sub-WBS or Activity.")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _add_supplemental_activity(self) -> None:
         if not self.store.activities_by_id:
-            messagebox.showwarning("Progress tree", "Load a Progress workbook first.")
+            messagebox.showwarning(tr('Progress tree'), tr('Load a Progress workbook first.'))
             return
         parent_path = self._selected_parent_path()
         if not parent_path:
-            messagebox.showwarning("Progress tree", "Select a WBS first.")
+            messagebox.showwarning(tr('Progress tree'), tr('Select a WBS first.'))
             return
-        activity_id = simpledialog.askstring("Add Activity", "Activity ID (must be unique):", parent=self)
+        activity_id = simpledialog.askstring(tr('Add Activity'), tr('Activity ID (must be unique):'), parent=self)
         if activity_id is None:
             return
-        description = simpledialog.askstring("Add Activity", "Activity name:", parent=self)
+        description = simpledialog.askstring(tr('Add Activity'), tr('Activity name:'), parent=self)
         if description is None:
             return
         try:
@@ -634,19 +639,19 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Activity created")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _edit_progress_node(self) -> None:
         node = self.store.selected_working_node()
         if node is None:
-            messagebox.showwarning("Progress tree", "Select a WBS or Activity to edit.")
+            messagebox.showwarning(tr('Progress tree'), tr('Select a WBS or Activity to edit.'))
             return
         title = "Edit WBS" if node.kind.value == "wbs" else "Edit Activity"
         code_label = "WBS code:" if node.kind.value == "wbs" else "Activity ID:"
         code = simpledialog.askstring(title, code_label, initialvalue=node.code, parent=self)
         if code is None:
             return
-        name = simpledialog.askstring(title, "Name:", initialvalue=node.name, parent=self)
+        name = simpledialog.askstring(title, tr('Name:'), initialvalue=node.name, parent=self)
         if name is None:
             return
         try:
@@ -657,18 +662,17 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Progress tree updated")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _delete_progress_node(self) -> None:
         node = self.store.selected_working_node()
         if node is None:
-            messagebox.showwarning("Progress tree", "Select a WBS or Activity to delete.")
+            messagebox.showwarning(tr('Progress tree'), tr('Select a WBS or Activity to delete.'))
             return
         label = f"{node.code} — {node.name}"
         if not messagebox.askyesno(
-            "Delete progress node",
-            f"Delete {label}?\n\nChild nodes will also be removed from the working tree. "
-            "The source workbook will not be overwritten.",
+            tr('Delete progress node'),
+            tr('Delete {value1}?\n\nChild nodes will also be removed from the working tree. The source workbook will not be overwritten.', value1=label),
         ):
             return
         try:
@@ -679,7 +683,7 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Progress node deleted")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _move_progress_node(self, offset: int) -> None:
         try:
@@ -690,7 +694,7 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Progress node reordered")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _indent_progress_node(self) -> None:
         try:
@@ -701,7 +705,7 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Progress node indented")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _outdent_progress_node(self) -> None:
         try:
@@ -712,26 +716,26 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Progress node outdented")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _reparent_progress_node(self) -> None:
         node = self.store.selected_working_node()
         if node is None:
-            messagebox.showwarning("Progress tree", "Select a WBS or Activity to move.")
+            messagebox.showwarning(tr('Progress tree'), tr('Select a WBS or Activity to move.'))
             return
         choices = [
             item for item in self.store.working_tree_nodes()
             if item.kind.value == "wbs" and item.node_id != node.node_id
         ]
         if not choices:
-            messagebox.showwarning("Progress tree", "No destination WBS is available.")
+            messagebox.showwarning(tr('Progress tree'), tr('No destination WBS is available.'))
             return
         dialog = tk.Toplevel(self)
-        dialog.title("Move progress node")
+        dialog.title(tr('Move progress node'))
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
         dialog.geometry("520x340")
-        ttk.Label(dialog, text=f"Move {node.code} — {node.name} under:").pack(anchor="w", padx=12, pady=(12, 6))
+        ttk.Label(dialog, text=tr('Move {value1} — {value2} under:', value1=node.code, value2=node.name)).pack(anchor="w", padx=12, pady=(12, 6))
         box = tk.Listbox(dialog, height=13)
         box.pack(fill="both", expand=True, padx=12)
         ids: list[str] = []
@@ -749,8 +753,8 @@ class AmountMappingFrame(ttk.Frame):
                 dialog.destroy()
         row = ttk.Frame(dialog)
         row.pack(fill="x", padx=12, pady=12)
-        ttk.Button(row, text="Move", command=accept).pack(side="right")
-        ttk.Button(row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(0, 8))
+        ttk.Button(row, text=tr('Move'), command=accept).pack(side="right")
+        ttk.Button(row, text=tr('Cancel'), command=dialog.destroy).pack(side="right", padx=(0, 8))
         box.bind("<Double-1>", lambda _event: accept())
         dialog.wait_window()
         if not selected:
@@ -761,7 +765,7 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Progress node moved")
         except ValueError as exc:
-            messagebox.showerror("Progress tree", str(exc))
+            messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _undo_tree_edit(self) -> None:
         if not self.store.undo_tree_edit():
@@ -880,10 +884,10 @@ class AmountMappingFrame(ttk.Frame):
         visit(None, 1)
         self.activity_empty_var.set(
             "" if rendered_activities else
-            ("No matching activities" if self.progress_file else "No Progress workbook loaded")
+            tr("No matching activities" if self.progress_file else "No Progress workbook loaded")
         )
         self.activity_page_var.set(
-            f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}"
+            tr('Rows {value1}-{value2} of {value3} | Page {value4}/{value5}', value1=page.start, value2=page.end, value3=page.total, value4=page.number, value5=page.pages)
         )
 
     def _boq_values(self, key: str) -> tuple[str, ...]:
@@ -906,8 +910,8 @@ class AmountMappingFrame(ttk.Frame):
         page = self.store.boq_page_data()
         for key in page.ids:
             self.boq_tree.insert("", "end", iid=key, values=self._boq_values(key))
-        self.boq_empty_var.set("" if page.total else ("No matching BOQ items" if self.boq_sheet else "No BOQ worksheet loaded"))
-        self.boq_page_var.set(f"Rows {page.start}-{page.end} of {page.total} | Page {page.number}/{page.pages}")
+        self.boq_empty_var.set("" if page.total else tr("No matching BOQ items" if self.boq_sheet else "No BOQ worksheet loaded"))
+        self.boq_page_var.set(tr('Rows {value1}-{value2} of {value3} | Page {value4}/{value5}', value1=page.start, value2=page.end, value3=page.total, value4=page.number, value5=page.pages))
         self._update_boq_selection_status()
 
     def _refresh_changed_rows(self, change) -> None:
@@ -953,7 +957,7 @@ class AmountMappingFrame(ttk.Frame):
         if not item:
             return "break"
         full_mapping = self.store.mapped_to_text(item)
-        self.boq_mapping_detail_var.set(full_mapping or "Not mapped")
+        self.boq_mapping_detail_var.set(full_mapping or tr("Not mapped"))
         previous = set(self.store.selected_boq_ids)
         shift = bool(event.state & 0x0001)
         additive = bool(event.state & 0x0004) or bool(event.state & 0x0008)
@@ -969,7 +973,7 @@ class AmountMappingFrame(ttk.Frame):
 
     def _update_boq_selection_status(self) -> None:
         self.boq_selection_var.set(
-            f"Selected {len(self.store.selected_boq_ids):,} items | {self.store.selected_boq_amount:,.2f}"
+            tr('Selected {value1:,} items | {value2:,.2f}', value1=len(self.store.selected_boq_ids), value2=self.store.selected_boq_amount)
         )
 
     def _select_boq_page(self) -> None:
@@ -1014,9 +1018,8 @@ class AmountMappingFrame(ttk.Frame):
             return True
         activity_id = next(iter(self.store.selected_activity_ids), "")
         return messagebox.askyesno(
-            "Amount Mapping",
-            f"{action} {count:,} BOQ items for {activity_id}?\n"
-            f"Selected amount: {self.store.selected_boq_amount:,.2f}",
+            tr('Amount Mapping'),
+            tr('{value1} {value2:,} BOQ items for {value3}?\nSelected amount: {value4:,.2f}', value1=action, value2=count, value3=activity_id, value4=self.store.selected_boq_amount),
         )
 
     def _map(self) -> None:
@@ -1028,7 +1031,7 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Mapping saved")
         except ValueError as exc:
-            messagebox.showwarning("Amount Mapping", str(exc))
+            messagebox.showwarning(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
     def _unmap(self) -> None:
         try:
@@ -1039,12 +1042,12 @@ class AmountMappingFrame(ttk.Frame):
             self._autosave_session()
             self._notify("Mapping removed")
         except ValueError as exc:
-            messagebox.showwarning("Amount Mapping", str(exc))
+            messagebox.showwarning(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
     def _undo(self) -> None:
         change = self.store.undo()
         if change is None:
-            messagebox.showinfo("Amount Mapping", "Nothing to undo.")
+            messagebox.showinfo(tr('Amount Mapping'), tr('Nothing to undo.'))
             return
         self._refresh_changed_rows(change)
         self._autosave_session()
@@ -1052,8 +1055,8 @@ class AmountMappingFrame(ttk.Frame):
 
     def _clear_all(self) -> None:
         if not messagebox.askyesno(
-            "Amount Mapping",
-            "Clear every mapping? You can use Undo immediately after this command.",
+            tr('Amount Mapping'),
+            tr('Clear every mapping? You can use Undo immediately after this command.'),
         ):
             return
         try:
@@ -1061,14 +1064,13 @@ class AmountMappingFrame(ttk.Frame):
             self._refresh_changed_rows(change)
             self._autosave_session()
         except ValueError as exc:
-            messagebox.showinfo("Amount Mapping", str(exc))
+            messagebox.showinfo(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
     def _update_summary(self) -> None:
         total = self.store.total_amount
         mapped = self.store.mapped_amount
         self.summary_var.set(
-            f"Mapped {mapped:,.2f} / {total:,.2f} | Remaining {self.store.remaining_amount:,.2f} | "
-            f"Items {self.store.mapped_item_count}/{len(self.store.boq_order)}"
+            tr('Mapped {value1:,.2f} / {value2:,.2f} | Remaining {value3:,.2f} | Items {value4}/{value5}', value1=mapped, value2=total, value3=self.store.remaining_amount, value4=self.store.mapped_item_count, value5=len(self.store.boq_order))
         )
         ready = bool(self.progress_file and self.boq_file and self.boq_sheet and self.store.boq_order)
         # Export now lives in the application shell. Keep compatibility with
@@ -1113,18 +1115,18 @@ class AmountMappingFrame(ttk.Frame):
         saved = self.session_repository.save(path, session)
         self.session_file = saved
         self.recent_repository.remember(saved)
-        self.session_status_var.set(f"Project: {saved.name} (saved)")
+        self.session_status_var.set(tr('Project: {value1} (saved)', value1=saved.name))
         if show_message:
-            messagebox.showinfo("Amount Mapping", f"Project saved:\n{saved}")
+            messagebox.showinfo(tr('Amount Mapping'), tr('Project saved:\n{value1}', value1=saved))
         return saved
 
     def _save_session(self) -> None:
         initial = self.session_file or self._default_session_path()
         if initial is None:
-            messagebox.showwarning("Amount Mapping", "Load a Progress workbook first.")
+            messagebox.showwarning(tr('Amount Mapping'), tr('Load a Progress workbook first.'))
             return
         selected = filedialog.asksaveasfilename(
-            title="Save Progress Studio project",
+            title=tr('Save Progress Studio project'),
             defaultextension=".json",
             initialfile=initial.name,
             initialdir=str(initial.parent),
@@ -1135,29 +1137,29 @@ class AmountMappingFrame(ttk.Frame):
         try:
             self._write_session(Path(selected), show_message=True)
         except Exception as exc:
-            messagebox.showerror("Amount Mapping", str(exc))
+            messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
     def _autosave_session(self) -> None:
         if self.session_file is None:
             self.session_file = self._default_session_path()
         if self.session_file is None:
-            self.session_status_var.set("Project: waiting for both workbooks")
+            self.session_status_var.set(tr('Project: waiting for both workbooks'))
             return
         try:
             self._write_session(self.session_file, show_message=False)
-            self.session_status_var.set("Auto-saved")
+            self.session_status_var.set(tr('Auto-saved'))
         except Exception as exc:
-            self.session_status_var.set("Project: auto-save failed")
-            messagebox.showerror("Amount Mapping", f"Auto-save failed:\n{exc}")
+            self.session_status_var.set(tr('Project: auto-save failed'))
+            messagebox.showerror(tr('Amount Mapping'), tr('Auto-save failed:\n{value1}', value1=exc))
 
     def _choose_recent_session(self, paths: list[Path]) -> Path | None:
         dialog = tk.Toplevel(self)
-        dialog.title("Recent Projects")
+        dialog.title(tr('Recent Projects'))
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
         dialog.geometry("680x260")
         selected: list[Path] = []
-        ttk.Label(dialog, text="Select a project to continue:").pack(anchor="w", padx=12, pady=(12, 6))
+        ttk.Label(dialog, text=tr('Select a project to continue:')).pack(anchor="w", padx=12, pady=(12, 6))
         box = tk.Listbox(dialog, height=8)
         box.pack(fill="both", expand=True, padx=12)
         for path in paths:
@@ -1171,8 +1173,8 @@ class AmountMappingFrame(ttk.Frame):
             if indexes:
                 selected.append(paths[indexes[0]])
                 dialog.destroy()
-        ttk.Button(buttons, text="Open", command=open_selected).pack(side="right")
-        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(0, 8))
+        ttk.Button(buttons, text=tr('Open'), command=open_selected).pack(side="right")
+        ttk.Button(buttons, text=tr('Cancel'), command=dialog.destroy).pack(side="right", padx=(0, 8))
         box.bind("<Double-1>", lambda _event: open_selected())
         dialog.wait_window()
         return selected[0] if selected else None
@@ -1180,7 +1182,7 @@ class AmountMappingFrame(ttk.Frame):
     def _load_recent_session(self) -> None:
         paths = self.recent_repository.list()
         if not paths:
-            messagebox.showinfo("Amount Mapping", "No recent projects were found.")
+            messagebox.showinfo(tr('Amount Mapping'), tr('No recent projects were found.'))
             return
         selected = self._choose_recent_session(paths)
         if selected:
@@ -1188,7 +1190,7 @@ class AmountMappingFrame(ttk.Frame):
 
     def _load_session(self) -> None:
         selected = filedialog.askopenfilename(
-            title="Open Progress Studio project",
+            title=tr('Open Progress Studio project'),
             filetypes=[("Progress Studio project", "*.progressstudio"), ("All files", "*.*")],
         )
         if selected:
@@ -1207,11 +1209,8 @@ class AmountMappingFrame(ttk.Frame):
             if snapshot and snapshot.is_available:
                 return self.session_repository.materialize_snapshot(snapshot)
             browse = messagebox.askyesno(
-                "Relink workbook",
-                f"{workbook_label} workbook cannot be verified at its saved location.\n\n"
-                f"Saved file: {saved.filename}\n\n"
-                "This legacy project does not contain an embedded workbook copy.\n"
-                "Browse for the moved or renamed workbook?",
+                tr('Relink workbook'),
+                tr('{value1} workbook cannot be verified at its saved location.\n\nSaved file: {value2}\n\nThis legacy project does not contain an embedded workbook copy.\nBrowse for the moved or renamed workbook?', value1=workbook_label, value2=saved.filename),
             )
             if not browse:
                 raise original_error
@@ -1268,7 +1267,7 @@ class AmountMappingFrame(ttk.Frame):
             self.load_sheet_button.configure(state="normal")
             self.session_file = Path(session_path).resolve()
             self.recent_repository.remember(self.session_file)
-            self.session_status_var.set(f"Project: {self.session_file.name} (loaded)")
+            self.session_status_var.set(tr('Project: {value1} (loaded)', value1=self.session_file.name))
             self._refresh_boq_filter_values()
             self._render_activities()
             self._render_boq()
@@ -1276,18 +1275,18 @@ class AmountMappingFrame(ttk.Frame):
             self._update_input_status()
             self._set_inputs_collapsed(True)
         except (SessionValidationError, ValueError, OSError) as exc:
-            messagebox.showerror("Amount Mapping", str(exc))
+            messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
         finally:
             self._busy(False)
 
     def _export(self, edited_workbook: Path | None = None) -> None:
         if not self.progress_file:
-            messagebox.showwarning("Amount Mapping", "Load a Progress workbook first.")
+            messagebox.showwarning(tr('Amount Mapping'), tr('Load a Progress workbook first.'))
             return
         try:
             validation = self.export_service.validate(self.store)
         except ValueError as exc:
-            messagebox.showerror("Export mapped workbook", str(exc))
+            messagebox.showerror(tr('Export mapped workbook'), tr("error.details", error=str(exc)))
             return
 
         summary = (
@@ -1299,7 +1298,7 @@ class AmountMappingFrame(ttk.Frame):
         )
         if not validation.is_complete:
             proceed = messagebox.askyesno(
-                "Export partial mapping?",
+                tr('Export partial mapping?'),
                 summary + "\n\nThe mapping is incomplete. Export the partial workbook anyway?",
             )
             if not proceed:
@@ -1307,7 +1306,7 @@ class AmountMappingFrame(ttk.Frame):
 
         initial = self.progress_file.with_name(self.progress_file.stem + "_mapped.xlsx")
         selected = filedialog.asksaveasfilename(
-            title="Export mapped Progress workbook",
+            title=tr('Export mapped Progress workbook'),
             defaultextension=".xlsx",
             initialfile=initial.name,
             initialdir=str(initial.parent),
@@ -1377,10 +1376,8 @@ class AmountMappingFrame(ttk.Frame):
                                 f"Unmatched: {len(mig.unmatched_activity_ids)} | Ambiguous: {len(mig.ambiguous_activity_ids)}"
                             )
                         messagebox.showinfo(
-                            "Export complete",
-                            f"Mapped workbook created:\n{result.output_file}\n\n"
-                            f"Amount rows updated: {result.amount_rows_updated}\n"
-                            f"Mapping rows written: {result.mapping_rows_written}\n\n{summary}{migration_text}",
+                            tr('Export complete'),
+                            tr('Mapped workbook created:\n{value1}\n\nAmount rows updated: {value2}\nMapping rows written: {value3}\n\n{value4}{value5}', value1=result.output_file, value2=result.amount_rows_updated, value3=result.mapping_rows_written, value4=summary, value5=migration_text),
                         )
                         finished = True
                     elif event == "error":
@@ -1388,7 +1385,7 @@ class AmountMappingFrame(ttk.Frame):
                         dialog.fail(f"Generation failed: {exc}")
                         dialog.close()
                         self._busy(False)
-                        messagebox.showerror("Export mapped workbook", str(exc))
+                        messagebox.showerror(tr('Export mapped workbook'), tr("error.details", error=str(exc)))
                         finished = True
             except queue.Empty:
                 pass

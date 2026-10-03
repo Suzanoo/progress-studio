@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased — Repository documentation reset
+## Unreleased — V1.1 product experience
+
+- Modern/simple ttk Home and Help, charcoal/gold theme and canonical S-curve icon.
+- Target-first Rebuild retaining Progress/Payment Snapshot/Live and live EV sources.
+- Central ENG/THA presentation resources; preference applies next application launch.
+- Finance/AI hidden from normal navigation; underlying engines retained.
+- Workbook README explains existing `okmd` edit protection (not encryption).
+- Product-first README and relocated active engineering docs/history with updated links.
+- Desktop/Windows acceptance remains a Product Owner gate; no release is claimed.
+
+## V1 accepted stable — d0db778
+
+- MS-1 Equal/Duration, MS-2 XML Amount and Monthly % Complete correction accepted.
+- EV Activity Amount / BOQ Mapping sources and milestone earning accepted.
+- MS-3 Planning Overview / Mini Gantt CANCELLED; MS-4 Full Regression Closure completed.
+- Accepted regression: 797 passed, 6 skipped, 6 subtests passed, 0 failed.
+- Tag: `progress-studio-v1-stable`.
+
+## Historical — Repository documentation reset
 
 - Replaced the milestone-heavy root README with a product flow / input / output front door.
 - Rewrote `ARCHITECTURE.md` as the current ownership/flow source of truth.

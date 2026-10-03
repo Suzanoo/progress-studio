@@ -41,10 +41,10 @@ def test_workspace_uses_lightweight_native_controls():
 
 
 def test_ms7_historical_documents_are_archived_and_active_docs_exist():
-    assert (ROOT / "ARCHITECTURE.md").is_file()
-    assert (ROOT / "ROADMAP.md").is_file()
+    assert (ROOT / "docs/ARCHITECTURE.md").is_file()
+    assert (ROOT / "docs/ROADMAP.md").is_file()
     assert (ROOT / "docs/USER_WORKFLOW.md").is_file()
     assert (ROOT / "docs/history/milestones/MS7.md").is_file()
     assert (ROOT / "docs/history/acceptance/MS7_ACCEPTANCE.md").is_file()
-    roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
-    assert "P11 Production Release" in roadmap
+    roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
+    assert "MS-3 Planning Overview / Mini Gantt" in roadmap

@@ -1,58 +1,49 @@
-# Progress Studio Documentation
+# Progress Studio documentation
 
-Active documentation is intentionally small. If two active documents
-disagree, `ARCHITECTURE.md` owns technical architecture and the
-implementation/tests own executable behavior.
+## Current authority
 
-## Collaboration roles
+- [Product README](../README.md) — product, installation and workflow.
+- [User workflow](USER_WORKFLOW.md) — Create, Excel updates, optional Mapping/Payment and Rebuild.
+- [Architecture](ARCHITECTURE.md) — technical ownership; executable behavior is protected by tests.
+- [V1.1 product experience](V1_1_PRODUCT_EXPERIENCE.md) — approved scope, UI/localization and acceptance.
+- [Weight selection](WEIGHT_SELECTION.md)
+- [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
+- [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
+- [Payment Breakdown](PAYMENT_BREAKDOWN.md)
+- [Roadmap/status](ROADMAP.md) — V1 stable, MS-3 cancelled, MS-4 completed, V1.1 pending PO acceptance.
+- [Changelog](../CHANGELOG.md)
 
-- [Coordinator Contract](COORDINATOR_CONTRACT.md) — product discussion, prompts,
-  review, acceptance briefings and current agent assignments.
-- [Engineer Contract](ENGINEER_CONTRACT.md) — engineering scope, ownership,
-  acceptance, handoff and authorized Git execution boundaries.
-- [Engineer Workflow](ENGINEER_WORKFLOW.md) — targeted investigation,
-  implementation, verification and delivery procedure.
+## Collaboration authority
 
-These role-based documents replace `CHATGPT_CONTRACT.md`, `WORK_CONTRACT.md`
-and `WORK_SKILL.md`, respectively. Historical records may use the previous names
-and agent assignments.
+- [Coordinator Contract](COORDINATOR_CONTRACT.md)
+- [Engineer Contract](ENGINEER_CONTRACT.md)
+- [Engineer Workflow](ENGINEER_WORKFLOW.md)
 
-## Start here
+These replace CHATGPT_CONTRACT.md, WORK_CONTRACT.md and WORK_SKILL.md.
+Historical agent assignments do not override the current role contracts.
 
--   [Repository README](../README.md) --- what Progress Studio is,
-    inputs, outputs and product flow.
--   [User Workflow](USER_WORKFLOW.md) --- Create, Mapping, Payment,
-    Excel and Rebuild workflow.
--   [EV monetary sources](EV_MONETARY_SOURCES.md) — explicit Activity Amount / BOQ BAC, milestone earning and live refresh.
--   [Weight Selection](WEIGHT_SELECTION.md) --- Equal/Duration/Amount creation and monetary versus dummy-weight semantics.
--   [Payment Breakdown](PAYMENT_BREAKDOWN.md) --- exact-name grouping,
-    calculation, workbook ownership and output contract.
--   [Architecture](../ARCHITECTURE.md) --- ownership boundaries and
-    technical contracts.
--   [Development](DEVELOPMENT.md) --- developer setup and engineering
-    rules.
--   [Testing](TESTING.md) --- current automated test tiers.
--   [Roadmap](../ROADMAP.md) --- pre-production milestones.
--   [Release Checklist](../RELEASE_CHECKLIST.md) --- RC/production gate.
--   [Changelog](../CHANGELOG.md) --- historical changes.
+## Engineering and distribution
 
-## Engineering reference
+- [Development](DEVELOPMENT.md)
+- [Testing](TESTING.md)
+- [Release checklist](RELEASE_CHECKLIST.md)
+- [Windows build guide](../packaging/windows/WINDOWS_BUILD_GUIDE.md)
+- [Windows portable contract](WIN1_WINDOWS_PORTABLE_BUILD.md)
 
--   `regressions/` --- important regression investigations that remain
-    useful for debugging.
--   `history/` --- milestone, acceptance, freeze and older user-guide
-    records. These documents are **not** current product contracts.
+## Retained Finance reference — hidden from normal V1.1 navigation
 
-## Historical user guides
+Underlying accepted Finance implementation and tests remain supported; no calculations
+were redesigned for V1.1.
 
-The old v2.3 Thai/English manuals are archived at
-`history/user-guides-v2.3/`. They contain obsolete contracts such as
-generic Activity-ID/WBS fallback behavior and should not be used as the
-current operational guide.
+- [Financial Forecast calculation contract](FINANCIAL_FORECAST_CONTRACT.md)
+- [Finance workbook](FF2_WORKBOOK.md)
+- [Finance desktop reference](FF3_DESKTOP.md)
 
--   [WIN-1 Windows Portable Build](WIN1_WINDOWS_PORTABLE_BUILD.md) ---
-    Windows portable packaging contract and acceptance.
+## History, not current product authority
 
-- [Financial Forecast calculation contract](FINANCIAL_FORECAST_CONTRACT.md) — FF-1 source-neutral cash model, timing, reconciliation, defaults and limits.
-- [Finance workbook](FF2_WORKBOOK.md) — FF-2 persistent inputs, live formulas, commands and Desktop Excel acceptance.
-- [Financial Forecast desktop](FF3_DESKTOP.md) — normal application create/refresh workflow and FF-3 Product Owner acceptance procedure.
+- [Pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md)
+- [EV-1 derivation notes](history/EV1_NOTES.md)
+- `history/` contains milestone/freeze/acceptance records and obsolete v2.3 user guides.
+- `regressions/` contains useful investigations; current contracts and tests take precedence.
+
+Old roadmap schedules and BOQ-only EV assumptions are historical, not new work.

@@ -35,20 +35,20 @@ def test_finish1_welcome_is_workflow_first_and_create_is_clean() -> None:
 
     assert 'self.current_workspace = "home"' in source
     assert 'self._show_workspace("home")' in source
-    assert "MSP / P6 XML → Progress Workbook" in source
-    assert "BOQ → Activity Amount" in source
-    assert "Prepare and render payment stages" in source
-    assert "Edited Workbook → Updated Workbook" in source
-    assert "Mapping and Payment are optional" in source
+    from progress_studio.presentation.gui.quick_guide import HOME_CARDS
+    from progress_studio.presentation.gui.strings import tr
+    assert [card[2] for card in HOME_CARDS] == ["import", "rebuild", "mapping", "payment"]
+    assert tr("home.optional", locale="en") == "Optional"
+    assert "build_home" in source
 
     create_start = source.index("    def _build_import_workspace")
     create_end = source.index("    def _build_mapping_workspace", create_start)
     create_block = source[create_start:create_end]
     assert "Export Mapped Workbook" not in create_block
-    assert 'text="Go to Mapping"' in create_block
+    assert "text=tr('Go to Mapping')" in create_block
 
 
 def test_finish1_create_file_picker_uses_schedule_xml_wording() -> None:
     source = (ROOT / "progress_studio/presentation/gui/app.py").read_text(encoding="utf-8")
-    assert 'title="Select Schedule XML"' in source
+    assert "title=tr('Select Schedule XML')" in source
     assert '("Schedule XML", "*.xml")' in source

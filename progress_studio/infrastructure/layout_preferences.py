@@ -12,6 +12,7 @@ class LayoutPreferences:
     mapping_sash: int | None = None
     sidebar_collapsed: bool = False
     focus_mapping: bool = False
+    language: str = "en"
 
 
 class LayoutPreferencesRepository:
@@ -23,12 +24,15 @@ class LayoutPreferencesRepository:
     def load(self) -> LayoutPreferences:
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return LayoutPreferences()
             return LayoutPreferences(
                 mapping_inputs_collapsed=bool(payload.get("mapping_inputs_collapsed", False)),
                 generator_collapsed=bool(payload.get("generator_collapsed", True)),
                 sidebar_collapsed=bool(payload.get("sidebar_collapsed", False)),
                 focus_mapping=bool(payload.get("focus_mapping", False)),
                 mapping_sash=self._optional_int(payload.get("mapping_sash")),
+                language=payload.get("language") if payload.get("language") in {"en", "th"} else "en",
             )
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return LayoutPreferences()
