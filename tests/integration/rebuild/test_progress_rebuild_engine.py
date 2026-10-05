@@ -82,7 +82,7 @@ def test_rb2_rebuild_progress_replaces_only_progress_owned_sheets(tmp_path: Path
     assert result.preserved_payment_sheet
     assert result.preserved_payment_input_sheet
     assert result.rebuilt_sheets == (
-        "main_monthly", "progress", "progress_table", "Dashboard_Data", "Dashboard"
+        "main_monthly", "progress", "progress_table", "Dashboard_Data", "Dashboard", "Weekly Compact"
     )
 
     wb = load_workbook(output, data_only=False)
@@ -129,3 +129,4 @@ def test_rb2_atomic_rebuild_can_replace_same_path(tmp_path: Path) -> None:
         assert wb["progress"]["A1"].value == "project_start"
     finally:
         wb.close()
+

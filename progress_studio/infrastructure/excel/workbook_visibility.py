@@ -4,6 +4,7 @@ from __future__ import annotations
 VISIBLE_SHEETS = (
     "README",
     "main",
+    "Weekly Compact",
     "main_monthly",
     "Payment Input",
     "Payment-Breakdown",
@@ -56,3 +57,4 @@ def apply_final_sheet_visibility(
             very_hidden.remove(workbook.worksheets[0].title)
 
     return tuple(visible), tuple(hidden), tuple(very_hidden)
+
