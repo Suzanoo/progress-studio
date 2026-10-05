@@ -477,6 +477,7 @@ def _overlay_chart(
     first_row: int,
     last_row: int,
     cutoff_label_format: str | None = None,
+    show_point_details: bool = True,
 ) -> LineChart:
     chart = LineChart()
     chart.y_axis.scaling.min = 0
@@ -541,6 +542,12 @@ def _overlay_chart(
             txPr=_label_text_properties(text_color),
         )
 
+    if not show_point_details:
+        for series in chart.series[:2]:
+            series.marker.symbol = "none"
+            series.dLbls = None
+            series.smooth = False
+
     if cutoff_col is not None:
         cutoff = Reference(data_ws, min_col=cutoff_col, max_col=cutoff_col, min_row=first_row, max_row=last_row)
         chart.add_data(cutoff, titles_from_data=False)
@@ -601,7 +608,7 @@ def reassert_traditional_overlay_transparency(workbook) -> None:
     shared final policy reasserts this renderer-owned presentation property
     without rebuilding the chart or its series.
     """
-    for sheet_name in ("main", "main_monthly"):
+    for sheet_name in ("main", "main_monthly", "Weekly Compact"):
         if sheet_name not in workbook.sheetnames:
             continue
         for chart in workbook[sheet_name]._charts:
@@ -611,6 +618,24 @@ def reassert_traditional_overlay_transparency(workbook) -> None:
             chart.plot_area.graphicalProperties = GraphicalProperties(
                 noFill=True, ln=LineProperties(noFill=True)
             )
+
+def add_compact_weekly_overlay(workbook, dataset: MainDataset, target) -> None:
+    """Consume finalized Weekly sources without rebuilding helpers or controls."""
+    data = workbook[DATA_SHEET]
+    first, last, first_col, last_col = _weekly_project_window(data, dataset)
+    # T:W are owned and populated by _build_explicit_overlay_series_sources.
+    # One leading point plus ALL canonical Weekly points; no Dashboard row cap.
+    chart = _overlay_chart(
+        data_ws=data, date_col=20, plan_col=21, actual_col=22, cutoff_col=23,
+        first_row=2, last_row=last - first + 3,
+        cutoff_label_format="dd/mm/yyyy", show_point_details=False,
+    )
+    chart.anchor = _responsive_anchor(
+        first_col=first_col, last_col=last_col, top_row=OVERLAY_TOP_ROW,
+        bottom_row=max(OVERLAY_TOP_ROW + 1, _scurve_plan_row(dataset) - 1),
+    )
+    target.add_chart(chart)
+
 
 def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bool]:
     """LW-12.4: independent-cutoff, project-bounded responsive overlays."""
@@ -740,3 +765,4 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
         monthly_added = True
 
     return weekly_added, monthly_added
+

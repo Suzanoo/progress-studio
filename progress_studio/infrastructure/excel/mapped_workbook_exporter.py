@@ -25,6 +25,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import build_dashbo
 from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
+from progress_studio.infrastructure.excel.weekly_compact_workbook import build_weekly_compact
 from progress_studio.infrastructure.excel.okd_workbook import OKDExportError, build_progress_views_from_source
 from progress_studio.infrastructure.excel.worksheet_filters import configure_filter_buttons
 from progress_studio.infrastructure.excel.edited_workbook_migrator import migrate_edited_main_into_workbook
@@ -240,6 +241,7 @@ class MappedWorkbookExporter:
                 if monthly_periods:
                     dataset = main_dataset_from_workbook(workbook, workbook_name=output_file.name)
                     build_traditional_overlays(workbook, dataset)
+                    build_weekly_compact(workbook, dataset)
                 # Finance follows the same authoritative edited-source choice as Payment.
                 from progress_studio.infrastructure.excel.finance_input_workbook import preserve_finance_inputs
                 finance_source = load_workbook(payment_source, data_only=False)
@@ -727,3 +729,4 @@ class MappedWorkbookExporter:
         ws.column_dimensions['A'].width = 34
         ws.column_dimensions['B'].width = 28
         ws.freeze_panes = 'A3'
+

@@ -10,6 +10,7 @@ from progress_studio.infrastructure.excel.calculation_policy import request_init
 from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
+from progress_studio.infrastructure.excel.weekly_compact_workbook import build_weekly_compact
 
 
 class MonthlyMainService:
@@ -27,6 +28,7 @@ class MonthlyMainService:
             )
             dataset = main_dataset_from_workbook(workbook, workbook_name=output_file.name)
             build_traditional_overlays(workbook, dataset)
+            build_weekly_compact(workbook, dataset)
             finalize_workbook(workbook, mode="snapshot", include_guide=True)
             # Create Progress needs one Excel-owned full calculation on first open
             # so Dashboard_Data formula caches and charts are complete immediately.
@@ -37,3 +39,4 @@ class MonthlyMainService:
         finally:
             workbook.close()
         return output_file
+

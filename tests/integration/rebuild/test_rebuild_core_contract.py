@@ -58,6 +58,7 @@ def test_rb1_sheet_contract_is_explicit_and_mode_specific() -> None:
         "progress_table",
         "Dashboard_Data",
         "Dashboard",
+        "Weekly Compact",
     )
     assert contract.generated_for(RebuildMode.PAYMENT) == ("Payment",)
 
@@ -121,3 +122,4 @@ def test_rb1_core_imports_no_mapping_session_or_tree_runtime() -> None:
     assert "working_tree" not in joined
     assert "mapped_workbook_exporter" not in joined
     assert "xml" not in joined
+

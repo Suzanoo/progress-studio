@@ -22,6 +22,7 @@ from progress_studio.infrastructure.excel.dashboard_workbook import build_dashbo
 from progress_studio.infrastructure.excel.live_dashboard_workbook import build_live_dashboard
 from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
+from progress_studio.infrastructure.excel.weekly_compact_workbook import build_weekly_compact
 from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
@@ -53,6 +54,7 @@ DEFAULT_REBUILD_CONTRACT = RebuildSheetContract(
         "progress_table",
         "Dashboard_Data",
         "Dashboard",
+        "Weekly Compact",
     ),
     generated_payment=("Payment",),
     internal_preserve=(
@@ -244,6 +246,7 @@ class WorkbookRebuildEngine:
                     wb, workbook_name=output.name
                 )
                 build_traditional_overlays(wb, snapshot_dataset)
+                build_weekly_compact(wb, snapshot_dataset, snapshot=True, value_source=values_main)
 
                 # Re-assert visibility/support contract after builders.
                 if "progress_table" in wb.sheetnames:
@@ -350,6 +353,7 @@ class WorkbookRebuildEngine:
                 # are renderer-only charts over the timescale and reuse the same
                 # Dashboard_Data cutoff contract; no S-Curve calculation is duplicated.
                 build_traditional_overlays(wb, dataset)
+                build_weekly_compact(wb, dataset)
 
                 if "Dashboard_Data" in wb.sheetnames:
                     wb["Dashboard_Data"].sheet_state = "hidden"
@@ -368,7 +372,7 @@ class WorkbookRebuildEngine:
                 week_count=len(dataset.periods),
                 monthly_periods=monthly_periods,
                 dashboard_rows=(len(dataset.rows) * 2),
-                rebuilt_sheets=("main_monthly", "progress", "Dashboard_Data", "Dashboard"),
+                rebuilt_sheets=("main_monthly", "progress", "Dashboard_Data", "Dashboard", "Weekly Compact"),
                 preserved_payment_sheet=preserved_payment_sheet,
                 preserved_payment_input_sheet=preserved_payment_input_sheet,
             )
@@ -533,4 +537,5 @@ class WorkbookRebuildEngine:
             raise RebuildContractError(
                 "Standalone rebuild accepts an Excel .xlsx or .xlsm workbook."
             )
+
 
