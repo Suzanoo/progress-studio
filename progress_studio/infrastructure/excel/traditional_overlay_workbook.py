@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from copy import deepcopy
 
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.series import SeriesLabel
@@ -634,7 +635,66 @@ def add_compact_weekly_overlay(workbook, dataset: MainDataset, target) -> None:
         first_col=first_col, last_col=last_col, top_row=OVERLAY_TOP_ROW,
         bottom_row=max(OVERLAY_TOP_ROW + 1, _scurve_plan_row(dataset) - 1),
     )
+    _add_compact_checkpoints(chart, data, first_row=first, last_row=last)
     target.add_chart(chart)
+
+
+def _add_compact_checkpoints(chart, data, *, first_row: int, last_row: int) -> None:
+    """Compact owns AC:AG; canonical A:AB and every Weekly curve point stay intact.
+
+    AC selects existing Monthly reporting dates; AD/AE annotate monthly values,
+    AF/AG annotate the current Weekly cutoff. Sparse marker-only series share
+    the same category axis. No new progress calculation or cutoff state.
+    """
+    last = last_row - first_row + 3
+    for col, title in enumerate(("Compact Monthly Checkpoint", "Compact Monthly Plan",
+                                "Compact Monthly Actual", "Compact Cutoff Plan",
+                                "Compact Cutoff Actual"), 29):
+        data.cell(1, col, title)
+        for row in range(2, max(data.max_row, last) + 1):
+            data.cell(row, col).value = None
+        data.cell(2, col, "=NA()")
+    monthly_last = max(2, max((c.row for c in data["K"] if isinstance(c.value, (date, datetime))), default=2))
+    for row in range(3, last + 1):
+        canonical = first_row + row - 3
+        data.cell(row, 29, f'=COUNTIF($K$2:$K${monthly_last},T{row})>0')
+        selected = f"IFERROR(W{row}=1,FALSE)"
+        observed = f"COUNT($C$2:C{canonical})>0"
+        for col, source, condition in (
+            (30, "U", f"AND(AC{row},NOT({selected}))"),
+            (31, "V", f"AND(AC{row},NOT({selected}),{observed})"),
+            (32, "U", selected), (33, "V", f"AND({selected},{observed})"),
+        ):
+            data.cell(row, col, f'=IFERROR(IF({condition},IF(ISNUMBER({source}{row}),{source}{row},NA()),NA()),NA())')
+            data.cell(row, col).number_format = OVERLAY_LABEL_FORMAT
+    styles = (
+        (BLUE, "t", PLAN_LABEL_TEXT, PLAN_LABEL_FILL, PLAN_LABEL_BORDER),
+        (GREEN, "b", ACTUAL_LABEL_TEXT, ACTUAL_LABEL_FILL, ACTUAL_LABEL_BORDER),
+    )
+    for index, title in enumerate(("Monthly Plan", "Monthly Actual", "Cutoff Plan", "Cutoff Actual")):
+        chart.add_data(Reference(data, min_col=30 + index, min_row=2, max_row=last), titles_from_data=False)
+        series = chart.series[-1]
+        series.cat = deepcopy(chart.series[0].cat)
+        series.tx = SeriesLabel(v=title)
+        series.graphicalProperties.line.noFill = True
+        series.smooth = False
+        color, position, text, fill, border = styles[index % 2]
+        strong = index >= 2
+        series.marker.symbol = "diamond" if strong else "circle"
+        series.marker.size = 8 if strong else 4
+        series.marker.graphicalProperties.solidFill = "7030A0" if strong else color
+        series.marker.graphicalProperties.line.solidFill = "7030A0" if strong else color
+        series.dLbls = DataLabelList(
+            showVal=True, showCatName=False, showSerName=False, showLegendKey=False,
+            numFmt=('"P "0.0%' if index == 2 else '"A "0.0%') if strong else OVERLAY_LABEL_FORMAT,
+            dLblPos=position,
+            spPr=_label_graphical_properties("F2EAF8" if strong else fill, "B39ACB" if strong else border),
+            txPr=_label_text_properties("7030A0" if strong else text),
+        )
+        if strong:
+            for paragraph in series.dLbls.txPr.p:
+                paragraph.pPr.defRPr.sz = 900
+                paragraph.pPr.defRPr.b = True
 
 
 def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bool]:
@@ -765,4 +825,3 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
         monthly_added = True
 
     return weekly_added, monthly_added
-

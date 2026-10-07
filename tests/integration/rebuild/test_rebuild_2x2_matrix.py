@@ -88,6 +88,21 @@ def _assert_overlay_series_contract(path: Path) -> None:
     wb = load_workbook(path, data_only=False)
     try:
         data = wb["Dashboard_Data"]
+        compact = wb['Weekly Compact']
+        assert len(compact._charts[0].series) == 7
+        assert compact._charts[0].series[0].val == wb['main']._charts[0].series[0].val
+        assert compact._charts[0].series[1].val == wb['main']._charts[0].series[1].val
+        assert data['AG4'].data_type == 'f'
+        assert compact.protection.sheet and compact.sheet_state == 'visible'
+        assert not compact.data_validations.dataValidation
+        # The narrow legacy fixture has a single display month at L:M.
+        assert 'L11:M11' in compact.merged_cells
+        monthly = wb['main_monthly']['L11']
+        if monthly.data_type == 'f':
+            assert compact['L11'].value == '=IF(\'main_monthly\'!L11="","",\'main_monthly\'!L11)'
+        else:
+            assert compact['L11'].value == monthly.value
+            assert compact['L11'].data_type != 'f'
         for sheet_name, plan_col, actual_col in (
             ("main", 21, 22),
             ("main_monthly", 25, 26),
@@ -192,6 +207,7 @@ def test_rebuild_2x2_payment_modes_replace_payment_only_and_preserve_progress_pr
 
     _assert_final_policy(output)
     assert _overlay_signature(output) == before_overlay
+    _assert_overlay_series_contract(output)
     assert _plot_area_nofill_count(output) >= 2
 
 

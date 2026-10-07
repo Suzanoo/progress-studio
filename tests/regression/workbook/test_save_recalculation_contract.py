@@ -128,13 +128,21 @@ def test_lw8_formula_payload_is_linear_not_activity_times_period_matrix(tmp_path
     wb = load_workbook(output, data_only=False)
     try:
         formula_cells = 0
+        compact_checkpoint_formulas = 0
         for sheet_name in ("Dashboard", "Dashboard_Data"):
             ws = wb[sheet_name]
             for row in ws.iter_rows():
                 for cell in row:
                     if isinstance(cell.value, str) and cell.value.startswith("="):
-                        formula_cells += 1
+                        if sheet_name == "Dashboard_Data" and 29 <= cell.column <= 33:
+                            compact_checkpoint_formulas += 1
+                        else:
+                            formula_cells += 1
         # One activity + selector/marker cache stays linear in periods and far below an activity×period matrix; explicit overlay anchor helpers remain linear.
         assert formula_cells < 120
+        # Compact adds exactly five helper columns per Weekly reporting point
+        # plus the existing leading chart point, independent of activity count.
+        weekly_count = sum(isinstance(c.value, datetime) for c in wb["Dashboard_Data"]["J"])
+        assert compact_checkpoint_formulas == 5 * (weekly_count + 1)
     finally:
         wb.close()

@@ -70,6 +70,13 @@ def test_mapping_final_output_restores_overlay_dependencies(tmp_path: Path, popu
         assert len(wb["Dashboard"]._charts) == 1
         assert len(wb["main"]._charts) == 1
         assert len(wb["main_monthly"]._charts) == 1
+        compact = wb['Weekly Compact']
+        assert len(compact._charts[0].series) == 7
+        assert compact._charts[0].series[0].val == wb['main']._charts[0].series[0].val
+        assert data['AG4'].data_type == 'f'
+        assert compact.protection.sheet and not compact.data_validations.dataValidation
+        assert any(isinstance(c.value, str) and "'main_monthly'!" in c.value
+                   for row in compact for c in row)
 
         # Display-only X columns remain visible but never become reporting points.
         weekly = [datetime(2026, 3, 6), datetime(2026, 3, 13)]

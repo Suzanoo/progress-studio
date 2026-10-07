@@ -1,4 +1,4 @@
-"""Read-only presentation of finalized Weekly data; no progress calculation."""
+"""Monthly presentation on Weekly geometry with the full Weekly overlay."""
 from __future__ import annotations
 
 from copy import copy, deepcopy
@@ -11,6 +11,7 @@ from openpyxl.utils import get_column_letter
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
     add_compact_weekly_overlay,
 )
+from progress_studio.infrastructure.excel.weekly_compact_monthly_workbook import project_monthly_regions
 
 SHEET_NAME = "Weekly Compact"
 PERIOD_WIDTH = 2.5
@@ -19,9 +20,9 @@ PERIOD_WIDTH = 2.5
 def build_weekly_compact(workbook, dataset, *, snapshot=False, value_source=None):
     """Project main at identical coordinates after traditional overlays exist.
 
-    Live/Create/Mapping cells link to main; Snapshot cells use the caller's
-    already-loaded data-only main. Charts always consume the existing Weekly
-    hybrid/Live source. This renderer never changes main or its helper ownership.
+    Information cells follow main. Monthly body/footer consume main_monthly;
+    Snapshot uses finalized values. Charts consume the existing Weekly hybrid/
+    Live source, with Compact-only checkpoint helpers. No progress calculation.
     """
     source = workbook["main"]
     header = dataset.header_row
@@ -33,6 +34,8 @@ def build_weekly_compact(workbook, dataset, *, snapshot=False, value_source=None
         raise ValueError("Weekly Compact Snapshot requires cached main values.")
     if "PS_WEEKLY_OVERLAY_CUTOFF" not in workbook.defined_names:
         raise ValueError("Finalize the Weekly cutoff/overlays before Weekly Compact.")
+    if "main_monthly" not in workbook.sheetnames:
+        raise ValueError("Finalize main_monthly before Weekly Compact.")
     if SHEET_NAME in workbook.sheetnames:
         del workbook[SHEET_NAME]
     target = workbook.copy_worksheet(source)
@@ -59,7 +62,7 @@ def build_weekly_compact(workbook, dataset, *, snapshot=False, value_source=None
                     ref = f"'main'!{src.coordinate}"
                     cell.value = f'=IF({ref}="","",{ref})'
 
-    # Keep the familiar control location, but only display the one Weekly name.
+    # Normalize the copied control before the monthly projection relocates it.
     for row in range(header + 1, source.max_row + 1):
         if source.cell(row, 12).value == "Cutoff Date":
             target.cell(row, 13, "=PS_WEEKLY_OVERLAY_CUTOFF")
@@ -87,6 +90,8 @@ def build_weekly_compact(workbook, dataset, *, snapshot=False, value_source=None
                 cell.number_format = ";;;"
         if new_month and not isinstance(target.cell(2, col), MergedCell):
             target.cell(2, col, current.strftime("%b"))
+
+    project_monthly_regions(workbook, dataset, target, snapshot=snapshot)
 
     # copy_worksheet does not copy validations or drawings. Do not add editable
     # controls or recreate the source's global names. New chart, shared sources.
