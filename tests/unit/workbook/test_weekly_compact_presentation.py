@@ -17,12 +17,15 @@ from progress_studio.services.monthly_cache_deriver import MonthlyCacheDeriver
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
 from progress_studio.infrastructure.excel.weekly_compact_workbook import build_weekly_compact
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
+from progress_studio.infrastructure.excel.live_monthly_workbook import _display_month_buckets
+from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
+from openpyxl.utils import get_column_letter
 
 
 def fingerprint(ws):
     return (
         [(c.coordinate, c.value, tuple(c._style or [0]*9), str(c.protection))
-         for row in ws for c in row],
+         for row in ws.iter_rows(max_col=28 if ws.title == "Dashboard_Data" else ws.max_column) for c in row],
         sorted(str(r) for r in ws.merged_cells.ranges),
         [(k, str(v)) for k,v in ws.column_dimensions.items()],
         [(k, str(v)) for k,v in ws.row_dimensions.items()],
@@ -55,13 +58,14 @@ def test_projection_preserves_both_existing_sheets_and_canonical_helpers(finaliz
     assert len(dates) == 316  # original three-week margins each side
     assert [compact.cell(4,c).value for c in dates] == [source.cell(4,c).value for c in dates]
     assert [compact.cell(3,c).value for c in dates] == [source.cell(3,c).value for c in dates]
-    for row in ds.activities:
-        for r in (row.row_number,row.row_number+1):
-            for col in dates:
-                coordinate = source.cell(r,col).coordinate
-                assert compact.cell(r,col).value == f'=IF(\'main\'!{coordinate}="","",\'main\'!{coordinate})'
+    for index, (_, cols) in enumerate(_display_month_buckets(source),18):
+        for row in ds.activities:
+            for r in (row.row_number,row.row_number+1):
+                ref=f"'main_monthly'!{get_column_letter(index)}{r}"
+                assert compact.cell(r,cols[0]).value == f'=IF({ref}="","",{ref})'
+                assert all(isinstance(compact.cell(r,col),MergedCell) for col in cols[1:])
     assert compact.freeze_panes == source.freeze_panes
-    assert [d.outlineLevel for d in compact.row_dimensions.values()] == [d.outlineLevel for d in source.row_dimensions.values()]
+    assert all(compact.row_dimensions[r].outlineLevel == d.outlineLevel for r,d in source.row_dimensions.items())
 
 
 @pytest.mark.parametrize("year,month,count", [(2026,10,5),(2026,11,4),(2024,2,4),(2023,2,4),(2025,12,4),(2026,1,5)])
@@ -75,7 +79,8 @@ def test_month_groups_keep_weekly_geometry(finalized, year, month, count):
     assert c.cell(5,cols[0]).border.left.style in ("thin","medium")
     for col in cols[1:]:
         assert c.cell(5,col).border.left.style is None
-        assert c.cell(5,col-1).border.right.style is None
+        if col-1 != cols[0]:
+            assert c.cell(5,col-1).border.right.style is None
 
 
 def test_hidden_labels_uniform_width_partial_months_and_year_boundary(finalized):
@@ -88,7 +93,8 @@ def test_hidden_labels_uniform_width_partial_months_and_year_boundary(finalized)
         assert not c.column_dimensions[cell.column_letter].hidden
         assert c.cell(3,cell.column).number_format == ";;;"
         assert c.cell(4,cell.column).number_format == ";;;"
-        assert c.cell(5,cell.column).number_format == ";;;"
+        if not isinstance(c.cell(5,cell.column),MergedCell):
+            assert c.cell(5,cell.column).number_format == "0.00%"
     assert ds.periods[0].reporting_date == datetime(2022,1,14)
     assert ds.periods[-1].reporting_date == datetime(2027,12,17)
     jan=next(x.column for x in dates if x.value==datetime(2026,1,2))
@@ -101,6 +107,11 @@ def test_full_category_chart_same_values_cutoff_anchor_and_shared_state(finalize
     original, compact=wb["main"]._charts[0],wb["Weekly Compact"]._charts[0]
     assert isinstance(compact.x_axis,TextAxis)
     assert compact.anchor == original.anchor
+    assert len(compact.series) == 7
+    for series in compact.series[3:]:
+        assert series.val.numRef.f.endswith("$312")
+        assert series.cat == compact.series[0].cat
+    assert wb['Dashboard_Data']['AG312'].data_type == 'f'
     for a,b in zip(original.series,compact.series):
         assert a.val.numRef.f == b.val.numRef.f
         assert a.cat == b.cat
@@ -135,7 +146,7 @@ def test_policy_and_package_roundtrip(finalized):
     with ZipFile(folder/"resaved.xlsx") as z:
         charts=[ET.fromstring(z.read(n)) for n in z.namelist() if n.startswith("xl/charts/chart") and n.endswith(".xml")]
         ns={"c":"http://schemas.openxmlformats.org/drawingml/2006/chart"}
-        assert any(r.find(".//c:catAx",ns) is not None and len(r.findall(".//c:ser",ns))==3 for r in charts)
+        assert any(r.find(".//c:catAx",ns) is not None and len(r.findall(".//c:ser",ns))==7 for r in charts)
     other.close()
 
 
@@ -145,9 +156,11 @@ def test_snapshot_freezes_grid_and_keeps_shared_overlay(finalized):
     # Stand-in cached result is distinct from its formula to expose accidental copy.
     col=ds.periods[0].column
     cached.cell(5,col,0.123)
+    build_monthly_main_view(wb,snapshot=True,value_source=cached)
     build_weekly_compact(wb,ds,snapshot=True,value_source=cached)
-    assert wb["Weekly Compact"].cell(5,col).value==0.123
-    for row in ds.activities:
-        for p in ds.periods:
-            assert wb["Weekly Compact"].cell(row.row_number,p.column).value==cached.cell(row.row_number,p.column).value
+    for index, (_,cols) in enumerate(_display_month_buckets(wb['main']),18):
+        for r in range(5,wb['main'].max_row+1):
+            if wb['main'].cell(r,4).value not in {'P','A','AP','AA'}:continue
+            assert wb['Weekly Compact'].cell(r,cols[0]).value == wb['main_monthly'].cell(r,index).value
+            assert wb['Weekly Compact'].cell(r,cols[0]).data_type != 'f'
     assert wb["Weekly Compact"]._charts[0].series[1].val.numRef.f == wb["main"]._charts[0].series[1].val.numRef.f
