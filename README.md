@@ -45,9 +45,18 @@ Equal/Duration weights are not money. See [EV monetary sources](docs/EV_MONETARY
 
 ## Product status
 
-V1 was accepted at `d0db778`, tag `progress-studio-v1-stable`.
-This source includes V1.1 product-experience work; Product Owner Desktop acceptance
-is a separate release gate. Mini Gantt is **cancelled**, not a planned feature.
+Accepted source milestones:
+
+- V1: `d0db778` (`progress-studio-v1-stable`).
+- V1.1: `b16ddb0` (`progress-studio-v1.1-stable`).
+- Weekly Compact V1: `c9087ea` (`weekly-compact-v1-stable`).
+- Weekly Compact Final Presentation: `17cc3f3` (`weekly-compact-final-presentation-stable`).
+
+The Final Presentation was accepted in Desktop Excel after F9, edit/recalculation,
+cutoff movement, WBS outline, and Save/Close/Reopen checks. Windows full regression:
+839 passed, 6 skipped, 6 subtests passed, 0 failed. This is source/workbook
+acceptance, not a claim that a new installer or distribution was released.
+Mini Gantt is **cancelled**, not a planned feature.
 Finance implementation is retained for compatibility but hidden from normal V1.1
 navigation. No Finance workflow is advertised here.
 
@@ -69,6 +78,8 @@ owner; the documentation does not imply a new downloadable release has been publ
 - [Weight selection](docs/WEIGHT_SELECTION.md)
 - [Earned Value monetary sources](docs/EV_MONETARY_SOURCES.md)
 - [Payment Breakdown](docs/PAYMENT_BREAKDOWN.md)
+- [Weekly Compact presentation](docs/WEEKLY_COMPACT.md)
+- [Open next-step questions](docs/NEXT_STEPS.md)
 - [Documentation index](docs/README.md)
 - [Changelog](CHANGELOG.md) / [Roadmap and status](docs/ROADMAP.md)
 

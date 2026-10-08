@@ -5,12 +5,14 @@
 - [Product README](../README.md) — product, installation and workflow.
 - [User workflow](USER_WORKFLOW.md) — Create, Excel updates, optional Mapping/Payment and Rebuild.
 - [Architecture](ARCHITECTURE.md) — technical ownership; executable behavior is protected by tests.
-- [V1.1 product experience](V1_1_PRODUCT_EXPERIENCE.md) — approved scope, UI/localization and acceptance.
+- [V1.1 product experience](V1_1_PRODUCT_EXPERIENCE.md) — accepted UI/localization design and original acceptance checklist.
+- [Weekly Compact](WEEKLY_COMPACT.md) — accepted V1 and Final Presentation contract.
+- [Next steps](NEXT_STEPS.md) — deferred questions; not implementation authorization.
 - [Weight selection](WEIGHT_SELECTION.md)
 - [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
 - [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
 - [Payment Breakdown](PAYMENT_BREAKDOWN.md)
-- [Roadmap/status](ROADMAP.md) — V1 stable, MS-3 cancelled, MS-4 completed, V1.1 pending PO acceptance.
+- [Roadmap/status](ROADMAP.md) — accepted milestones through Weekly Compact Final Presentation; deferred work.
 - [Changelog](../CHANGELOG.md)
 
 ## Collaboration authority

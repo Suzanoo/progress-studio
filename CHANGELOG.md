@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased — V1.1 product experience
+## Weekly Compact Final Presentation — accepted, 17cc3f3
+
+- Weekly physical timeline with Monthly Gantt body and monthly bottom data
+  sourced from `main_monthly`; full Weekly S-Curve retained.
+- Monthly checkpoint markers/labels and distinct purple current-cutoff markers.
+- Shared editable Weekly cutoff on `main`; Compact linked cutoff is read-only.
+- Windows regression: 839 passed, 6 skipped, 6 subtests passed, 0 failed.
+- Desktop Excel acceptance passed after F9, edit/F9, cutoff/collision, outline,
+  and Save/Close/Reopen. Tag: `weekly-compact-final-presentation-stable`.
+
+## Weekly Compact V1 — accepted, c9087ea
+
+- Weekly-as-Monthly compact chart-first presentation using shared Weekly cutoff.
+- Tag: `weekly-compact-v1-stable`.
+
+## V1.1 product experience — accepted, b16ddb0
 
 - Modern/simple ttk Home and Help, charcoal/gold theme and canonical S-curve icon.
 - Target-first Rebuild retaining Progress/Payment Snapshot/Live and live EV sources.
@@ -8,7 +23,8 @@
 - Finance/AI hidden from normal navigation; underlying engines retained.
 - Workbook README explains existing `okmd` edit protection (not encryption).
 - Product-first README and relocated active engineering docs/history with updated links.
-- Desktop/Windows acceptance remains a Product Owner gate; no release is claimed.
+- Product Owner accepted the V1.1 milestone; tag: `progress-studio-v1.1-stable`.
+- No new installer/customer release is claimed by this source changelog.
 
 ## V1 accepted stable — d0db778
 

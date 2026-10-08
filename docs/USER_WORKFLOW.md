@@ -117,6 +117,17 @@ X    | M1 M2 ... Mn | X
 -   `X` = display margin.
 -   `Wn` / `Mn` = reporting-period labels.
 
+## Weekly Compact presentation
+
+Weekly Compact is an additional presentation of the existing Weekly model,
+not a new Monthly calculation model. The Gantt body and four-row monthly footer
+follow `main_monthly`; the S-Curve keeps Weekly points and shows monthly
+checkpoints plus purple current-cutoff Plan/Actual markers. The editable Weekly
+cutoff remains on `main`; the Compact cutoff date is a locked linked display.
+Monthly table values are not masked to the Weekly cutoff. Press F9 after opening
+or editing to update Excel-calculated presentation, then Save. See
+[Weekly Compact](WEEKLY_COMPACT.md).
+
 ## 6. Recalculation in Excel
 
 Progress Studio workbooks use a user-driven Excel formula calculation

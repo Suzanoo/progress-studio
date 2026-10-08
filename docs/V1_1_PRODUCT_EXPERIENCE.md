@@ -1,7 +1,9 @@
 # V1.1 product experience
 
-Authorized from V1 stable `d0db778`. Implementation requires separate PO Desktop
-acceptance before Git integration/release. No Desktop PASS is implied.
+Authorized from V1 stable `d0db778`. This document retains the original
+acceptance checklist. The Product Owner subsequently accepted V1.1 at
+`main @ b16ddb0`, tag `progress-studio-v1.1-stable`. This does not imply a
+new installer/customer release.
 
 ## Presentation
 

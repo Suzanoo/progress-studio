@@ -284,6 +284,19 @@ change the Activity-ID identity used by Mapping or standard Payment.
 
 See `docs/PAYMENT_BREAKDOWN.md` for the complete feature contract.
 
+## Weekly Compact presentation boundary
+
+Weekly Compact retains the Weekly physical column geometry and Weekly source
+calculation. Its Gantt body and monthly bottom-data bands project existing
+`main_monthly` output by month; they do not establish a second Monthly engine.
+The overlay preserves the Weekly Plan/Actual curves, adds monthly checkpoints
+at the last retained Weekly reporting point per month, and displays distinct
+current-cutoff markers. At coincident dates the current-cutoff marker takes
+precedence over a monthly checkpoint. The editable Weekly cutoff remains on
+`main`; Compact displays a locked linked value. Excel adapter-owned
+`Dashboard_Data` columns AC:AG are reserved for Compact chart helpers.
+See [Weekly Compact](WEEKLY_COMPACT.md).
+
 ## 9. Renderer ownership
 
 A renderer owns only the workbook objects it creates.
