@@ -1,6 +1,9 @@
 """Presentation-only resources. English IDs are stable; values never enter engines."""
 
 GUIDE = {
+    "amount.source.xml": ("Use XML field", "ใช้ฟิลด์จาก XML"),
+    "amount.source.later": ("Enter in Excel later", "กรอกใน Excel ภายหลัง"),
+    "amount.later.help": ("Start weights at 1 (milestones 0). Edit Amounts in Excel, then F9 / Save and Progress Rebuild. EV Contract Values remain separate.", "เริ่มน้ำหนักที่ 1 (Milestone 0) แก้ Amount ใน Excel แล้ว F9 / Save และ Rebuild Progress ส่วน Contract Value ของ EV กรอกแยกต่างหาก"),
     "preview.summary": ("Ordinary: {ordinary} | Positive: {positive} | Zero: {zero} | Milestones: {milestones} (zero weight) | Valid-value total: {total:,.2f}", "กิจกรรมทั่วไป: {ordinary} | บวก: {positive} | ศูนย์: {zero} | Milestone: {milestones} (น้ำหนักศูนย์) | รวมค่าที่ถูกต้อง: {total:,.2f}"),
     "preview.blocked": ("Create blocked: {count} issue(s). {error}", "ยังสร้างไม่ได้: พบ {count} ปัญหา รายละเอียด: {error}"),
     "preview.precision": ("Values retain workbook numeric precision; two decimals are display only.", "ค่าคงความละเอียดตามตัวเลขของ Workbook ทศนิยมสองตำแหน่งใช้แสดงผลเท่านั้น"),

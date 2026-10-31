@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from math import isfinite
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -114,6 +115,11 @@ class PaymentInputSparseReader:
                 value = self._requirement_value(cell, shared_strings)
                 if value is None:
                     continue
+                if not isfinite(value):
+                    ref = cell.attrib.get("r", f"row {row_num}")
+                    raise PaymentWorkbookError(
+                        f"Payment requirement at {ref} must be a finite percentage between 0% and 100%."
+                    )
                 if value < 0.0 or value > 1.0:
                     ref = cell.attrib.get("r", f"row {row_num}")
                     raise PaymentWorkbookError(

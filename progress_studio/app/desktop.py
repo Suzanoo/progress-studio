@@ -37,6 +37,7 @@ class DesktopRunOptions:
     distribution_method: str = "auto"
     weight_basis: str = "equal"
     amount_field: str | None = None
+    amount_initialization: str = "xml_field"
 
 
 class DesktopRunner:
@@ -57,10 +58,11 @@ class DesktopRunner:
             raise ValueError("Input file must be an XML schedule file.")
         if options.cutoff_day not in {"1", "2", "3", "4", "5", "6", "7"}:
             raise ValueError("Cutoff day must be between 1 and 7.")
-        from progress_studio.services.weighting import validate_weight_basis
+        from progress_studio.services.weighting import validate_weight_basis, validate_amount_initialization, XML_FIELD
         basis = validate_weight_basis(options.weight_basis)
+        initialization = validate_amount_initialization(basis, options.amount_initialization, options.amount_field)
 
-        if basis == "amount" and not options.amount_field:
+        if basis == "amount" and initialization == XML_FIELD and not options.amount_field:
             raise ValueError("Select an XML Amount field before Create.")
         context = PipelineContext(
             source_xml=source,
@@ -68,6 +70,7 @@ class DesktopRunner:
             amount_per_activity=1.0,
             weight_basis=basis,
             amount_field=options.amount_field if basis == "amount" else None,
+            amount_initialization=initialization,
         )
         return self._pipeline_factory(options.distribution_method).run(context, observer=observer)
 

@@ -4,6 +4,22 @@ from __future__ import annotations
 import math
 from progress_studio.domain import Activity
 
+XML_FIELD = "xml_field"
+MANUAL_PLACEHOLDER = "manual_placeholder"
+
+
+def validate_amount_initialization(basis: str | None, initialization: str,
+                                   amount_field: str | None = None) -> str:
+    """Validate explicit creation intent; never fall back from a bad XML field."""
+    if initialization not in {XML_FIELD, MANUAL_PLACEHOLDER}:
+        raise ValueError("Unknown Amount initialization source.")
+    if initialization == MANUAL_PLACEHOLDER:
+        if basis != "amount":
+            raise ValueError("Enter in Excel later requires Amount weighting.")
+        if amount_field:
+            raise ValueError("Enter in Excel later cannot also select an XML Amount field.")
+    return initialization
+
 
 def validate_weight_basis(basis: str) -> str:
     basis = basis.strip().lower()

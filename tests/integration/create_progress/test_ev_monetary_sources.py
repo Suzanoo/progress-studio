@@ -165,7 +165,8 @@ def test_xml_create_bac_and_progress_rebuild_preservation(tmp_path,monkeypatch,s
         assert service.analyze(out,monetary_source=ACTIVITY).project_bac==1200
 
 
-def test_mapping_regeneration_preserves_independent_bac_and_zero_milestone(tmp_path,monkeypatch):
+@pytest.mark.parametrize('initialization',['xml_field','manual_placeholder'])
+def test_mapping_regeneration_preserves_independent_bac_and_zero_milestone(tmp_path,monkeypatch,initialization):
     from tests.fixtures.amount_xml import amount_xml
     from progress_studio.app.desktop import DesktopRunner,DesktopRunOptions
     from progress_studio.infrastructure.schedule_xml import NormalizedScheduleXmlReader
@@ -177,13 +178,21 @@ def test_mapping_regeneration_preserves_independent_bac_and_zero_milestone(tmp_p
     xml=amount_xml(tmp_path,'p6',('100','900','0','200'))
     field=NormalizedScheduleXmlReader().read_with_amount_fields(xml)[2][0]
     monkeypatch.setattr('progress_studio.pipeline.import_step.desktop_path',lambda:tmp_path/'desktop')
-    source=DesktopRunner().run(DesktopRunOptions(xml,'5',weight_basis='amount',amount_field=field.identity)).output_workbook
+    source=DesktopRunner().run(DesktopRunOptions(xml,'5',weight_basis='amount',
+        amount_field=field.identity if initialization=='xml_field' else None,
+        amount_initialization=initialization)).output_workbook
+    if initialization=='manual_placeholder':
+        wb=load_workbook(source)
+        for row,value in enumerate((100,900,0,200),4):wb[SHEET].cell(row,3,value)
+        wb.save(source);wb.close()
     store=MappingStore();store.load_activities(ProgressActivityReader().read(source))
     store.load_boq([BOQRow('B1','BOQ',2,'1','','','Ordinary',1000,'BOQ1'),BOQRow('B2','BOQ',3,'1','','','Milestone',500,'BOQ2')])
     for aid,bid in [('A1','B1'),('A4','B2')]:
         store.selected_activity_ids={aid};store.selected_boq_ids={bid};store.map_selected(100)
     mapped=tmp_path/'mapped.xlsx';WorkbookExportService().export(source,mapped,store)
     wb=load_workbook(mapped)
+    from progress_studio.infrastructure.excel.weight_basis import amount_initialization
+    assert amount_initialization(wb)==initialization
     assert [a.amount for a in main_dataset_from_workbook(wb).activities]==[1000,0,0,0]
     assert [wb[SHEET].cell(r,3).value for r in range(4,8)]==[100,900,0,200]
     wb.close()

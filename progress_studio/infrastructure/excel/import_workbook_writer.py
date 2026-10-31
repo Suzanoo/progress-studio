@@ -10,7 +10,7 @@ from progress_studio.domain import Activity, ActivityWbsSequencer
 
 
 class ImportWorkbookWriter:
-    def write(self, output_file: Path, source_file: Path, project_name: str, rows: list[Activity], *, weight_basis: str | None = None, amount_field=None) -> None:
+    def write(self, output_file: Path, source_file: Path, project_name: str, rows: list[Activity], *, weight_basis: str | None = None, amount_field=None, amount_initialization: str = "xml_field") -> None:
         wb = Workbook()
         ws = wb.active
         ws.title = WORKBOOK_SCHEMA.main_sheet
@@ -92,7 +92,10 @@ class ImportWorkbookWriter:
         if amount_field is not None:
             from progress_studio.infrastructure.excel.weight_basis import set_creation_field
             set_creation_field(wb, amount_field)
+        if weight_basis == "amount":
+            from progress_studio.infrastructure.excel.weight_basis import set_amount_initialization
+            set_amount_initialization(wb, amount_initialization)
         from progress_studio.infrastructure.excel.ev_monetary_inputs import seed_import
-        seed_import(wb, rows, weight_basis, amount_field)
+        seed_import(wb, rows, weight_basis, amount_field, amount_initialization=amount_initialization)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_file)

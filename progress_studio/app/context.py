@@ -24,3 +24,4 @@ class PipelineContext:
     metadata: dict[str, Any] = field(default_factory=dict)
     weight_basis: str = "equal"
     amount_field: str | None = None
+    amount_initialization: str = "xml_field"

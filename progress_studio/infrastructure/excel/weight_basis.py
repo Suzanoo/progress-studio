@@ -9,6 +9,19 @@ from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font
 
 KEY = "Creation Weight Basis"
+INITIALIZATION_KEY = "Amount Initialization Source"
+
+
+def set_amount_initialization(workbook, initialization: str) -> None:
+    _set_info(workbook, INITIALIZATION_KEY, initialization)
+
+
+def amount_initialization(workbook) -> str | None:
+    """Origin only, never confirmation of current values. Legacy Amount was XML."""
+    value = _get_info(workbook, INITIALIZATION_KEY)
+    if value is None and creation_basis(workbook) == 'amount':
+        return 'xml_field'
+    return value if value in {'xml_field', 'manual_placeholder'} else None
 
 
 def _set_info(workbook, key, value):
@@ -55,7 +68,10 @@ def creation_field(workbook) -> AmountField | None:
 def uses_dummy_weights(workbook) -> bool:
     # Mapping supplies its own real amount source. Keep creation provenance,
     # but never label a subsequently BOQ-mapped workbook as current dummy data.
-    return creation_basis(workbook) in {'equal', 'duration'} and 'BOQ Activity Mapping' not in workbook.sheetnames
+    basis = creation_basis(workbook)
+    non_monetary_origin = basis in {'equal', 'duration'} or (
+        basis == 'amount' and amount_initialization(workbook) != 'xml_field')
+    return non_monetary_origin and 'BOQ Activity Mapping' not in workbook.sheetnames
 
 
 def apply_weight_labels(workbook) -> None:
@@ -64,8 +80,15 @@ def apply_weight_labels(workbook) -> None:
         return  # legacy files have no new semantics inferred from their values
     dummy = uses_dummy_weights(workbook)
     field = creation_field(workbook)
+    manual = basis == 'amount' and amount_initialization(workbook) == 'manual_placeholder'
     if 'BOQ Activity Mapping' in workbook.sheetnames:
         message = f"Created with {basis.title()} weights. Current amounts: BOQ Mapping; see Mapping Summary."
+    elif manual:
+        message = ("Amount weights originally initialized at 1 (milestones 0); current values may have changed. "
+                   "After editing main Amounts: F9, Save, then Progress Rebuild to refresh copied Monthly/Dashboard views. "
+                   "EV uses independent selected-source Contract Values; placeholders are not BAC.")
+    elif basis == 'amount' and amount_initialization(workbook) is None:
+        message = "Amount initialization source is unknown. Progress weights are not verified Contract Values; enter independent EV monetary inputs."
     elif dummy:
         message = f"Weight basis: {basis.title()} — dummy units, not Contract Value or financial data."
     else:
@@ -77,11 +100,13 @@ def apply_weight_labels(workbook) -> None:
         ws['B4'] = message
         ws['B4'].font = Font(size=11, bold=True, color='17365D')
         ws['B4'].alignment = Alignment(wrap_text=True, vertical='center')
-        ws.row_dimensions[4].height = 54 if basis == "amount" else 30
+        ws.row_dimensions[4].height = 90 if manual else (54 if basis == "amount" else 30)
     # Preserve engine-recognized Amount headers; explain their units in comments.
     for name in ('main', 'main_monthly', 'Amount Mapping', 'Dashboard', 'Payment', 'Payment-Breakdown', 'Earned Value', 'EV Table'):
         if name not in workbook.sheetnames:
             continue
+        if basis == 'amount' and amount_initialization(workbook) != 'xml_field' and name in ('Earned Value', 'EV Table'):
+            continue  # Independent BAC is not a main placeholder weight.
         ws = workbook[name]
         for row in ws.iter_rows(max_row=min(ws.max_row, 40)):
             for cell in row:
@@ -91,5 +116,6 @@ def apply_weight_labels(workbook) -> None:
         if name == 'Dashboard' and ws['J6'].value in ('Project Value', 'Total weight'):
             ws['J6'] = 'Total weight' if dummy else 'Project Value'
         if name == 'Payment-Breakdown' and str(ws['A1'].value or '').startswith('Payment Breakdown'):
-            ws['A1'] = (f'Payment Breakdown — {basis.title()} dummy-weighted progress'
+            ws['A1'] = ('Payment Breakdown — current main weights' if manual and dummy else
+                        f'Payment Breakdown — {basis.title()} dummy-weighted progress'
                         if dummy else 'Payment Breakdown')

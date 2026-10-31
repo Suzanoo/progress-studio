@@ -9,7 +9,11 @@
 - Explicit source milestones are retained with 0 in both modes. P6 Start/Finish
   Milestone and MSP Milestone are authoritative; same-day dates alone are not.
 - WBS/summary nodes receive existing rollup formulas, not additional weights.
-- Amount requires explicit selection of a declared numeric custom XML field.
+- Amount offers **Use XML field** and **Enter in Excel later**.
+  Later entry initializes ordinary Activities to 1 and milestones to 0, using
+  the existing positive-total validation. It is available with or without XML
+  numeric fields. No confirmation or readiness state is introduced.
+  XML mode requires explicit selection of a declared numeric custom XML field.
   The picker displays name/alias, source-qualified identity/type, raw values,
   ordinary positive/zero counts, milestone count, total and validation issues.
   No field is selected automatically, even if only one exists or its name says Amount.
@@ -57,6 +61,11 @@ precision remains a limitation; raw values are shown for review before Create.
 ## Workbook lifecycle
 
 - Creation Weight Basis is stored in existing Info key/value metadata.
+- Amount Initialization Source records `xml_field` or `manual_placeholder` in
+  Info. It records origin, not certification of current monetary values.
+  Manual origin leaves EV Contract Values blank at Create and input preparation.
+  Legacy Amount without this key retains its accepted XML-origin behavior;
+  explicitly unsupported origins never qualify for automatic BAC seeding.
 - Existing internal XML Amount storage carries the computed dummy weight to the
   Amount Mapping engine. In Amount mode it carries the explicitly selected
   monetary XML values; in Equal/Duration it carries only computed dummy weights.
@@ -70,20 +79,22 @@ precision remains a limitation; raw values are shown for review before Create.
 - Legacy workbooks without this metadata retain their original labeling.
 - Number formats, rollups, Plan distribution, calculation/F9 policy, cutoff,
   chart ownership and workbook protection stay with existing helpers/renderers.
+- After editing main Amounts, F9 / Save and Progress Rebuild refresh copied
+  Monthly/Dashboard values; F9 alone cannot regenerate them. Independent EV BAC
+  changes require EV refresh from the selected source. Initial Create generates
+  Progress views, not Payment or EV output views.
 
 ## Monetary consumers
 
-Dummy weights are not Contract Value, actual cost or cash flow. Payment progress
-continues to use amount-weighted percentages; its copied Amount headers carry
-context. Payment-Breakdown Amount headers receive the same explanation through
-finalization. Earned Value still requires complete embedded BOQ Mapping; a dummy
-Create workbook alone cannot become monetary BAC. Finance continues to require
-its own cash/receivable/payable inputs and does not infer cash from dummy weights.
-Amount Create does not bypass EV's BOQ requirement: complete BOQ Mapping is
-still needed before EV generation. No synthetic BOQ/allocation is created from
-XML values. After Mapping, BOQ totals become current monetary authority; XML
-field metadata remains creation provenance. Finance still requires independent
-cash/receivable/payable inputs even when XML Amount is monetary.
+Dummy weights are not Contract Value, actual cost or cash flow. Standard Payment
+positions Activity-ID requirements against each Activity's Plan distribution;
+it requires no real Amounts, BOQ Mapping or dummy replacement. Payment Breakdown
+is a separate exact-name, Amount-weighted calculation.
+EV follows [EV monetary sources](EV_MONETARY_SOURCES.md): Activity Amount uses
+independent EV Monetary Inputs; BOQ Mapping uses its existing completeness and
+reconciliation rules. Placeholder main weights do not block valid independent
+BAC, and never silently populate BAC. Mapping preserves independent Activity
+Contract Values and does not choose the EV source. Finance remains independent.
 
 ## Compatibility and validation
 
@@ -91,7 +102,10 @@ Desktop and CLI Create always select a weight basis. `--weight-basis equal` is
 the CLI default; `--weight-basis duration` selects source duration.
 `--weight-basis amount --amount-field p6:udf:<ObjectId>` or
 `--weight-basis amount --amount-field msp:field:<FieldID>` selects the exact field
-shown in the GUI picker. No identity is hardcoded for a customer/sample. The old
+shown in the GUI picker. No identity is hardcoded for a customer/sample.
+`--weight-basis amount --amount-initialization manual_placeholder` selects later
+entry without an XML field. `xml_field` remains the default for compatibility;
+invalid XML selection never falls back to placeholders. The old
 `--amount` / DesktopRunOptions.amount_per_activity parameter is retained only
 for call compatibility and does not determine new Create weights. Reader-only
 normalization and low-level ImportService calls without weight_basis retain

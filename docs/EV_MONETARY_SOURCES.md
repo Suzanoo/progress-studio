@@ -13,12 +13,17 @@ New Create workbooks contain **EV Monetary Inputs**. Its Allocated Contract
 Value column is the current monetary authority for Activity Amount EV. It is
 independent of main's Progress Weight/Amount. Amount Create seeds ordinary
 values from the selected field and retains the milestone's original monetary
-value separately from its zero Progress Weight. Equal/Duration create blank
+value separately from its zero Progress Weight. Amount / Enter in Excel later
+stores a manual-placeholder origin and creates blank monetary inputs, even though
+its creation basis is Amount. There is no monetary confirmation workflow.
+Equal/Duration create blank
 monetary inputs; enter real allocated Contract Values before building EV.
 
 For existing workbooks, **Prepare monetary inputs** creates a new output file.
-For Amount-origin workbooks it copies current main Amount, not original XML or
-historic metadata amounts. For dummy/unknown origins values remain blank.
+For XML Amount-origin workbooks it copies current main Amount, not original XML or
+historic metadata amounts. Legacy Amount workbooks without the new origin key
+retain that behavior. Explicit manual-placeholder or unsupported origins stay
+blank even after main edits; Equal/Duration/unknown bases also remain blank.
 Verify every value, explicitly mark milestones and enter their dates. Old MS-2
 workbooks discarded milestone values: enter those values explicitly; they
 cannot be recovered from a zero progress weight. No XML reread occurs.

@@ -18,9 +18,20 @@ The initial workbook includes weekly `main`, monthly `main_monthly`,
 Dashboard and internal/helper data required by the selected workflow.
 
 Choose **Equal** (default), **Duration**, or **Amount** as the Weight basis.
-For Amount, choose **Select Amount field / Preview...**, select the intended
+For Amount, choose **Use XML field** or **Enter in Excel later**.
+For XML, choose **Select Amount field / Preview...**, select the intended
 numeric custom field, review its raw values/counts/total, and confirm the selection.
 No field is chosen automatically. No fallback amount needs to be entered.
+
+**Enter in Excel later** works with or without XML Amount fields. It starts ordinary
+Activities at 1 and milestones at 0. These are Progress weights, not EV Contract
+Values. Edit `main` Amounts when useful; there is no monetary confirmation step.
+After Amount edits, F9 / Save and **Progress Rebuild** refresh generated/copied
+Monthly and Dashboard values. F9 alone does not rewrite those copies. Payment-only
+or EV-only Rebuild does not replace this Progress refresh.
+Create includes blank `EV Monetary Inputs` for this path, but no generated Payment
+or Earned Value views. To use Activity-source EV, enter independent Contract Values
+there; changing `main` Amounts does not populate them automatically.
 
 Equal gives each ordinary activity one calculation unit. Duration uses the
 source working duration normalized to hours (P6 PlannedDuration / MSP Duration),
@@ -29,7 +40,7 @@ summary/WBS rows roll up activity weights. Invalid ordinary duration stops
 Duration creation with the affected Activity IDs; it never switches to Equal.
 
 Equal/Duration dummy weights are not Contract Value, actual cost or cash flow.
-Amount uses real monetary values from the selected XML field; this does not
+Amount with **Use XML field** uses monetary values from the selected XML field; this does not
 supply actual cost or Finance cash data. Missing, invalid or negative ordinary
 Amount and an unusable total block creation; individual zeros are retained. The workbook
 README identifies the basis; Info preserves it through Save/Reopen and Rebuild.
@@ -56,6 +67,10 @@ rendering uses the current workbook schedule/progress structure to
 position `Payment` output.
 
 Standard Payment identity is Activity ID.
+
+Valid Plan profiles and Payment Input requirements are sufficient: Standard Payment
+does not require real Amounts, BOQ Mapping or replacement of initial weights.
+Requirements must be finite percentages from 0% to 100%; blank is not explicit 0%.
 
 Payment must not rebuild Progress-owned Dashboard/overlay data.
 

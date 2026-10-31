@@ -42,6 +42,7 @@ class ProgressStudioApplication:
                 amount_per_activity=1.0,
                 weight_basis=options.weight_basis,
                 amount_field=options.amount_field,
+                amount_initialization=options.amount_initialization,
             )
             result = self._pipeline.run(context)
             if result.output_workbook:

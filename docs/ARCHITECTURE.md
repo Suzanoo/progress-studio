@@ -66,7 +66,9 @@ numeric custom fields with source-qualified identities. Native P6/MSP costs are
 not changed. Normalization never chooses an Amount field or assigns its values.
 Create assigns weights before the existing Amount Mapping pipeline: Equal
 (default) assigns 1 to ordinary activities; Duration uses source duration; Amount
-validates one explicitly selected custom numeric XML field. All modes retain
+validates one explicitly selected custom numeric XML field or, with explicit
+Enter in Excel later intent, reuses Equal's 1/0 initializer. Initialization origin
+is stored separately from creation basis; placeholders never seed EV BAC. All modes retain
 milestones with zero weight and exclude WBS nodes from duplicate weighting.
 Duration and Amount validation never substitute another weighting mode.
 Amount preview uses Decimal/raw XML strings; the accepted workbook engine uses
