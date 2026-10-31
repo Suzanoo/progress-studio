@@ -104,6 +104,8 @@ class MappedWorkbookExporter:
             validate_progress_workbook_contract(source_workbook)
             from progress_studio.infrastructure.excel.weight_basis import creation_basis, set_creation_basis, creation_field, set_creation_field
             source_creation_basis = creation_basis(source_workbook)
+            from progress_studio.infrastructure.excel.weight_basis import amount_initialization, set_amount_initialization
+            source_amount_initialization = amount_initialization(source_workbook)
             source_amount_field = creation_field(source_workbook)
             from progress_studio.infrastructure.excel.ev_monetary_inputs import SHEET as EV_INPUTS, write_inputs
             monetary_records = None
@@ -189,6 +191,8 @@ class MappedWorkbookExporter:
                     write_inputs(workbook, preserved)
                 if source_creation_basis is not None:
                     set_creation_basis(workbook, source_creation_basis)
+                if source_creation_basis == 'amount':
+                    set_amount_initialization(workbook, source_amount_initialization or 'unknown')
                 if source_amount_field is not None:
                     set_creation_field(workbook, source_amount_field)
                 self._write_amount_mapping(workbook, totals)

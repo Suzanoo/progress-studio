@@ -66,13 +66,13 @@ def write_inputs(workbook, records):
     return ws
 
 
-def seed_import(workbook, rows, weight_basis, field):
+def seed_import(workbook, rows, weight_basis, field, *, amount_initialization="xml_field"):
     records = []
     for item in rows:
         if item.is_summary:
             continue
         value = None
-        if weight_basis == 'amount':
+        if weight_basis == 'amount' and amount_initialization == 'xml_field':
             if item.is_milestone:
                 raw = [v for k,v in item.amount_field_values if field and k == field.identity]
                 # Preserve an explicit source value, including invalid text, for
@@ -142,10 +142,10 @@ def prepare_inputs(source, output):
     try:
         if SHEET in wb.sheetnames:
             raise ValueError(f'{SHEET} already exists. Edit it in Excel, then refresh EV.')
-        from progress_studio.infrastructure.excel.weight_basis import creation_basis
+        from progress_studio.infrastructure.excel.weight_basis import creation_basis, amount_initialization
         # Provenance is only an eligibility gate. Current main Amount is read,
         # never the historic XML value/metadata payload. Dummy bases stay blank.
-        is_monetary = creation_basis(wb) == 'amount'
+        is_monetary = creation_basis(wb) == 'amount' and amount_initialization(wb) == 'xml_field'
         write_inputs(wb, [(a.activity_id, a.description, a.amount if is_monetary else None,
                            False, None, None) for a in dataset.activities])
         wb.save(output)
