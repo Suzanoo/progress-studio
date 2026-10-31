@@ -7,6 +7,7 @@ from openpyxl.styles import Alignment, Protection
 from openpyxl.utils import get_column_letter
 
 from progress_studio.infrastructure.excel.live_monthly_workbook import _display_month_buckets
+from progress_studio.infrastructure.excel.cutoff_controls import prepare_cutoff_placement, find_cutoff_controls
 
 
 def project_monthly_regions(workbook, dataset, target, *, snapshot=False):
@@ -81,21 +82,14 @@ def project_monthly_regions(workbook, dataset, target, *, snapshot=False):
 
     # Preserve the only input on main. Compact displays the same name after the
     # actual generated footer, rather than leaving a copied mid-section control.
-    controls = [row for row in range(dataset.header_row + 1, source.max_row + 1)
-                if source.cell(row, 12).value == "Cutoff Date"]
-    for row in controls:
-        for col in (12, 13):
-            if col >= first_col:
-                continue  # Legacy narrow schemas already projected these cells.
-            target.cell(row, col).value = None
-            target.cell(row, col)._style = copy(source.cell(row, 2)._style)
-            target.cell(row, col).protection = Protection(locked=True)
-    if footer and controls:
-        row = max(footer + body) + 1  # Legacy layouts may place footer above body.
-        for dest, src in ((2, 12), (3, 13)):
-            target.cell(row, dest)._style = copy(source.cell(controls[0], src)._style)
+    controls = find_cutoff_controls(source, dataset)
+    if controls:
+        row = prepare_cutoff_placement(target, dataset)
+        source_row, label_col, value_col = controls[0]
+        for dest, src in ((2, label_col), (3, value_col)):
+            target.cell(row, dest)._style = copy(source.cell(source_row, src)._style)
             target.cell(row, dest).protection = Protection(locked=True)
         target.cell(row, 2, "Cutoff Date")
         target.cell(row, 3, "=PS_WEEKLY_OVERLAY_CUTOFF")
         target.cell(row, 3).number_format = "dd/mm/yyyy"
-        target.row_dimensions[row].height = target.row_dimensions[max(footer)].height or 20
+        target.row_dimensions[row].height = target.row_dimensions[max(footer) if footer else row - 1].height or 20

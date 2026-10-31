@@ -85,10 +85,12 @@ def test_checkpoints_use_weekly_values_and_existing_selection(artifact):
 
 def test_dynamic_readonly_date_and_main_input(artifact):
     w=load_workbook(artifact);s=w['Weekly Compact']
-    assert next(w.defined_names['PS_WEEKLY_OVERLAY_CUTOFF'].destinations)==('main','$M$35')
-    assert not w['main']['M35'].protection.locked
+    assert next(w.defined_names['PS_WEEKLY_OVERLAY_CUTOFF'].destinations)==('main','$C$40')
+    assert not w['main']['C40'].protection.locked
     assert s['C40'].value=='=PS_WEEKLY_OVERLAY_CUTOFF' and s['C40'].protection.locked
-    assert s['M35'].value is None and not s.data_validations.dataValidation
+    assert w['main']['M35'].value is None
+    assert s['M35'].value in (None, '=IF(\'main\'!M35="","",\'main\'!M35)')
+    assert not s.data_validations.dataValidation
     # Shift the finalized layout, then regenerate from new semantic row identities.
     for name in ['main','main_monthly']:w[name].insert_rows(5,4)
     build_weekly_compact(w,main_dataset_from_workbook(w))

@@ -31,6 +31,18 @@ curve. There is no independent Compact cutoff or new Monthly calculation model.
 
 ## Implementation boundary
 
+WU-1 places each editable selector on `main` and `main_monthly` in columns
+B (label) and C (date), immediately after the generated body and S-Curve footer.
+Compact uses the same placement for its locked Weekly-linked display, with no
+dropdown. Weekly and Monthly selectors remain independent; Dashboard and EV
+reporting dates retain their existing ownership. This placement change does not
+change the existing overlay initialization/reset policy during regeneration.
+
+Create, Mapping regeneration, and Progress Snapshot/Live Rebuild use this
+placement. Supported legacy controls are removed and their names rebound;
+conflicting user content or merged cells cause an explicit placement error.
+Payment/EV-only finalization does not migrate existing controls.
+
 - `weekly_compact_workbook.py`: Compact presentation coordination.
 - `weekly_compact_monthly_workbook.py`: semantic projection of monthly body/footer.
 - `traditional_overlay_workbook.py`: sparse chart helper series and markers.

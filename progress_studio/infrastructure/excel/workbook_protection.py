@@ -144,7 +144,16 @@ def _protect_main(ws) -> None:
 
 
 def _unlock_local_cutoff_control(ws) -> None:
-    """Unlock only the local traditional-overlay cutoff cell in column M."""
+    """Resolve the renderer's semantic binding, retaining legacy-only support."""
+    from progress_studio.infrastructure.excel.cutoff_controls import bound_cutoff_cell, CONTROL_NAMES
+    cell = bound_cutoff_cell(ws)
+    if cell is not None:
+        if cell.data_type != "f":
+            _set_unlocked(cell)
+        return
+    if CONTROL_NAMES.get(ws.title) in ws.parent.defined_names:
+        return  # A malformed binding must not unlock a guessed cell.
+    # Payment/EV-only finalization must still support unmigrated legacy workbooks.
     for row in range(1, ws.max_row + 1):
         if str(ws.cell(row, 12).value or "").strip() == "Cutoff Date":
             _set_unlocked(ws.cell(row, 13))
