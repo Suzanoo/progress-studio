@@ -11,6 +11,7 @@ from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import m
 from progress_studio.infrastructure.excel.monthly_main_workbook import build_monthly_main_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
 from progress_studio.infrastructure.excel.weekly_compact_workbook import build_weekly_compact
+from progress_studio.infrastructure.excel.cutoff_controls import validate_existing_cutoff_placements
 
 
 class MonthlyMainService:
@@ -21,6 +22,7 @@ class MonthlyMainService:
         # Keep the workbook in RAM, render/finalize it here, and save only once.
         workbook = load_workbook(input_file)
         try:
+            validate_existing_cutoff_placements(workbook)
             build_monthly_main_view(
                 workbook,
                 source_sheet=WORKBOOK_SCHEMA.main_sheet,

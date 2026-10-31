@@ -7,6 +7,7 @@ from openpyxl.utils.cell import range_to_tuple
 
 from progress_studio.domain.mapping_models import ActivityRow, BOQRow
 from progress_studio.infrastructure.excel.payment_input_workbook import PaymentInputWorkbook
+from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.services.mapping_store import MappingStore
 from progress_studio.services.workbook_export_service import WorkbookExportService
 from progress_studio.services.workbook_generation_service import WorkbookGenerationService
@@ -114,9 +115,12 @@ def test_mapping_final_output_restores_overlay_dependencies(tmp_path: Path, popu
             assert chart.anchor.to.col == max(reporting_cols)
             assert chart.anchor._from.row == 4
             cutoff_row = next(r for r in range(1, ws.max_row + 1)
-                              if ws.cell(r, 12).value == "Cutoff Date")
-            assert chart.anchor.to.row == cutoff_row
-            control = ws.cell(cutoff_row, 13)
+                              if ws.cell(r, 2).value == "Cutoff Date")
+            dataset = main_dataset_from_workbook(wb)
+            first_footer = min(r.row_number for r in dataset.rows if r.row_type.lower() == 's-curve')
+            assert chart.anchor.to.row == first_footer - 1
+            assert cutoff_row > first_footer
+            control = ws.cell(cutoff_row, 3)
             assert control.value == dates[-1]
             assert not control.protection.locked
             validations = [dv for dv in ws.data_validations.dataValidation
@@ -124,7 +128,7 @@ def test_mapping_final_output_restores_overlay_dependencies(tmp_path: Path, popu
             assert len(validations) == 1
             assert validations[0].formula1 == f'=INDIRECT("Dashboard_Data!${list_col}$2:${list_col}${len(dates) + 1}")'
             cutoff_name = "PS_WEEKLY_OVERLAY_CUTOFF" if name == "main" else "PS_MONTHLY_OVERLAY_CUTOFF"
-            assert wb.defined_names[cutoff_name].attr_text == f"'{name}'!$M${cutoff_row}"
+            assert wb.defined_names[cutoff_name].attr_text == f"'{name}'!$C${cutoff_row}"
 
         # Series helpers resolve to the existing reporting/visible-Actual sources.
         for target, source_col in (("U", "B"), ("V", "P"), ("W", "R"),

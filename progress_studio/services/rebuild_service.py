@@ -23,6 +23,7 @@ from progress_studio.infrastructure.excel.live_dashboard_workbook import build_l
 from progress_studio.infrastructure.excel.live_monthly_workbook import build_live_monthly_view
 from progress_studio.infrastructure.excel.traditional_overlay_workbook import build_traditional_overlays
 from progress_studio.infrastructure.excel.weekly_compact_workbook import build_weekly_compact
+from progress_studio.infrastructure.excel.cutoff_controls import validate_existing_cutoff_placements
 from progress_studio.infrastructure.excel.main_dataset_workbook_adapter import main_dataset_from_workbook
 from progress_studio.infrastructure.excel.xlsx_package_validator import validate_xlsx_tables
 from progress_studio.infrastructure.excel.final_workbook_policy import finalize_workbook
@@ -201,6 +202,7 @@ class WorkbookRebuildEngine:
                 preserved_payment_sheet = "Payment" in wb.sheetnames
                 preserved_payment_input_sheet = "Payment Input" in wb.sheetnames
 
+                validate_existing_cutoff_placements(wb)
                 # Hard contract: delete only Progress-generated sheets. Builders are
                 # deterministic and may also remove their own target, but deleting
                 # here makes ownership explicit and prevents stale sheet remnants.
@@ -324,6 +326,7 @@ class WorkbookRebuildEngine:
                 preserved_payment_sheet = "Payment" in wb.sheetnames
                 preserved_payment_input_sheet = "Payment Input" in wb.sheetnames
 
+                validate_existing_cutoff_placements(wb)
                 # Live owns only these generated Progress views.
                 for sheet_name in (
                     "main_monthly",

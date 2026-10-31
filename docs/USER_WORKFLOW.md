@@ -143,6 +143,15 @@ Monthly table values are not masked to the Weekly cutoff. Press F9 after opening
 or editing to update Excel-calculated presentation, then Save. See
 [Weekly Compact](WEEKLY_COMPACT.md).
 
+The Weekly and Monthly cutoff dropdowns are in B:C below each generated table
+and S-Curve footer. Weekly Compact shows the Weekly cutoff there as a read-only
+date. Dashboard and EV reporting dates remain separate. Use Progress Rebuild
+to migrate an older workbook's controls; Payment/EV-only rebuild does not move
+them. Regeneration retains the existing cutoff default/reset behavior, so check
+the selected dates after Rebuild. If placement reports an occupied or merged
+cell, preserve the original workbook, move the conflicting content to a free
+location in a copy, and retry. Rebuild will not overwrite that content silently.
+
 ## 6. Recalculation in Excel
 
 Progress Studio workbooks use a user-driven Excel formula calculation

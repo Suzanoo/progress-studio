@@ -123,6 +123,9 @@ class MappedWorkbookExporter:
                 and self._supports_main_rebuild(source_workbook)
                 and "Timescale Info" in source_workbook.sheetnames
             )
+            if can_generate:
+                from progress_studio.infrastructure.excel.cutoff_controls import validate_existing_cutoff_placements
+                validate_existing_cutoff_placements(source_workbook)
         finally:
             source_workbook.close()
 

@@ -46,9 +46,9 @@ def test_dashboard_v1_live_dashboard_control_and_curve_contract():
 def test_dashboard_v1_traditional_overlay_contract():
     text = (ROOT / "infrastructure/excel/traditional_overlay_workbook.py").read_text()
 
-    # Weekly and Monthly own independent cutoff cells in column M.
-    assert "label_col = 12  # L" in text
-    assert "value_col = 13  # M" in text
+    # WU-1 changes placement only; independent cutoff calculation stays frozen.
+    assert "label_col = 2" in text
+    assert "value_col = 3" in text
     assert 'display_format="dd/mm/yyyy"' in text
     assert 'display_format="mmm yyyy"' in text
     assert "weekly_cutoff_ref=weekly_cutoff_ref" in text

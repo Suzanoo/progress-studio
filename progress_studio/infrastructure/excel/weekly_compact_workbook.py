@@ -12,6 +12,7 @@ from progress_studio.infrastructure.excel.traditional_overlay_workbook import (
     add_compact_weekly_overlay,
 )
 from progress_studio.infrastructure.excel.weekly_compact_monthly_workbook import project_monthly_regions
+from progress_studio.infrastructure.excel.cutoff_controls import find_cutoff_controls
 
 SHEET_NAME = "Weekly Compact"
 PERIOD_WIDTH = 2.5
@@ -48,26 +49,20 @@ def build_weekly_compact(workbook, dataset, *, snapshot=False, value_source=None
     target.sheet_view.showGridLines = False
     target.freeze_panes = source.freeze_panes
     target.cell(1, 1, "Activity Data — Weekly Compact")
+    control_cells = {(r, c) for r, lc, vc in find_cutoff_controls(source, dataset) for c in (lc, vc)}
 
     for row in target.iter_rows():
         for cell in row:
             if isinstance(cell, MergedCell):
                 continue
             cell.protection = Protection(locked=True, hidden=cell.protection.hidden)
-            if cell.row > header:
+            if cell.row > header and (cell.row, cell.column) not in control_cells:
                 src = source.cell(cell.row, cell.column)
                 if snapshot:
                     cell.value = value_source.cell(cell.row, cell.column).value
                 else:
                     ref = f"'main'!{src.coordinate}"
                     cell.value = f'=IF({ref}="","",{ref})'
-
-    # Normalize the copied control before the monthly projection relocates it.
-    for row in range(header + 1, source.max_row + 1):
-        if source.cell(row, 12).value == "Cutoff Date":
-            target.cell(row, 13, "=PS_WEEKLY_OVERLAY_CUTOFF")
-            target.cell(row, 13).number_format = "dd/mm/yyyy"
-            target.cell(row, 13).comment = None
 
     for i, col in enumerate(columns):
         letter = get_column_letter(col)

@@ -50,9 +50,9 @@ def test_create_progress_final_step_moves_proven_rebuild_features_to_create_boun
             ws = wb[sheet_name]
             cutoff_row = next(
                 row for row in range(1, ws.max_row + 1)
-                if ws.cell(row, 12).value == "Cutoff Date"
+                if ws.cell(row, 2).value == "Cutoff Date"
             )
-            assert ws.cell(cutoff_row, 13).protection.locked is False
+            assert ws.cell(cutoff_row, 3).protection.locked is False
     finally:
         wb.close()
 

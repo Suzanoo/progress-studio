@@ -120,8 +120,8 @@ def test_overlay_lw1233_project_bounds_and_cutoff_controls_contract():
     assert 'monthly_cutoff_ref=monthly_cutoff_ref' in text
     assert 'list_col="J"' in text
     assert 'list_col="K"' in text
-    assert 'label_col = 12  # L' in text
-    assert 'value_col = 13  # M' in text
+    assert 'label_col = 2' in text
+    assert 'value_col = 3' in text
     assert 'display_format="dd/mm/yyyy"' in text
     assert 'display_format="mmm yyyy"' in text
 
@@ -237,12 +237,12 @@ def test_lw124_three_cutoffs_are_independent_and_overlay_helpers_are_local():
 
     build_traditional_overlays(wb, dataset)
 
-    # Control row is immediately above the S-Curve Plan row; Amount is col I.
-    assert main['M19'].value == datetime(2026, 7, 17)
+    # Control is below the finalized generated table (only P footer in fixture).
+    assert main['C21'].value == datetime(2026, 7, 17)
     # Monthly owns a different value/list and does not bind to Dashboard.
-    assert monthly['M19'].value == datetime(2026, 8, 31)
-    assert main['M19'].number_format == 'dd/mm/yyyy'
-    assert monthly['M19'].number_format == 'mmm yyyy'
+    assert monthly['C21'].value == datetime(2026, 8, 31)
+    assert main['C21'].number_format == 'dd/mm/yyyy'
+    assert monthly['C21'].number_format == 'mmm yyyy'
     assert dash['K5'].value == datetime(2026, 7, 17)
 
     # Cutoff helpers use workbook defined-name proxies. This preserves the
@@ -250,8 +250,8 @@ def test_lw124_three_cutoffs_are_independent_and_overlay_helpers_are_local():
     # from direct main-sheet formulas for snapshot performance.
     assert 'PS_WEEKLY_OVERLAY_CUTOFF' in data['P2'].value
     assert 'PS_MONTHLY_OVERLAY_CUTOFF' in data['Q2'].value
-    assert wb.defined_names['PS_WEEKLY_OVERLAY_CUTOFF'].attr_text == "'main'!$M$19"
-    assert wb.defined_names['PS_MONTHLY_OVERLAY_CUTOFF'].attr_text == "'main_monthly'!$M$19"
+    assert wb.defined_names['PS_WEEKLY_OVERLAY_CUTOFF'].attr_text == "'main'!$C$21"
+    assert wb.defined_names['PS_MONTHLY_OVERLAY_CUTOFF'].attr_text == "'main_monthly'!$C$21"
     assert 'Dashboard!$K$5' not in data['P2'].value
     assert 'Dashboard!$K$5' not in data['Q2'].value
     assert 'PS_WEEKLY_OVERLAY_CUTOFF' in data['R2'].value
@@ -260,10 +260,10 @@ def test_lw124_three_cutoffs_are_independent_and_overlay_helpers_are_local():
     assert 'OR(A3="",A3>' in data['R2'].value
 
     # Simulate independent user edits: no formula links exist between controls.
-    main['M19'] = datetime(2026, 7, 10)
-    monthly['M19'] = datetime(2026, 7, 31)
+    main['C21'] = datetime(2026, 7, 10)
+    monthly['C21'] = datetime(2026, 7, 31)
     assert dash['K5'].value == datetime(2026, 7, 17)
-    assert main['M19'].value != monthly['M19'].value
+    assert main['C21'].value != monthly['C21'].value
 
 
 def test_lw124_local_cutoff_cells_are_unlocked_without_unprotecting_sheet():
@@ -341,8 +341,9 @@ def test_lw1241_removes_legacy_cutoff_dropdown_and_deduplicates_current_validati
 
     assert main['C19'].value is None
     assert main['I19'].value is None
-    assert main['L19'].value == 'Cutoff Date'
-    assert main['M19'].value == datetime(2026, 7, 17)
-    target_validations = [dv for dv in main.data_validations.dataValidation if 'M19' in dv.cells]
+    assert main['B21'].value == 'Cutoff Date'
+    assert main['C21'].value == datetime(2026, 7, 17)
+    assert main['L19'].value is None and main['M19'].value is None
+    target_validations = [dv for dv in main.data_validations.dataValidation if 'C21' in dv.cells]
     assert len(target_validations) == 1
     assert all('I19' not in dv.cells for dv in main.data_validations.dataValidation)

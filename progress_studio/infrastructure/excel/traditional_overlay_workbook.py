@@ -19,6 +19,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 
 from progress_studio.domain.main_dataset import MainDataset
+from progress_studio.infrastructure.excel.cutoff_controls import prepare_cutoff_placement
 from progress_studio.infrastructure.excel.dashboard_workbook import BLUE, GREEN, DATA_SHEET
 
 WEEKLY_OVERLAY_NAME = "PS_CURVE_OVERLAY_WEEKLY"
@@ -338,68 +339,21 @@ def _scurve_plan_row(dataset: MainDataset) -> int:
     return max((row.row_number for row in dataset.rows), default=dataset.header_row + 2) + 1
 
 
-def _remove_data_validations_for_cell(ws, coordinate: str) -> None:
-    """Remove stale single-cell validations that target ``coordinate``.
-
-    Rebuild can run on workbooks created by older LW revisions.  Those files
-    may already contain a local cutoff dropdown in the legacy Activity Data
-    columns, or an earlier validation on the current M cell.  Keeping both
-    produces duplicate cutoff selectors in Excel.
-    """
-    validations = list(ws.data_validations.dataValidation)
-    for validation in validations:
-        try:
-            targets_cell = coordinate in validation.cells
-        except TypeError:
-            targets_cell = False
-        if targets_cell:
-            ws.data_validations.dataValidation.remove(validation)
-
-
-def _clear_legacy_cutoff_control(ws, dataset: MainDataset, *, row: int) -> None:
-    """Remove the pre-LW-12.4.1 cutoff selector from its old columns."""
-    legacy_label_col = dataset.header_column("description") or 3
-    legacy_value_col = dataset.header_column("amount") or max(4, legacy_label_col + 1)
-    if (legacy_label_col, legacy_value_col) == (12, 13):
-        return
-
-    legacy_label = ws.cell(row, legacy_label_col)
-    if str(legacy_label.value or "").strip() != "Cutoff Date":
-        return
-
-    legacy_value = ws.cell(row, legacy_value_col)
-    _remove_data_validations_for_cell(ws, legacy_value.coordinate)
-    for cell in (legacy_label, legacy_value):
-        cell.value = None
-        cell.comment = None
-        cell.fill = PatternFill(fill_type=None)
-        cell.font = Font()
-        cell.alignment = Alignment()
-        cell.number_format = "General"
-
-
 def _add_cutoff_control(
     ws,
     dataset: MainDataset,
     *,
-    row: int,
     list_col: str,
     list_last_row: int,
     initial_value,
     display_format: str,
 ) -> str:
-    """Add a compact independent cutoff selector in columns L:M.
-
-    Column M is intentionally the editable value cell on both traditional
-    views.  Keeping the control out of the timescale footprint makes it easy
-    to reach even when the transparent overlay is visible.
-    """
-    label_col = 12  # L
-    value_col = 13  # M
-    _clear_legacy_cutoff_control(ws, dataset, row=row)
+    """Place the independent selector at B:C below the generated table."""
+    row = prepare_cutoff_placement(ws, dataset)
+    label_col = 2
+    value_col = 3
     label = ws.cell(row, label_col)
     value = ws.cell(row, value_col)
-    _remove_data_validations_for_cell(ws, value.coordinate)
     label.value = "Cutoff Date"
     label.fill = PatternFill("solid", fgColor=CUTOFF_LABEL_FILL)
     label.font = Font(color="FFFFFF", bold=True)
@@ -413,6 +367,7 @@ def _add_cutoff_control(
         "This cutoff belongs to this sheet only. Press F9 or Save after changing it to recalculate the overlay.",
         "Progress Studio",
     )
+    ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 0, 20)
     validation = DataValidation(
         type="list",
         formula1=f'=INDIRECT("{DATA_SHEET}!${list_col}$2:${list_col}${max(2, list_last_row)}")',
@@ -706,7 +661,6 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
     data_ws = workbook[DATA_SHEET]
 
     scurve_plan_row = _scurve_plan_row(dataset)
-    control_row = max(dataset.header_row + 1, scurve_plan_row - 1)
     bottom_anchor_row = max(OVERLAY_TOP_ROW + 1, scurve_plan_row - 1)
 
     weekly_list_last = max(2, len(dataset.periods) + 1)
@@ -733,12 +687,12 @@ def build_traditional_overlays(workbook, dataset: MainDataset) -> tuple[bool, bo
     monthly_cutoff_ref = None
     if "main" in workbook.sheetnames:
         weekly_cutoff_ref = _add_cutoff_control(
-            workbook["main"], dataset, row=control_row, list_col="J", list_last_row=weekly_list_last,
+            workbook["main"], dataset, list_col="J", list_last_row=weekly_list_last,
             initial_value=weekly_initial, display_format="dd/mm/yyyy",
         )
     if "main_monthly" in workbook.sheetnames:
         monthly_cutoff_ref = _add_cutoff_control(
-            workbook["main_monthly"], dataset, row=control_row, list_col="K", list_last_row=monthly_list_last,
+            workbook["main_monthly"], dataset, list_col="K", list_last_row=monthly_list_last,
             initial_value=monthly_initial, display_format="mmm yyyy",
         )
 
