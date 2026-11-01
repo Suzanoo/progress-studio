@@ -154,6 +154,36 @@ location in a copy, and retry. Rebuild will not overwrite that content silently.
 
 ## 6. Recalculation in Excel
 
+### Calendar duration columns (WU-2)
+
+New Create and fresh Mapping-generated workbooks include **Plan Duration** before
+**Plan Start** and **Actual Duration** before **Actual Start**. Values are inclusive
+calendar days (`INT(Finish)-INT(Start)+1`), displayed with `d`, not source working
+hours and not Duration weighting. Ordinary same-day activities show 1; explicitly
+identified milestones show 0 when dates are valid. Amount=0 never identifies a
+milestone. Imported milestone identity is retained independently of monetary data.
+
+Plan Duration is on the P row. Actual Duration is on the A row only when both
+Actual Start and Actual Finish are present and valid (completion is established
+by Actual Finish, not progress percentages or a cutoff). Missing, nonnumeric or
+reversed dates produce a blank value; entered invalid/reversed date pairs mark
+the duration cell red. Time-of-day is ignored. Plan summaries use the span of
+their existing rolled-up dates, not a sum of durations; Actual summaries stay blank.
+This does not introduce a new automatic rollup of edited child dates.
+
+Edit dates in `main`, then F9/Save; duration cells are protected derived values.
+Monthly metadata dates remain copies under the existing contract: Progress Rebuild
+refreshes them and their durations. Live Compact's metadata follows `main`;
+Snapshot Monthly/Compact contain durations computed at Rebuild. Formula-based
+date inputs need valid saved Excel caches for Snapshot calculation.
+
+Ordinary Rebuild does not insert these columns into legacy `main`. Fresh Mapping
+generation can use the new schema; unmarked legacy activities are not guessed to
+be milestones. Mapping reads paired Actual dates from its loaded source workbook.
+The optional edited-workbook migration retains its existing selective progress/
+Amount contract; it does not newly migrate schedule dates. Load the intended
+schedule-date source into Mapping. No automatic legacy column migration is included.
+
 Progress Studio workbooks use a user-driven Excel formula calculation
 policy.
 

@@ -50,6 +50,8 @@ def build_workbook_guide(workbook) -> None:
          "Use Progress Studio → Rebuild Payment when payment configuration changes."),
     ]
     row = 6
+    if 'main' in workbook.sheetnames and any(c.value == 'Plan Duration' for c in workbook['main'][4]):
+        sections.append(("6  DURATION", "Duration shows inclusive calendar days, not working hours or weights. Actual requires both actual dates; summaries stay blank. Edit dates in main, F9/Save. Progress Rebuild refreshes copied Monthly dates/durations; legacy layouts are not upgraded."))
     for title, body in sections:
         ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
         ws.cell(row, 2, title)
