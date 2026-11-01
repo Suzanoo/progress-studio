@@ -399,4 +399,6 @@ def build_monthly_main_view(
     monthly.sheet_view.showGridLines = source.sheet_view.showGridLines
 
     configure_incremental_excel_recalculation(workbook)
+    from progress_studio.infrastructure.excel.duration_workbook import populate_durations
+    populate_durations(workbook, monthly, snapshot=snapshot, value_source=value_source)
     return len(buckets)

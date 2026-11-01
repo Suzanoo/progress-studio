@@ -263,4 +263,6 @@ def build_live_monthly_view(
     monthly.sheet_properties.outlinePr.summaryBelow = False
     monthly.sheet_properties.outlinePr.applyStyles = True
     monthly.sheet_view.showGridLines = source.sheet_view.showGridLines
+    from progress_studio.infrastructure.excel.duration_workbook import populate_durations
+    populate_durations(workbook, monthly)
     return len(display_buckets)

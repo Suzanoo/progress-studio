@@ -239,6 +239,8 @@ class MappedWorkbookExporter:
                 except PaymentWorkbookError:
                     payment_reconcile = None
 
+                from progress_studio.infrastructure.excel.duration_workbook import populate_durations
+                populate_durations(workbook)
                 monthly_periods = build_monthly_main_view(workbook, require_timescale=False)
                 build_dashboard(workbook, project_name=output_file.stem)
                 # These builders replace main_monthly and Dashboard_Data. Restore

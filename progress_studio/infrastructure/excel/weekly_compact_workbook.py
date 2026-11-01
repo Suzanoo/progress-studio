@@ -87,6 +87,9 @@ def build_weekly_compact(workbook, dataset, *, snapshot=False, value_source=None
             target.cell(2, col, current.strftime("%b"))
 
     project_monthly_regions(workbook, dataset, target, snapshot=snapshot)
+    if snapshot:
+        from progress_studio.infrastructure.excel.duration_workbook import populate_durations
+        populate_durations(workbook, target, snapshot=True, value_source=value_source)
 
     # copy_worksheet does not copy validations or drawings. Do not add editable
     # controls or recreate the source's global names. New chart, shared sources.

@@ -680,6 +680,9 @@ def add_weekly_timescale(
     info.append(["Amount Input Option 2", "Enter Amount in Amount Mapping and run Script 04."])
     info.append(["Mapping Activities", mapping_count])
 
+    from progress_studio.infrastructure.excel.duration_workbook import populate_durations
+    populate_durations(wb)
+
     output_file.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_file)
     wb.close()

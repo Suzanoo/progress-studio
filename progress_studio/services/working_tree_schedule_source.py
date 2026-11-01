@@ -23,6 +23,7 @@ class _ActivityMetadata:
     percent_complete: float | None = None
     physical_percent_complete: float | None = None
     total_slack_minutes: float | None = None
+    is_milestone: bool = False
 
 
 class WorkingTreeScheduleSource:
@@ -85,6 +86,11 @@ class WorkingTreeScheduleSource:
             description_col = headers["description"]
             project_name = self.progress_file.stem
             metadata: dict[str, _ActivityMetadata] = {}
+            from progress_studio.infrastructure.excel.duration_workbook import milestone_ids
+            milestones = milestone_ids(wb)
+            # Legacy monetary-input flags are explicit identity, never inferred from Amount.
+            if 'plan duration' not in headers and 'EV Monetary Inputs' in wb.sheetnames:
+                milestones.update(str(r[0]).strip().upper() for r in wb['EV Monetary Inputs'].iter_rows(min_row=4,max_col=4,values_only=True) if r[0] and r[3] is True)
             for row in range(header_row + 1, ws.max_row + 1):
                 row_type = str(ws.cell(row, row_type_col).value or "").strip().lower()
                 pa = str(ws.cell(row, pa_col).value or "P").strip().upper() if pa_col else "P"
@@ -96,16 +102,18 @@ class WorkingTreeScheduleSource:
                 if not activity_id:
                     continue
                 total_float_hours = self._number(ws.cell(row, headers.get("total float (hr)", 0)).value) if headers.get("total float (hr)") else None
+                actual_row = row + 1 if pa_col and str(ws.cell(row+1,pa_col).value or '').upper() == 'A' else row
                 metadata[activity_id] = _ActivityMetadata(
                     task_id=ws.cell(row, headers["task id"]).value if headers.get("task id") else None,
                     uid=ws.cell(row, headers["uid"]).value if headers.get("uid") else None,
                     plan_start=self._date(ws.cell(row, headers["plan start"]).value),
                     plan_finish=self._date(ws.cell(row, headers["plan finish"]).value),
-                    actual_start=self._date(ws.cell(row, headers["actual start"]).value) if headers.get("actual start") else None,
-                    actual_finish=self._date(ws.cell(row, headers["actual finish"]).value) if headers.get("actual finish") else None,
+                    actual_start=self._date(ws.cell(actual_row, headers["actual start"]).value) if headers.get("actual start") else None,
+                    actual_finish=self._date(ws.cell(actual_row, headers["actual finish"]).value) if headers.get("actual finish") else None,
                     percent_complete=(self._number(ws.cell(row, headers["% complete"]).value) or 0.0) * 100.0 if headers.get("% complete") and self._number(ws.cell(row, headers["% complete"]).value) is not None else None,
                     physical_percent_complete=(self._number(ws.cell(row, headers["physical %"]).value) or 0.0) * 100.0 if headers.get("physical %") and self._number(ws.cell(row, headers["physical %"]).value) is not None else None,
                     total_slack_minutes=total_float_hours * 60.0 if total_float_hours is not None else None,
+                    is_milestone=activity_id in milestones,
                 )
             return project_name or self.progress_file.stem, metadata
         finally:
@@ -161,6 +169,7 @@ class WorkingTreeScheduleSource:
                     physical_percent_complete=meta.physical_percent_complete,
                     total_slack_minutes=meta.total_slack_minutes,
                     amount=self.amounts.get(node.code.strip().upper(), 0.0),
+                    is_milestone=meta.is_milestone,
                 )
             )
         ScheduleService().roll_up_summary_dates(rows)

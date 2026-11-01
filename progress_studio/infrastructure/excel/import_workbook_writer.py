@@ -16,7 +16,7 @@ class ImportWorkbookWriter:
         ws.title = WORKBOOK_SCHEMA.main_sheet
         headers = [
             "Row Type", "WBS", "Description", "Activity ID", "Task ID", "UID",
-            "Outline Level", "Plan Start", "Plan Finish", "Actual Start", "Actual Finish",
+            "Outline Level", "Plan Duration", "Plan Start", "Plan Finish", "Actual Duration", "Actual Start", "Actual Finish",
             "% Complete", "Physical %", "Total Float (hr)", "XML Amount",
         ]
         ws.append(headers)
@@ -48,7 +48,7 @@ class ImportWorkbookWriter:
                 row.name,
                 row.activity_id if not row.is_summary else None,
                 row.task_id, row.uid, row.outline_level,
-                row.plan_start, row.plan_finish, row.actual_start, row.actual_finish,
+                None, row.plan_start, row.plan_finish, None, row.actual_start, row.actual_finish,
                 row.percent_complete / 100.0 if row.percent_complete is not None else None,
                 row.physical_percent_complete / 100.0 if row.physical_percent_complete is not None else None,
                 total_float_hours,
@@ -63,19 +63,19 @@ class ImportWorkbookWriter:
                     ws.cell(excel_row, col).font = Font(bold=True)
 
         for row_no in range(2, ws.max_row + 1):
-            for col in (8, 9, 10, 11):
+            for col in (9, 10, 12, 13):
                 ws.cell(row_no, col).number_format = "dd/mm/yyyy"
-            for col in (12, 13):
+            for col in (14, 15):
                 ws.cell(row_no, col).number_format = "0.00%"
-            ws.cell(row_no, 14).number_format = "0.00"
-            ws.cell(row_no, 15).number_format = '#,##0.00'
+            ws.cell(row_no, 16).number_format = "0.00"
+            ws.cell(row_no, 17).number_format = '#,##0.00'
 
         widths = {"A": 12, "B": 16, "C": 48, "D": 14, "E": 11, "F": 11, "G": 14,
-                  "H": 19, "I": 19, "J": 19, "K": 19, "L": 13, "M": 13, "N": 16, "O": 16}
+                  "H": 15, "I": 19, "J": 19, "K": 15, "L": 19, "M": 19, "N": 13, "O": 13, "P": 16, "Q": 16}
         for column, width in widths.items():
             ws.column_dimensions[column].width = width
         ws.freeze_panes = "A2"
-        ws.auto_filter.ref = f"A1:N{ws.max_row}"
+        ws.auto_filter.ref = f"A1:Q{ws.max_row}"
         ws.sheet_properties.outlinePr.summaryBelow = False
         ws.sheet_view.showGridLines = False
 
@@ -86,6 +86,8 @@ class ImportWorkbookWriter:
         info.append(["Activity Rows", sum(not row.is_summary for row in rows)])
         info.column_dimensions["A"].width = 22
         info.column_dimensions["B"].width = 70
+        from progress_studio.infrastructure.excel.duration_workbook import seed_milestones
+        seed_milestones(wb, rows)
         if weight_basis is not None:
             from progress_studio.infrastructure.excel.weight_basis import set_creation_basis
             set_creation_basis(wb, weight_basis)

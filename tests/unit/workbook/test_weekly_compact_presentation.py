@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
@@ -58,7 +58,7 @@ def test_projection_preserves_both_existing_sheets_and_canonical_helpers(finaliz
     assert len(dates) == 316  # original three-week margins each side
     assert [compact.cell(4,c).value for c in dates] == [source.cell(4,c).value for c in dates]
     assert [compact.cell(3,c).value for c in dates] == [source.cell(3,c).value for c in dates]
-    for index, (_, cols) in enumerate(_display_month_buckets(source),18):
+    for index, (_, cols) in enumerate(_display_month_buckets(source), min(c.column for c in wb["main_monthly"][4] if isinstance(c.value, date))):
         for row in ds.activities:
             for r in (row.row_number,row.row_number+1):
                 ref=f"'main_monthly'!{get_column_letter(index)}{r}"
@@ -158,7 +158,7 @@ def test_snapshot_freezes_grid_and_keeps_shared_overlay(finalized):
     cached.cell(5,col,0.123)
     build_monthly_main_view(wb,snapshot=True,value_source=cached)
     build_weekly_compact(wb,ds,snapshot=True,value_source=cached)
-    for index, (_,cols) in enumerate(_display_month_buckets(wb['main']),18):
+    for index, (_,cols) in enumerate(_display_month_buckets(wb['main']), min(c.column for c in wb["main_monthly"][4] if isinstance(c.value, date))):
         for r in range(5,wb['main'].max_row+1):
             if wb['main'].cell(r,4).value not in {'P','A','AP','AA'}:continue
             assert wb['Weekly Compact'].cell(r,cols[0]).value == wb['main_monthly'].cell(r,index).value

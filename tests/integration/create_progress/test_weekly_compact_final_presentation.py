@@ -37,27 +37,27 @@ def test_create_projects_monthly_body_footer_and_all_row_scopes(artifact):
             assert copy(cell.font)==copy(m.cell(r,source[key]).font)
             assert not cell.alignment.shrinkToFit and cell.protection.locked
             assert all(isinstance(s.cell(r,c),MergedCell) for c in cols[1:])
-    assert w['main']['FG18'].value==0  # Actual zero input, not missing data.
-    assert w['main']['FG30'].value is None  # No Actual observation.
-    assert 'COUNT(' in m['AZ18'].value and 'COUNT(' in m['AZ30'].value
-    assert s['FG39'].value=='=IF(\'main_monthly\'!AZ39="","",\'main_monthly\'!AZ39)'
+    assert w['main']['FI18'].value==0  # Actual zero input, not missing data.
+    assert w['main']['FI30'].value is None  # No Actual observation.
+    assert 'COUNT(' in m['BB18'].value and 'COUNT(' in m['BB30'].value
+    assert s['FI39'].value=='=IF(\'main_monthly\'!BB39="","",\'main_monthly\'!BB39)'
     # The normal Create renderer owns its own accepted last-nonblank footer.
-    assert 'LOOKUP' in m['AZ39'].value
-    assert 'PS_WEEKLY_OVERLAY_CUTOFF' not in s['FG39'].value
+    assert 'LOOKUP' in m['BB39'].value
+    assert 'PS_WEEKLY_OVERLAY_CUTOFF' not in s['FI39'].value
 
 
 def test_merged_band_cf_anchors_and_geometry(artifact):
     w=load_workbook(artifact);s=w['Weekly Compact']
-    oct_rules=[rules for area,rules in s.conditional_formatting._cf_rules.items() if str(area.sqref)=='FG5:FK34'][0]
+    oct_rules=[rules for area,rules in s.conditional_formatting._cf_rules.items() if str(area.sqref)=='FI5:FM34'][0]
     assert len(oct_rules)==8
-    assert all('$FG5<>""' in r.formula[0] for r in oct_rules)
-    assert 'FG13:FK13' in s.merged_cells and 'FG14:FK14' in s.merged_cells
-    assert 'X36:AA36' in s.merged_cells # leap February, four weeks
-    assert 'AB36:AF36' in s.merged_cells # March, five weeks
-    assert 'T36:W36' in s.merged_cells # first partial month
-    assert 'FY36:GB36' in s.merged_cells # final partial month
-    assert 'BP36:BS36' in s.merged_cells and 'BT36:BX36' in s.merged_cells
-    assert all(s.column_dimensions[L(c)].width==2.5 for c in range(18,186))
+    assert all('$FI5<>""' in r.formula[0] for r in oct_rules)
+    assert 'FI13:FM13' in s.merged_cells and 'FI14:FM14' in s.merged_cells
+    assert 'Z36:AC36' in s.merged_cells # leap February, four weeks
+    assert 'AD36:AH36' in s.merged_cells # March, five weeks
+    assert 'V36:Y36' in s.merged_cells # first partial month
+    assert 'GA36:GD36' in s.merged_cells # final partial month
+    assert 'BR36:BU36' in s.merged_cells and 'BV36:BZ36' in s.merged_cells
+    assert all(s.column_dimensions[L(c)].width==2.5 for c in range(20,188))
 
 
 def test_checkpoints_use_weekly_values_and_existing_selection(artifact):
