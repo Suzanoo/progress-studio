@@ -26,6 +26,36 @@ Accepted at `main @ b16ddb0`, tag `progress-studio-v1.1-stable`.
   cutoff movement, monthly checkpoint collision, WBS outline, Save/Close/Reopen.
 - See [Weekly Compact contract](WEEKLY_COMPACT.md).
 
+## Current accepted baseline — WU-2
+
+Current planning baseline: `main @ 78675f5`, tag `wu2-duration-columns-stable`.
+WU-2 Plan Duration and Actual Duration is accepted and integrated. See
+[User workflow](USER_WORKFLOW.md) for its existing workbook behavior.
+This records the accepted baseline; no new regression result is claimed here.
+
+## BOQ Update and XML Amount Writeback — planning only
+
+Product directions are accepted: staged BOQ Amount-only updates followed by
+structural revisions, and reviewed P6 XML Amount export from one workbook to one
+target while preserving the original XML. Planning/documentation is authorized;
+feature implementation is **not authorized**.
+
+The [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) is the single detailed
+source for accepted direction, evidence, proposed gates and unresolved decisions.
+
+| Proposed order | Milestone | Status |
+| --- | --- | --- |
+| 1 | BU-1 — Amount-only BOQ Update | Proposed implementation; B1/B2 decisions and separate authorization needed |
+| 2 | XW-1 — P6 writeback engine proof | Proposed implementation; XML policy decisions and separate authorization needed |
+| 3 | XW-2 — Reviewed desktop export | Proposed; depends on accepted XW-1 |
+| 4 | BR-0 — Structural BOQ identity/reconciliation design | Proposed later investigation; structural implementation remains deferred |
+
+BU-1 and XW-1 are technically independent; this order is an engineering
+recommendation, not an approved implementation schedule. Completed external
+investigations and the one-off recovery/export do not mean these features exist.
+No new milestone is marked implemented or accepted. MSP/batch writeback and
+structural BOQ implementation remain outside the initial proposed scope.
+
 ## Deferred investigation (not authorized implementation)
 
 See [Next Steps](NEXT_STEPS.md) for Amount conversion at Rebuild and Actual

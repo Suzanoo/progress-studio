@@ -1,7 +1,8 @@
 # Next Steps — Product Owner notes (not approved implementation)
 
-Recorded after Weekly Compact Final Presentation acceptance, baseline
-`main @ 17cc3f3`.
+NS-1 and NS-2 were recorded after Weekly Compact Final Presentation acceptance
+at `main @ 17cc3f3`; their investigation status is retained. The new initiative
+reference below was reviewed at `main @ 78675f5` on 2026-11-01.
 
 ## NS-1 — Rebuild weight-basis conversion
 
@@ -30,8 +31,21 @@ new/removed activities, and any snapshot/live rebuild differences. Do not assume
 that incoming XML Actual is currently consumed by Rebuild. No conflict-resolution
 or automatic overwrite policy has been approved.
 
+## BOQ Update and XML Amount Writeback
+
+These product directions are now accepted, with **planning/documentation only**
+authorized. See the [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) for the
+proposed independent delivery tracks, staged structural scope, decision register
+and verification gates. See [Roadmap](ROADMAP.md) for milestone status.
+
+The next recommended implementation milestone is BU-1, subject to its stated
+product decisions and separate PO authorization. XML source/milestone/formula/
+target policies remain open; neither feature is implemented by this planning task.
+These initiatives do not authorize NS-1/NS-2 or change Rebuild/EV ownership.
+
 ## Boundary
 
-These notes are for future product investigation and decision. They are not
+NS-1/NS-2 remain future investigation questions. The initiative above has accepted
+product direction but no feature implementation authorization. These notes are not
 implementation authorization, acceptance criteria, or a change to current
 Weight Selection / Rebuild contracts.
