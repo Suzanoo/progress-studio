@@ -247,3 +247,41 @@ structural BAC or source changes need EV refresh. No Rebuild All or Snapshot EV.
 The workbook README explains the existing `okmd` password. It protects editing,
 not confidentiality. Manual password changes in Excel can be reset by later
 processing paths applying shared protection. Custom passwords are not a V1.1 feature.
+
+
+## BU-1: update BOQ Amounts in a Mapping project
+
+Engineering handoff; native Desktop/Excel and PO acceptance pending.
+
+1. Open the existing saved Mapping project. In Excel, recalculate and Save the
+   revised BOQ first, then select **Update BOQ Amounts...** in Mapping.
+2. Select the revised workbook. The existing selected BOQ worksheet is compared
+   against the verified project snapshot. Review changed items, affected Activity
+   Amounts, mapped/unmapped counts, totals and formula usage before confirming.
+3. **Apply and Save** preserves allocation pairs and percentages, saves a sibling
+   `*.before-boq-update-*.progressstudio` recovery copy of the current project,
+   then atomically saves the updated project. Cancel makes no project changes.
+   An unchanged candidate cannot be applied. Keep the recovery copy until review
+   is complete; open it to recover the pre-update project.
+4. Save/close/reopen as usual and use existing Mapping export to produce the
+   updated Progress Workbook. Existing exported Workbooks and XML are unchanged.
+
+Only positive-to-positive Amount changes are supported. Row insertion, deletion,
+reordering, changed descriptions/hierarchy/units/quantities or other non-Amount
+cells, ambiguous duplicate identities and eligibility transitions are rejected.
+Comparison covers every content row/column of the selected Mapping sheet; it is
+not structural reconciliation of other worksheets. Formatting is not identity.
+Non-Amount formulas and their saved values must remain unchanged.
+
+Saved numeric formula results are supported and formula counts appear in review.
+Missing, invalid or error results block the update. An unchanged heading with an
+explicit saved empty-string formula result remains a non-item. Formula cache
+freshness cannot be independently guaranteed; Excel recalculation/Save is required.
+
+The updated BOQ is embedded in the project and pinned to reviewed file bytes.
+If an external BOQ is changed or resaved, reopening uses the embedded reviewed
+snapshot rather than trusting changed formula caches. Use Update BOQ Amounts
+again for a later revision. Legacy projects need a verified original BOQ or an
+embedded snapshot. Failed validation or persistence retains the live project;
+a recovery copy may remain if the final write fails. A post-save display error
+explicitly reports that the save succeeded and asks you to reopen the project.

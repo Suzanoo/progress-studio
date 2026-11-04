@@ -13,7 +13,7 @@
 - [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
 - [Payment Breakdown](PAYMENT_BREAKDOWN.md)
 - [Roadmap/status](ROADMAP.md) — accepted baseline through WU-2; proposed and deferred work.
-- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted product directions; proposed milestones and open decisions; planning only, no feature implementation authorization.
+- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and decision register; BU-1 engineering handoff with native/PO acceptance pending; other milestones unauthorized.
 - [Changelog](../CHANGELOG.md)
 
 ## Collaboration authority

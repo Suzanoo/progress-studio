@@ -10,6 +10,8 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from progress_studio.domain.mapping_session import WorkbookFingerprint, WorkbookSnapshot
 from progress_studio.services.boq_mapping_service import BOQMappingService
+from progress_studio.services.boq_update_service import BOQUpdateService
+from progress_studio.presentation.gui.boq_update_dialog import review_boq_update
 from progress_studio.services.mapping_store import MappingStore
 from progress_studio.services.workbook_export_service import WorkbookExportService
 from progress_studio.infrastructure.layout_preferences import (
@@ -169,7 +171,10 @@ class AmountMappingFrame(ttk.Frame):
         self.activity_tree.bind("<Button-1>", self._activity_click)
         self._build_pager(left, self.activity_page_var, self._activity_prev, self._activity_next)
 
-        ttk.Label(right, text=tr('BOQ Items'), font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        boq_header = ttk.Frame(right)
+        boq_header.pack(fill="x")
+        ttk.Label(boq_header, text=tr('BOQ Items'), font=("Segoe UI", 10, "bold")).pack(side="left")
+        ttk.Button(boq_header, text=tr('boq_update.title'), command=self._update_boq).pack(side="right")
         self.boq_empty_label = ttk.Label(right, textvariable=self.boq_empty_var, style="Empty.TLabel", anchor="center")
         self.boq_empty_label.pack(fill="x", pady=(12, 4))
         filter_row = ttk.Frame(right)
@@ -529,6 +534,48 @@ class AmountMappingFrame(ttk.Frame):
             self._set_inputs_collapsed(True)
         except Exception as exc:
             messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
+        finally:
+            self._busy(False)
+
+    def _update_boq(self) -> None:
+        if not (self.session_file and self.progress_file and self.boq_file and self.boq_sheet):
+            messagebox.showinfo(tr('boq_update.title'), tr('boq_update.open_first'))
+            return
+        messagebox.showinfo(tr('boq_update.title'), tr('boq_update.prerequisite'))
+        selected = filedialog.askopenfilename(title=tr('boq_update.title'),
+                                             filetypes=[('Excel workbook', '*.xlsx')])
+        if not selected:
+            return
+        committed = False
+        try:
+            self._busy(True)
+            service = BOQUpdateService(self.session_repository)
+            preview = service.preview(self._session_data(), self.store,
+                                      self.session_file, Path(selected))
+            self._busy(False)
+            if not review_boq_update(self, preview):
+                return
+            self._busy(True)
+            store, backup, materialized = service.apply(preview, self._session_data(), self.store)
+            if backup is None:
+                return
+            # Persist succeeded. Publish only the fully validated candidate.
+            self.store = store
+            self.boq_file = materialized
+            self._boq_fingerprint = preview.updated.boq
+            self._boq_snapshot = preview.updated.boq_snapshot
+            committed = True
+            self.boq_path_var.set(str(preview.candidate_path))
+            self._refresh_boq_filter_values()
+            self._render_boq()
+            self._render_activities()
+            self._update_summary()
+            self._update_input_status()
+            self.session_status_var.set(tr('Project: {value1} (saved)', value1=self.session_file.name))
+            messagebox.showinfo(tr('boq_update.title'), tr('boq_update.success', backup=str(backup)))
+        except Exception as exc:
+            key = 'boq_update.display_failed' if committed else 'boq_update.failed'
+            messagebox.showerror(tr('boq_update.title'), tr(key, error=str(exc)))
         finally:
             self._busy(False)
 
@@ -1096,10 +1143,10 @@ class AmountMappingFrame(ttk.Frame):
         ).strip("_") or "project"
         return user_data_dir() / "sessions" / f"{safe_stem}-{key}.progressstudio"
 
-    def _write_session(self, path: Path, show_message: bool) -> Path:
+    def _session_data(self):
         if not self.progress_file or not self.boq_file or not self.boq_sheet:
             raise ValueError("Load the Progress workbook and BOQ worksheet first.")
-        session = self.session_repository.create(
+        return self.session_repository.create(
             self.progress_file,
             self.boq_file,
             self.boq_sheet,
@@ -1112,6 +1159,9 @@ class AmountMappingFrame(ttk.Frame):
             progress_snapshot=self._progress_snapshot,
             boq_snapshot=self._boq_snapshot,
         )
+
+    def _write_session(self, path: Path, show_message: bool) -> Path:
+        session = self._session_data()
         saved = self.session_repository.save(path, session)
         self.session_file = saved
         self.recent_repository.remember(saved)
