@@ -26,35 +26,28 @@ Accepted at `main @ b16ddb0`, tag `progress-studio-v1.1-stable`.
   cutoff movement, monthly checkpoint collision, WBS outline, Save/Close/Reopen.
 - See [Weekly Compact contract](WEEKLY_COMPACT.md).
 
-## Current accepted baseline — WU-2
+## Current accepted baseline — BU-1
 
-BU-1 implementation baseline: `main @ 273636b`; WU-2 stable tag: `wu2-duration-columns-stable`.
-WU-2 Plan Duration and Actual Duration is accepted and integrated. See
-[User workflow](USER_WORKFLOW.md) for its existing workbook behavior.
-This records the accepted baseline; no new regression result is claimed here.
+`main @ de125d4`, tag `bu1-boq-amount-update-stable`.
+The 2026-11-04 Product Owner authorization records BU-1 automated regression,
+Windows Desktop and Product Owner acceptance as passed and integrated. This is
+accepted baseline evidence, not a claim of new native testing in XW-1.
+WU-2 duration behavior remains accepted.
 
-## BOQ Update and XML Amount Writeback — BU-1 engineering handoff
+## BOQ Update and XML Amount Writeback
 
-Product directions are accepted: staged BOQ Amount-only updates followed by
-structural revisions, and reviewed P6 XML Amount export from one workbook to one
-target while preserving the original XML. **Only BU-1 implementation is authorized.**
-Native Desktop/Excel and Product Owner acceptance remain pending.
+The [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) owns accepted directions
+and X1–X5 decisions. XW-1 implementation alone was authorized on 2026-11-04.
 
-The [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) is the single detailed
-source for accepted direction, evidence, proposed gates and unresolved decisions.
+| Milestone | Status |
+| --- | --- |
+| BU-1 — Amount-only BOQ Update | Accepted and integrated |
+| XW-1 — P6 writeback engine proof | Implemented for engineering handoff; PO acceptance and native P6 compatibility unproven |
+| XW-2 — Reviewed desktop export | Unauthorized; depends on accepted XW-1 |
+| BR-0 — Structural BOQ identity/reconciliation design | Unauthorized for implementation |
 
-| Proposed order | Milestone | Status |
-| --- | --- | --- |
-| 1 | BU-1 — Amount-only BOQ Update | Implemented for engineering handoff; B1/B2 accepted; native/PO acceptance pending |
-| 2 | XW-1 — P6 writeback engine proof | Proposed implementation; XML policy decisions and separate authorization needed |
-| 3 | XW-2 — Reviewed desktop export | Proposed; depends on accepted XW-1 |
-| 4 | BR-0 — Structural BOQ identity/reconciliation design | Proposed later investigation; structural implementation remains deferred |
-
-BU-1 and XW-1 are technically independent; this order is an engineering
-recommendation, not an approved implementation schedule. Completed external
-investigations and the one-off recovery/export do not mean these features exist.
-BU-1 is not marked accepted or release-ready. MSP/batch writeback and
-structural BOQ implementation remain outside the initial proposed scope.
+[P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) documents the engine and proof.
+No Desktop export screen, MSP/batch writeback or structural BOQ revision is added.
 
 ## Deferred investigation (not authorized implementation)
 
