@@ -12,8 +12,9 @@
 - [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
 - [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
 - [Payment Breakdown](PAYMENT_BREAKDOWN.md)
-- [Roadmap/status](ROADMAP.md) — accepted baseline through WU-2; proposed and deferred work.
-- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and decision register; BU-1 engineering handoff with native/PO acceptance pending; other milestones unauthorized.
+- [Roadmap/status](ROADMAP.md) — accepted BU-1 baseline; XW-1 handoff and deferred work.
+- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and X1–X5 decisions; XW-1 engineering handoff; XW-2/BR-0 unauthorized.
+- [P6 Amount writeback engine](XML_AMOUNT_WRITEBACK.md) — reviewed XW-1 engine proof, supported inputs, output safety and native compatibility gates.
 - [Changelog](../CHANGELOG.md)
 
 ## Collaboration authority

@@ -5,11 +5,15 @@ Date: 2026-11-01. Reviewed baseline: `main @ 78675f524933b691b0d61485fc347b2bdfe
 
 ## Authority and status
 
-The Product Owner has approved the product directions in the next section and
-authorized BU-1 implementation against `main @ 273636b` on 2026-11-02.
-**BU-1 is implemented for engineering handoff; native acceptance and PO acceptance
-remain pending. XW-1, XW-2 and BR-0 remain unauthorized.** The sequence,
-boundaries and policies labeled recommendations remain proposals.
+The Product Owner accepted BU-1 automated, Windows Desktop and product acceptance,
+and authorized **XW-1 only** on 2026-11-04 against `main @ de125d4`, tag
+`bu1-boq-amount-update-stable`. X1–X5 and the XML saved-formula policy below are
+accepted. XW-1 is implemented for engineering handoff, not PO-accepted or released.
+**XW-2 and BR-0 remain unauthorized for implementation.**
+
+See [P6 Amount writeback engine](XML_AMOUNT_WRITEBACK.md) for the implemented
+boundary, reproducible proof and limitations. The Engineer has not performed Git
+writes or native P6 acceptance. Coordinator owns separately authorized integration.
 
 This file owns this initiative's accepted direction, proposed plan and decision
 register. [Roadmap](ROADMAP.md) records status; [Next Steps](NEXT_STEPS.md) links
@@ -29,7 +33,7 @@ and role contracts remain authoritative for existing behavior.
   of a combined project.
 - Engineer independently recommends order, dependencies, scope and gates.
   Product semantics are not established by implementation convenience.
-- BU-1 alone is authorized for implementation. Engineer delivers;
+- XW-1 alone is currently authorized for implementation. Engineer delivers;
   Coordinator integrates only after PO review and explicit Git authorization.
 
 ## Completed evidence and relevant delta
@@ -98,7 +102,8 @@ milestone-zero or positive-total policy into export automatically.
 The workbook's main Amount is Progress Weight; independent EV Monetary Inputs
 owns Activity Contract Value. Creation metadata describes origin, not current
 monetary validity. Manual-origin workbooks may contain real money after editing.
-This is the principal unresolved XML product boundary.
+X1 now resolves this boundary with explicit per-operation monetary confirmation;
+existing EV source semantics remain unchanged.
 
 ## Recommended sequence and dependencies
 
@@ -114,7 +119,7 @@ XW-2 depends on acceptance of XW-1. BR-0 is not a prerequisite for Amount-only
 updates or XML; it precedes any structural BOQ implementation. This sequence is
 not authorization, a fixed schedule or a requirement for new shared infrastructure.
 
-### BU-1 — Amount-only BOQ Update (implemented; acceptance pending)
+### BU-1 — Amount-only BOQ Update (accepted and integrated)
 
 Outcome: a user can review and accept a verified Amount-only revision, retain
 allocation pairs and exact shares, save/reopen the project and export updated
@@ -149,11 +154,11 @@ native checks explicitly rather than assigning routine QA to the PO.
 Deferred: structural reconciliation, split/merge, automatic XML updates, changes
 to standalone Rebuild, Payment prerequisites, EV source selection or historic BAC.
 
-### XW-1 — P6 writeback engine proof (proposed)
+### XW-1 — P6 writeback engine proof (engineering handoff)
 
 Outcome: a repeatable proof generates and validates a separate P6 XML for reviewed
 selected workbook Activity amounts; engine inputs/preview/results are testable
-without a desktop screen. Resolve X1-X5 before policy-dependent implementation.
+without a desktop screen. X1-X5 are accepted below.
 This proof is not a released user-facing workflow or general P6 round-trip claim.
 
 Scope: strict source evidence, project/ID matching, typed UDF resolution, before/
@@ -161,7 +166,9 @@ after preview, preservation of unrelated XML, safe separate output and diagnosti
 Recommend exact case-preserved matching within an explicit project boundary,
 one unique target per selected ID, replace rather than accumulate, and unchanged
 target-only Activities. An unmatched selected ID blocks export, not silent omission.
-Permit a reviewed source selection; no requirement to export all workbook rows.
+The XW-1 engine validates every Activity/P row in the selected workbook. That
+workbook may be a subset of the target combined Project; arbitrary row filtering
+is not exposed by this proof.
 Revalidate input identity after preview. Do not infer selected IDs from row order.
 
 Likely affected areas: workbook-reading boundaries, existing amount/field domain
@@ -216,17 +223,17 @@ remapping outcomes. Then propose implementation milestones based on evidence.
 Deferred: production structural reconciliation. Stage 2 direction alone does
 not authorize BR-0 execution or any subsequent implementation.
 
-## Decision register — B1/B2 accepted; XML decisions pending
+## Decision register — B1/B2 and X1–X5 accepted
 
-| ID | Decision and recommendation | Needed before |
+| ID | Accepted decision | Milestone |
 | --- | --- | --- |
 | B1 | Zero transitions: initially support changes between positive amounts on existing eligible items; unchanged zero/non-item rows stay unchanged. Block newly eligible rows or positive-to-zero transitions explicitly until a zero-item retention policy is approved. Accepted for BU-1 by the implementation authorization. | BU-1 |
-| B2 | Formula Amounts: accepted for BU-1: saved numeric results with visible formula count and a recalculate/save prerequisite; reject missing/error results. Cached-result freshness cannot be independently guaranteed. The XML formula policy remains unresolved and requires its own decision. | BU-1 / XW-1 respectively |
-| X1 | Source meaning: recommend selected current main Activity/P Amounts with explicit per-operation monetary intent; do not infer money from origin/positive values and do not silently merge EV Monetary Inputs or Mapping Summary. Creation origin must not permanently disqualify later real money. | XW-1 |
-| X2 | Milestones: recommend preserve target monetary values and exclude milestone writes initially; detect unknown/conflicting identity and block affected selection. Future milestone money export needs a deliberately chosen monetary source. | XW-1 |
-| X3 | Target field: recommend an explicit typed Activity Cost UDF, reusing the intended existing field only after identity/type validation, or offering creation of Progress Studio Amount with a fresh unused ID. Never hardcode the case-study ID or silently change native cost fields. | XW-1 |
-| X4 | Project scope: recommend one direct P6 Project initially; a combined building subset within it is supported. Multiple Project elements should block with explanation unless explicit project selection is approved. A combined project is not necessarily multi-project XML. | XW-1 |
-| X5 | Numeric policy: recommend individual zero and all-zero selected subsets be valid; blank is not zero; reject negative/nonfinite/invalid values; preserve supported stored precision without deliberate cents rounding. Confirm replacement semantics, not addition. | XW-1 |
+| B2 | Formula Amounts: accepted for BU-1: saved numeric results with visible formula count and a recalculate/save prerequisite; reject missing/error results. Cached-result freshness cannot be independently guaranteed. XW-1 also accepts saved numeric formula results, requires explicit recalculation/Save confirmation, rejects missing/invalid/error caches and warns that freshness cannot be guaranteed. | BU-1 / XW-1 respectively |
+| X1 | Source meaning: use selected current main Activity/P Amounts with explicit per-operation monetary intent; do not infer money from origin/positive values and do not silently merge EV Monetary Inputs or Mapping Summary. Creation origin must not permanently disqualify later real money. | XW-1 |
+| X2 | Milestones: preserve target monetary values and exclude milestone writes initially; detect unknown/conflicting identity and block affected selection. Future milestone money export needs a deliberately chosen monetary source. | XW-1 |
+| X3 | Target field: use an explicit typed Activity Cost UDF, reusing the intended existing field only after identity/type validation, or offering creation of Progress Studio Amount with a fresh unused ID. Never hardcode the case-study ID or silently change native cost fields. | XW-1 |
+| X4 | Project scope: one direct P6 Project initially; a combined building subset within it is supported. Multiple Project elements should block with explanation unless explicit project selection is approved. A combined project is not necessarily multi-project XML. | XW-1 |
+| X5 | Numeric policy: individual zero and all-zero selected subsets be valid; blank is not zero; reject negative/nonfinite/invalid values; preserve supported stored precision without deliberate cents rounding. Values replace existing amounts; they are not added. | XW-1 |
 
 These are product-visible scope/meaning choices, not requests for the PO to choose
 classes, algorithms or test tooling. Exact diagnostics, implementation structure,

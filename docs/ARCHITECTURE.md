@@ -96,6 +96,20 @@ standalone rebuild contract.
 Payment Breakdown also derives from current `main` and does not require
 the original XML, BOQ file, Mapping session, or `Payment Input`.
 
+### Reviewed P6 monetary writeback (XW-1)
+
+`XmlWritebackService` owns assessment and explicit reviewed publication for one
+Workbook and one P6 target. The strict Excel evidence adapter reuses sparse XLSX
+primitives without MainDataset float coercion. The P6 writer patches original XML
+bytes; it never serializes NormalizedSchedule. Domain evidence retains Decimal
+values. Existing Create weighting/EV/Mapping/Rebuild paths are unchanged.
+
+All source Activity/P rows are validated and exact IDs matched in one Project.
+Typed Cost UDF selection/creation is explicit, milestone money is preserved,
+and target-only Activities stay unchanged. Assessment fingerprints bind review
+to inputs; export stages and verifies a new file before no-overwrite publication.
+No Desktop integration exists in XW-1. See [writeback contract](XML_AMOUNT_WRITEBACK.md).
+
 ## 3. Ownership matrix
 
   ------------------------------------------------------------------------
