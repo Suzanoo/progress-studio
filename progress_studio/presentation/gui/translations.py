@@ -319,3 +319,24 @@ PAIRS.update({
     "Activity ID": "Activity ID", "WBS": "WBS", "All": "ทั้งหมด",
     "Wait for the current operation to finish before closing.": "กรุณารอให้งานปัจจุบันเสร็จก่อนปิดโปรแกรม",
 })
+
+# BU-1 review workflow; source workbook labels remain untranslated.
+GUIDE.update({
+    'boq_update.title': ('Update BOQ Amounts...', 'อัปเดตยอดเงิน BOQ...'),
+    'boq_update.open_first': ('Open or save a Mapping project with both workbooks first.', 'กรุณาเปิดหรือบันทึกโปรเจกต์ Mapping ที่มี Workbook ทั้งสองก่อน'),
+    'boq_update.prerequisite': ('Recalculate and Save the updated BOQ in Excel before selecting it. Only positive-to-positive Amount changes are supported. Saved formula results may be used, but their freshness cannot be verified independently.', 'กรุณาคำนวณสูตรใหม่และ Save BOQ ใน Excel ก่อนเลือกไฟล์ รองรับเฉพาะยอดบวกเปลี่ยนเป็นยอดบวก ใช้ผลสูตรที่บันทึกไว้ได้ แต่โปรแกรมยืนยันความเป็นปัจจุบันของผลสูตรไม่ได้'),
+    'boq_update.source': ('Updated BOQ: {file}\nWorksheet: {sheet}', 'BOQ ใหม่: {file}\nชีต: {sheet}'),
+    'boq_update.summary': ('Changed: {changed} | Unchanged: {unchanged} | Mapped: {mapped} | Unmapped: {unmapped}\nBOQ total: {old:,.2f} → {new:,.2f}\nMapped total: {old_mapped:,.2f} → {new_mapped:,.2f}', 'เปลี่ยน: {changed} | คงเดิม: {unchanged} | จับคู่แล้ว: {mapped} | ยังไม่จับคู่: {unmapped}\nยอด BOQ: {old:,.2f} → {new:,.2f}\nยอดที่จับคู่: {old_mapped:,.2f} → {new_mapped:,.2f}'),
+    'boq_update.formulas': ('Amount formula cells — previous: {old}, updated: {new}. Values are saved Excel results, not recalculated here. Recalculate and Save in Excel first; cache freshness cannot be guaranteed.', 'เซลล์สูตร Amount — เดิม: {old}, ใหม่: {new} ใช้ผลลัพธ์ที่ Excel บันทึกไว้ โปรแกรมไม่ได้คำนวณสูตรใหม่ ต้องคำนวณและ Save ใน Excel ก่อน และไม่สามารถยืนยันความเป็นปัจจุบันของผลสูตรได้'),
+    'boq_update.items': ('BOQ changes', 'รายการ BOQ ที่เปลี่ยน'),
+    'boq_update.activities': ('Activity impacts', 'ผลกระทบต่อกิจกรรม'),
+    'boq_update.identity': ('Item / Activity', 'รายการ / กิจกรรม'),
+    'boq_update.old': ('Previous', 'เดิม'),
+    'boq_update.new': ('Updated', 'ใหม่'),
+    'boq_update.delta': ('Difference', 'ผลต่าง'),
+    'boq_update.apply': ('Apply and Save', 'ยืนยันและบันทึก'),
+    'boq_update.save_notice': ('Apply saves this project and creates a recovery copy beside it. Existing exported workbooks and XML remain unchanged. Cancel leaves this project unchanged.', 'เมื่อยืนยัน โปรแกรมจะบันทึกโปรเจกต์และสร้างสำเนากู้คืนไว้ข้างไฟล์เดิม Workbook และ XML ที่เคยส่งออกจะไม่เปลี่ยน กดยกเลิกเพื่อคงโปรเจกต์เดิม'),
+    'boq_update.success': ('BOQ updated and project saved. Mapping shares are preserved. Export a new workbook to use the revised amounts.\n\nRecovery copy:\n{backup}', 'อัปเดต BOQ และบันทึกโปรเจกต์แล้ว รักษาสัดส่วน Mapping เดิม ให้ส่งออก Workbook ใหม่เพื่อใช้ยอดที่แก้ไข\n\nสำเนากู้คืน:\n{backup}'),
+    'boq_update.failed': ('BOQ update was not applied. Your previous project remains available.\n\n{error}', 'ไม่ได้อัปเดต BOQ โปรเจกต์เดิมยังคงอยู่\n\n{error}'),
+    'boq_update.display_failed': ('BOQ update was saved, but the view could not refresh. Reopen this project.\n\n{error}', 'บันทึก BOQ ใหม่แล้ว แต่แสดงผลใหม่ไม่สำเร็จ กรุณาเปิดโปรเจกต์นี้อีกครั้ง\n\n{error}'),
+})

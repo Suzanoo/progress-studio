@@ -33,19 +33,17 @@ or automatic overwrite policy has been approved.
 
 ## BOQ Update and XML Amount Writeback
 
-These product directions are now accepted, with **planning/documentation only**
-authorized. See the [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) for the
-proposed independent delivery tracks, staged structural scope, decision register
-and verification gates. See [Roadmap](ROADMAP.md) for milestone status.
-
-The next recommended implementation milestone is BU-1, subject to its stated
-product decisions and separate PO authorization. XML source/milestone/formula/
-target policies remain open; neither feature is implemented by this planning task.
-These initiatives do not authorize NS-1/NS-2 or change Rebuild/EV ownership.
+Product directions are accepted. BU-1 alone was authorized against `main @ 273636b`
+and is implemented for engineering handoff. B1/B2 are accepted for BOQ only.
+See the [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) for decisions and
+[Roadmap](ROADMAP.md) for status. Next: review the BU-1 engineering package,
+complete native Desktop/Excel gates, then obtain PO acceptance and separately
+authorized Coordinator integration. XW-1, XW-2 and BR-0 remain unauthorized.
+XML monetary/source/milestone/formula/target decisions remain open.
 
 ## Boundary
 
 NS-1/NS-2 remain future investigation questions. The initiative above has accepted
-product direction but no feature implementation authorization. These notes are not
+product direction with implementation authorization limited to BU-1. These notes are not
 implementation authorization, acceptance criteria, or a change to current
 Weight Selection / Rebuild contracts.

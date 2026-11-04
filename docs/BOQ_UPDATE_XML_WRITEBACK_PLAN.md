@@ -6,8 +6,9 @@ Date: 2026-11-01. Reviewed baseline: `main @ 78675f524933b691b0d61485fc347b2bdfe
 ## Authority and status
 
 The Product Owner has approved the product directions in the next section and
-authorized engineering planning and documentation only. **No feature milestone
-below is authorized for implementation, implemented or accepted.** The sequence,
+authorized BU-1 implementation against `main @ 273636b` on 2026-11-02.
+**BU-1 is implemented for engineering handoff; native acceptance and PO acceptance
+remain pending. XW-1, XW-2 and BR-0 remain unauthorized.** The sequence,
 boundaries and policies labeled recommendations remain proposals.
 
 This file owns this initiative's accepted direction, proposed plan and decision
@@ -28,7 +29,7 @@ and role contracts remain authoritative for existing behavior.
   of a combined project.
 - Engineer independently recommends order, dependencies, scope and gates.
   Product semantics are not established by implementation convenience.
-- Only planning and documentation are currently authorized. Engineer delivers;
+- BU-1 alone is authorized for implementation. Engineer delivers;
   Coordinator integrates only after PO review and explicit Git authorization.
 
 ## Completed evidence and relevant delta
@@ -113,7 +114,7 @@ XW-2 depends on acceptance of XW-1. BR-0 is not a prerequisite for Amount-only
 updates or XML; it precedes any structural BOQ implementation. This sequence is
 not authorization, a fixed schedule or a requirement for new shared infrastructure.
 
-### BU-1 — Amount-only BOQ Update (proposed first implementation milestone)
+### BU-1 — Amount-only BOQ Update (implemented; acceptance pending)
 
 Outcome: a user can review and accept a verified Amount-only revision, retain
 allocation pairs and exact shares, save/reopen the project and export updated
@@ -123,7 +124,7 @@ Scope: comparison against the session's verified BOQ; changed-item and affected
 Activity amounts; unchanged/unmapped counts and totals; explicit accept/cancel;
 coherent fingerprint/snapshot/mapping persistence; failed-update recovery.
 Recommend strict rejection of structural/ambiguous changes rather than best-effort
-remapping. Decide B1/B2 below before implementing their policy-dependent paths.
+remapping. B1/B2 below are accepted for BU-1 only.
 Detect source changes after preview and require fresh validation before applying.
 An unchanged candidate should be a harmless no-op with truthful feedback.
 
@@ -215,12 +216,12 @@ remapping outcomes. Then propose implementation milestones based on evidence.
 Deferred: production structural reconciliation. Stage 2 direction alone does
 not authorize BR-0 execution or any subsequent implementation.
 
-## Decision register — recommendations awaiting PO decision
+## Decision register — B1/B2 accepted; XML decisions pending
 
 | ID | Decision and recommendation | Needed before |
 | --- | --- | --- |
-| B1 | Zero transitions: initially support changes between positive amounts on existing eligible items; unchanged zero/non-item rows stay unchanged. Block newly eligible rows or positive-to-zero transitions explicitly until a zero-item retention policy is approved. This narrows accepted Amount-only direction and requires approval. | BU-1 |
-| B2 | Formula Amounts: recommend saved numeric results with visible formula count and a recalculate/save prerequisite; reject missing/error results. Cached-result freshness cannot be independently guaranteed. Literal-only is safer but less usable. Define the same evidence policy independently for BOQ and XML. | BU-1 / XW-1 respectively |
+| B1 | Zero transitions: initially support changes between positive amounts on existing eligible items; unchanged zero/non-item rows stay unchanged. Block newly eligible rows or positive-to-zero transitions explicitly until a zero-item retention policy is approved. Accepted for BU-1 by the implementation authorization. | BU-1 |
+| B2 | Formula Amounts: accepted for BU-1: saved numeric results with visible formula count and a recalculate/save prerequisite; reject missing/error results. Cached-result freshness cannot be independently guaranteed. The XML formula policy remains unresolved and requires its own decision. | BU-1 / XW-1 respectively |
 | X1 | Source meaning: recommend selected current main Activity/P Amounts with explicit per-operation monetary intent; do not infer money from origin/positive values and do not silently merge EV Monetary Inputs or Mapping Summary. Creation origin must not permanently disqualify later real money. | XW-1 |
 | X2 | Milestones: recommend preserve target monetary values and exclude milestone writes initially; detect unknown/conflicting identity and block affected selection. Future milestone money export needs a deliberately chosen monetary source. | XW-1 |
 | X3 | Target field: recommend an explicit typed Activity Cost UDF, reusing the intended existing field only after identity/type validation, or offering creation of Progress Studio Amount with a fresh unused ID. Never hardcode the case-study ID or silently change native cost fields. | XW-1 |
@@ -245,7 +246,11 @@ adapter reuse and verification methods remain engineering responsibilities.
 - Failed/cancelled operations must preserve prior usable state. Verify output
   collision handling and original recovery; never quietly discard unmatched data.
 
-This planning change is verified by document/link/status/diff checks, not feature
-tests. Earlier report assertions were not rerun as current full-regression proof.
+BU-1 adds strict selected-sheet evidence comparison, staged MappingStore updates,
+review, a sibling recovery project and atomic session publication. Reviewed BOQ
+fingerprints use binary identity: semantic identity omits formula caches, so an
+externally resaved file must fall back to the embedded reviewed snapshot.
+No session format migration or XML/EV/Payment policy change is introduced.
+See the delivered BU-1 implementation report for actual engineering results.
 Every implementation milestone needs its own engineering results, applicable
 native evidence, PO acceptance and separately authorized Git integration.
