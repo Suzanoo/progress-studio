@@ -12,9 +12,9 @@
 - [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
 - [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
 - [Payment Breakdown](PAYMENT_BREAKDOWN.md)
-- [Roadmap/status](ROADMAP.md) — accepted BU-1 baseline; XW-1 handoff and deferred work.
-- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and X1–X5 decisions; XW-1 engineering handoff; XW-2/BR-0 unauthorized.
-- [P6 Amount writeback engine](XML_AMOUNT_WRITEBACK.md) — reviewed XW-1 engine proof, supported inputs, output safety and native compatibility gates.
+- [Roadmap/status](ROADMAP.md) — accepted XW-1 baseline; XW-2 handoff and deferred work.
+- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and X1–X5 decisions; XW-1 accepted; XW-2 handoff; BR-0 unauthorized.
+- [P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) — accepted XW-1 engine, XW-2 Desktop review/export, output safety and acceptance boundaries.
 - [Changelog](../CHANGELOG.md)
 
 ## Collaboration authority

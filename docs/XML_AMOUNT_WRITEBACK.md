@@ -1,9 +1,56 @@
 # P6 XML Amount writeback engine — XW-1
 
-Status: engineering implementation handoff. Authorized 2026-11-04 against
-`main @ de125d4310cabce504e236e3e090192bf2418aa2` / `bu1-boq-amount-update-stable`.
+Status: XW-1 accepted, integrated and closed at `main @ c928d59`, tag
+`xw1-p6-xml-writeback-stable`. Product Owner evidence records Windows automated
+verification, real NKC1 proof and native Primavera P6 compatibility acceptance.
+XW-2 Desktop integration is implemented for engineering handoff; its native
+Windows usability, Product Owner Acceptance and Git integration remain pending.
 X1–X5 are accepted in [the initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md).
-No Desktop integration, PO acceptance, native P6 acceptance or release is claimed.
+
+## Desktop operation — XW-2
+
+Open **Tools > Export Amounts to P6 XML...** from any workspace. One resizable
+operation dialog contains file selection, confirmations, review and export.
+No new sidebar/Home/Rebuild route or Project Session requirement is added.
+
+1. Explicitly choose a saved XLSX/XLSM Workbook and a target P6 XML. Nothing is
+   inferred from Mapping, Project Session, an embedded snapshot or recent exports.
+   After Mapping edits, first use Export Mapped Workbook and select that output.
+2. Field discovery reads through XW-1 assessment. It is never export approval.
+   Select a named Activity / Cost field (even if only one) or explicitly request
+   creation of Progress Studio Amount. Field numbers distinguish duplicate labels;
+   Field details exposes technical identities as secondary evidence. Review a
+   candidate to inspect its existing values; the engine determines compatibility.
+3. Confirm main Amounts represent money. If formulas are detected, recalculate
+   all relevant formulas in Excel, Save, and confirm this prerequisite. Missing or
+   invalid caches remain blockers. Cache freshness cannot independently be proven.
+4. Review Amounts: inspect Project ID, field, Activity IDs/names, exact stored
+   before/proposed values, replacements, unchanged ordinary rows, preserved
+   milestones, ordinary zeros and target-only IDs. Missing is distinct from zero.
+   Target-only values/names are explicitly not assessed by the engine; these
+   records remain unchanged. Select a row to read full values in the details area.
+   Totals cover matched ordinary Activities, not Project BAC or Contract Value.
+   Invalid assessments display diagnostic subtotals only and never allow export.
+5. Export XML and select a NEW destination in an existing writable directory.
+   This explicit action and Save selection approve only the displayed assessment.
+   Existing destinations and input aliases are refused, never silently renamed or
+   overwritten. Zero replacements may be exported as an explicitly requested copy;
+   a reviewed new field is still created if requested. Success shows the actual
+   path; importing into Primavera remains a separate operation.
+
+Changing inputs, field or confirmation clears the review. External edits are
+checked by XW-1 before publication. Failure requires a fresh review; the UI never
+silently reassesses and exports an unseen result. Original diagnostics are retained
+under localized ENG/THA recovery guidance. Field labels and customer data are not
+translated. Language preference continues to apply on next application launch.
+
+Indeterminate work runs off the UI thread, with results consumed by Tk's event
+loop. Controls and duplicate export are blocked while busy. Cancel/close requests
+cancellation and keeps the dialog/application alive until the worker returns.
+Assessment cannot interrupt the accepted engine mid-read; its result is discarded.
+An export which already published is reported as success, even after a late cancel.
+Close again after the outcome is shown. No fabricated percentages or P6 import
+success claims are shown. Force termination/power loss remains outside UI control.
 
 ## Operation and ownership
 
@@ -126,17 +173,25 @@ Inspect the assessment and its `Review digest`, then repeat the same command wit
 digest. This harness is engineering tooling, not a production CLI/GUI feature.
 Customer files are separate proof artifacts, not repository test fixtures.
 
-## Remaining native compatibility gates
+## Acceptance evidence and remaining Desktop gates
 
-Automated XML parsing, exact byte preservation and Progress Studio re-import do
-not establish Primavera import compatibility. Before claiming native round-trip
-support, import copies into an isolated P6 test project for (1) an existing Cost
-UDF and (2) a newly created Cost UDF. Check P6's actual field identity/type/currency
-and selected Activity values; export again and compare milestone amounts,
-target-only Activities and schedule/resource/relationship data. Record P6 version,
-import options and any diagnostics. Native P6 can remap database ObjectIds and
-numeric precision; this engine does not promise preservation across P6's importer.
+XW-1 native P6 compatibility is accepted by the Product Owner; this handoff does
+not request re-running the engine acceptance suite. Automated parsing/preservation
+and Progress Studio re-import still do not prove every native P6 version/import
+option. P6 can remap database identities and numeric precision.
 
-XW-2 Desktop integration, MSP/batch, multi-Project selection and structural BOQ
-revision remain outside this implementation. Coordinator review and PO acceptance
-are separate from engineering proof and Git integration requires its own authority.
+For XW-2, Windows PO acceptance concerns the new dialog (including ENG/THA,
+resizing and file pickers) and one saved NKC1 Workbook -> reviewed new XML -> P6
+workflow. Use a copy/test project and check the selected field/representative
+amounts, milestone preservation and usability. Record actual P6 import outcomes
+separately; no new native Windows/P6 test is claimed by headless verification.
+
+Focused Desktop verification:
+
+```bash
+python -m pytest tests/integration/desktop/test_xml_writeback_workflow.py tests/integration/desktop/test_product_experience.py tests/unit/xml/test_xml_amount_writeback.py tests/integration/xml/test_xml_writeback_safety.py -q
+```
+
+MSP/batch, multi-Project selection, XML merging, structural BOQ revision, XW-3 and
+unrelated work remain outside XW-2. Coordinator review, PO acceptance and Git
+integration require their separate gates and authority.

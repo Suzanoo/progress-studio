@@ -340,3 +340,114 @@ GUIDE.update({
     'boq_update.failed': ('BOQ update was not applied. Your previous project remains available.\n\n{error}', 'ไม่ได้อัปเดต BOQ โปรเจกต์เดิมยังคงอยู่\n\n{error}'),
     'boq_update.display_failed': ('BOQ update was saved, but the view could not refresh. Reopen this project.\n\n{error}', 'บันทึก BOQ ใหม่แล้ว แต่แสดงผลใหม่ไม่สำเร็จ กรุณาเปิดโปรเจกต์นี้อีกครั้ง\n\n{error}'),
 })
+
+# XW-2 Desktop XML writeback resources.
+GUIDE.update({'xw.title': ('Export Amounts to P6 XML...', 'ส่งออก Amount ไปยัง P6 XML...'),
+ 'xw.help': ('Choose a saved Workbook and target P6 XML. After BOQ Mapping, first Export Mapped Workbook and '
+             'select that output. No Project Session is used.',
+             'เลือก Workbook ที่บันทึกแล้วและ P6 XML เป้าหมาย หากแก้ผ่าน BOQ Mapping ให้ Export Mapped '
+             'Workbook ก่อนแล้วเลือกไฟล์ผลลัพธ์นี้ ไม่ใช้ข้อมูลจาก Project Session'),
+ 'xw.workbook': ('Saved Workbook', 'Workbook ที่บันทึกแล้ว'),
+ 'xw.target': ('Target P6 XML', 'P6 XML เป้าหมาย'),
+ 'xw.field': ('Activity Amount field', 'ฟิลด์มูลค่ากิจกรรม'),
+ 'xw.field_details': ('Field details', 'รายละเอียดฟิลด์'),
+ 'xw.monetary': ('I confirm these main Activity Amounts are monetary values.',
+                 'ยืนยันว่า Amount ของกิจกรรมใน main เป็นมูลค่าเงิน'),
+ 'xw.formula_confirm': ('I recalculated all formulas in Excel and saved this Workbook before this review.',
+                        'ฉันคำนวณสูตรทั้งหมดใน Excel และบันทึก Workbook นี้ก่อนตรวจสอบแล้ว'),
+ 'xw.start': ('Select both input files to discover available fields.',
+              'เลือกไฟล์ต้นทางทั้งสองเพื่อค้นหาฟิลด์'),
+ 'xw.changed': ('Review required. Previous review is no longer approved for export.',
+                'ต้องตรวจสอบใหม่ ผลตรวจเดิมใช้ส่งออกไม่ได้แล้ว'),
+ 'xw.id': ('Activity ID', 'รหัสกิจกรรม'),
+ 'xw.before': ('Existing XML Amount', 'Amount เดิมใน XML'),
+ 'xw.after': ('Proposed XML Amount', 'Amount ที่จะใช้ใน XML'),
+ 'xw.state': ('Status', 'สถานะ'),
+ 'xw.review': ('Review Amounts', 'ตรวจสอบ Amount'),
+ 'xw.export': ('Export XML...', 'ส่งออก XML...'),
+ 'xw.save': ('Save as a NEW XML file (existing files cannot be replaced)',
+             'บันทึกเป็น XML ไฟล์ใหม่ (แทนที่ไฟล์เดิมไม่ได้)'),
+ 'xw.cancel_work': ('Request cancellation', 'ขอยกเลิกการทำงาน'),
+ 'xw.assessing': ('Reading and assessing files...', 'กำลังอ่านและตรวจสอบไฟล์...'),
+ 'xw.exporting': ('Validating reviewed inputs and exporting...', 'กำลังตรวจต้นทางตามผล review และส่งออก...'),
+ 'xw.cancelled': ('Export cancelled; no output was published.',
+                  'ยกเลิกการส่งออกแล้ว ไม่มีไฟล์ผลลัพธ์ถูกเผยแพร่'),
+ 'xw.review_cancelled': ('Assessment discarded. No export was requested.',
+                         'ยกเลิกผลตรวจแล้ว ไม่มีการสั่งส่งออก'),
+ 'xw.cancelling': ('Cancellation requested. Waiting for the actual result; a completed export will still be '
+                   'reported. Close again after completion.',
+                   'ขอยกเลิกแล้ว กำลังรอผลจริง หากส่งออกสำเร็จแล้วจะแสดงผลสำเร็จ '
+                   'กดปิดอีกครั้งเมื่อทำงานเสร็จ'),
+ 'xw.failed': ('Operation blocked or failed. Review again before exporting.',
+               'ดำเนินการไม่ได้หรือผิดพลาด ต้องตรวจสอบใหม่ก่อนส่งออก'),
+ 'xw.recovery': ('Resolve the diagnostic above. Check source files, field selection and confirmations; '
+                 'recalculate and save in Excel if needed. For output errors, choose a new filename in an '
+                 'existing writable folder. Review again. Original inputs are not overwritten.',
+                 'แก้ตามรายละเอียดด้านบน ตรวจไฟล์ต้นทาง ฟิลด์และการยืนยัน หากจำเป็นให้คำนวณและบันทึกใน Excel '
+                 'หากผิดพลาดที่ปลายทาง ให้เลือกชื่อใหม่ในโฟลเดอร์ที่มีอยู่และเขียนได้ แล้วตรวจสอบใหม่ '
+                 'ไฟล์ต้นทางไม่ถูกเขียนทับ'),
+ 'xw.success': ('XML exported: {path}', 'ส่งออก XML แล้ว: {path}'),
+ 'xw.p6_notice': ('XML generation is complete, not a Primavera P6 import. Import and verify the new file in '
+                  'P6 separately.',
+                  'การสร้าง XML เสร็จแล้ว ยังไม่ได้ Import เข้า Primavera P6 ให้นำไฟล์ใหม่เข้า P6 '
+                  'และตรวจสอบแยกต่างหาก'),
+ 'xw.create': ('Create new Progress Studio Amount — Activity / Cost',
+               'สร้าง Progress Studio Amount ใหม่ — Activity / Cost'),
+ 'xw.choose': ('No field selected', 'ยังไม่ได้เลือกฟิลด์'),
+ 'xw.discovery': ('Fields discovered. Explicitly choose a field, confirm monetary intent, then Review '
+                  'Amounts. Discovery is not export approval.',
+                  'ค้นหาฟิลด์แล้ว ให้เลือกฟิลด์ ยืนยันมูลค่าเงิน แล้วตรวจสอบ Amount '
+                  'ผลค้นหานี้ยังใช้ส่งออกไม่ได้'),
+ 'xw.valid': ('Review ready. Inspect rows, totals and warnings before Export XML.',
+              'ผลตรวจพร้อมแล้ว ตรวจรายการ ยอดรวมและคำเตือนก่อนส่งออก XML'),
+ 'xw.blocked': ('Blocked: diagnostic subtotals only; no partial export is allowed.',
+                'ยังส่งออกไม่ได้ ยอดรวมเป็นข้อมูลตรวจปัญหาเท่านั้น ไม่อนุญาตให้ส่งออกบางส่วน'),
+ 'xw.new_field': ('This export creates a NEW Progress Studio Amount Activity Cost field. See Field details '
+                  'for its proposed identity.',
+                  'การส่งออกนี้จะสร้างฟิลด์ Progress Studio Amount ชนิด Activity Cost ใหม่ '
+                  'ดูรหัสที่เสนอในรายละเอียดฟิลด์'),
+ 'xw.no_changes': ('No Amount replacements. Export is still available as an explicitly requested copy; any '
+                   'proposed new field is still created.',
+                   'ไม่มี Amount ที่ต้องแทนที่ ยังส่งออกเป็นสำเนาตามที่สั่งได้ หากเสนอสร้างฟิลด์ใหม่ '
+                   'ฟิลด์นั้นจะถูกสร้าง'),
+ 'xw.blockers': ('Blockers (engine diagnostics):', 'ข้อขัดข้อง (รายละเอียดจาก engine):'),
+ 'xw.warnings': ('Warnings (engine diagnostics):', 'คำเตือน (รายละเอียดจาก engine):'),
+ 'xw.totals_notice': ('Totals cover matched ordinary Activities only, not Project BAC or Contract Value. No '
+                      'currency is assumed. Stored digits are shown without rounding. Formula caches cannot '
+                      'independently be certified current. Select a row for full values. Target-only fields '
+                      'are not assessed or changed.',
+                      'ยอดรวมครอบคลุมกิจกรรมทั่วไปที่จับคู่ได้เท่านั้น ไม่ใช่ Project BAC หรือ Contract '
+                      'Value ไม่กำหนดสกุลเงินเอง แสดงตัวเลขที่บันทึกโดยไม่ปัดเศษ '
+                      'ไม่สามารถรับรองความสดของผลสูตรได้ เลือกแถวเพื่อดูค่าเต็ม '
+                      'ฟิลด์ของกิจกรรมที่อยู่เฉพาะใน XML ไม่ถูกตรวจหรือแก้ไข'),
+ 'xw.details_notice': ('Field numbers distinguish candidates in this file; they do not imply equivalence. '
+                       'Technical identities are shown here only. Review each candidate to inspect existing '
+                       'values. The engine validates compatibility.',
+                       'เลขลำดับใช้แยกฟิลด์ในไฟล์นี้ ไม่ได้ยืนยันว่าเป็นฟิลด์เดียวกัน '
+                       'รหัสภายในแสดงเฉพาะรายละเอียดนี้ ตรวจแต่ละฟิลด์เพื่อดูค่าเดิม engine '
+                       'เป็นผู้ตรวจความเข้ากันได้'),
+ 'xw.missing': ('Missing', 'ไม่มีค่า'),
+ 'xw.not_assessed': ('Not assessed', 'ไม่ได้ตรวจค่า'),
+ 'xw.replace': ('Replace', 'แทนที่'),
+ 'xw.unchanged': ('Unchanged ordinary', 'กิจกรรมทั่วไปไม่เปลี่ยน'),
+ 'xw.preserve_milestone': ('Preserved milestone', 'คงค่า Milestone'),
+ 'xw.target_only': ('Target only — unchanged', 'มีเฉพาะใน XML — ไม่เปลี่ยน'),
+ 'xw.summary': ('Project ID: {project} | Field: {field}\n'
+                'Source: {source} | Matched rows: {matched} | Replacements: {replaced} | Unchanged ordinary: '
+                '{unchanged} | Preserved milestones: {milestones}\n'
+                'Target only: {other} | Ordinary zeros: {zeros} | Formula rows: {formulas}\n'
+                'Matched ordinary total: known before {before} (missing: {missing}) → proposed {after}',
+                'รหัสโครงการ: {project} | ฟิลด์: {field}\n'
+                'ต้นทาง: {source} | แถวจับคู่: {matched} | แทนที่: {replaced} | ทั่วไปไม่เปลี่ยน: '
+                '{unchanged} | คง Milestone: {milestones}\n'
+                'เฉพาะ XML: {other} | ทั่วไปค่าศูนย์: {zeros} | แถวสูตร: {formulas}\n'
+                'ยอดรวมทั่วไปที่จับคู่: ค่าเดิมที่ทราบ {before} (ไม่มีค่า: {missing}) → ค่าเสนอ {after}'),
+ 'xw.guide': ('Export money to P6: Tools > Export Amounts to P6 XML. Select the saved Workbook (after Export '
+              'Mapped Workbook if applicable) and target XML, choose a Cost field or reviewed creation, '
+              'confirm money and formula recalculation/Save, Review, then Export to a new file. Inputs and '
+              'existing files are never overwritten. Import into P6 separately.',
+              'ส่งมูลค่าเข้า P6: Tools > ส่งออก Amount ไปยัง P6 XML เลือก Workbook ที่บันทึกแล้ว (หลัง '
+              'Export Mapped Workbook หากใช้ Mapping) และ XML เป้าหมาย เลือกฟิลด์ Cost หรือสร้างใหม่ '
+              'ยืนยันมูลค่าเงินและการคำนวณสูตร/Save ตรวจสอบแล้วส่งออกเป็นไฟล์ใหม่ '
+              'ไม่เขียนทับต้นทางหรือไฟล์ที่มีอยู่ ให้นำเข้า P6 แยกต่างหาก')})
+GUIDE["xw.close"] = ("Close", "ปิด")
