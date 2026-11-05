@@ -5,15 +5,14 @@ Date: 2026-11-01. Reviewed baseline: `main @ 78675f524933b691b0d61485fc347b2bdfe
 
 ## Authority and status
 
-The Product Owner accepted BU-1 automated, Windows Desktop and product acceptance,
-and authorized **XW-1 only** on 2026-11-04 against `main @ de125d4`, tag
-`bu1-boq-amount-update-stable`. X1–X5 and the XML saved-formula policy below are
-accepted. XW-1 is implemented for engineering handoff, not PO-accepted or released.
-**XW-2 and BR-0 remain unauthorized for implementation.**
-
-See [P6 Amount writeback engine](XML_AMOUNT_WRITEBACK.md) for the implemented
-boundary, reproducible proof and limitations. The Engineer has not performed Git
-writes or native P6 acceptance. Coordinator owns separately authorized integration.
+BU-1 and XW-1 are accepted and closed. Current accepted baseline is
+`main @ c928d59`, tag `xw1-p6-xml-writeback-stable`. Product Owner evidence records
+XW-1 Windows automated verification, real NKC1 proof and native P6 compatibility.
+XW-2 decisions D1–D5 and implementation were authorized on 2026-11-04. XW-2 is
+implemented for engineering handoff; native Windows UX, PO acceptance and Git
+integration remain pending. **XW-3 and BR-0 implementation are unauthorized.**
+See [P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) for the engine and Desktop
+workflow contract. Coordinator owns separately authorized Git integration.
 
 This file owns this initiative's accepted direction, proposed plan and decision
 register. [Roadmap](ROADMAP.md) records status; [Next Steps](NEXT_STEPS.md) links
@@ -192,21 +191,25 @@ proof when available, but remains a release gate for XW-2 if unavailable.
 Deferred: GUI release, MSP, batch targets, automatic source merging, renumbering,
 schedule editing and writing arbitrary native cost/resource fields.
 
-### XW-2 — Reviewed desktop export (proposed)
+### XW-2 — Reviewed desktop export (authorized; engineering handoff)
 
-Outcome: one workbook/one target workflow exposes validated selection, source/
-field/project identity, before/after values and totals, exclusions and blockers,
-and exports only after review. Depends on accepted XW-1; menu placement is open.
+Accepted decisions D1–D5: Tools > Export Amounts to P6 XML...; one resizable
+operation dialog; independent explicit saved Workbook and target XML selection;
+no session/snapshot substitution or automatic Mapping Export/Rebuild; explicit
+named Cost field selection or reviewed creation; monetary and formula Save
+confirmations; valid assessment, visible review and explicit new-file export.
+No new sidebar, Home card or Rebuild target. Zero-change copies remain permitted.
 
-Likely areas: presentation, XW-1 orchestration integration, translations, workflow
-documentation and integration tests. Preserve ENG/THA conventions. No second
-implementation of the engine inside the GUI.
+Reuse XW-1 without duplicating monetary, identity, milestone, UDF or output logic.
+Preserve ENG/THA launch language, original inputs and new-file-only publication.
+See [the workflow contract](XML_AMOUNT_WRITEBACK.md) for behavior and recovery.
 
-Gates: invalid input feedback; stale-preview invalidation; cancel and output
-collision handling; no overwrite of either input; end-to-end desktop export;
-unchanged source workbook/XML bytes; P6 compatibility gate above; existing
-Create/Mapping/Rebuild/Payment/EV and WU-2 regression; PO acceptance.
-Deferred: batch/MSP and broader monetary-source policies not explicitly approved.
+Engineering gates: invalid inputs; stale review; cancel/late cancel; output
+collisions/failures; no hidden session dependency; exact values and input bytes;
+existing Create/Mapping/Rebuild/Payment/EV regression. Native gates: Windows
+Desktop usability and one scoped NKC1 workflow; prior XW-1 acceptance remains
+accepted. PO acceptance and Coordinator Git integration are still pending.
+Deferred: batch/MSP, project selection, merging and broader monetary policies.
 
 ### BR-0 — Structural BOQ identity and reconciliation design (proposed later work)
 

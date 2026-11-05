@@ -397,3 +397,15 @@ Before changing cross-workspace behavior, tests should identify the
 affected ownership boundary (Create, Mapping, Payment, Rebuild,
 renderer, or Final Workbook Policy) and include the relevant workflow
 regression gate.
+
+## XW-2 Desktop writeback boundary
+
+`presentation/gui/xml_writeback_dialog.py` owns a single operation dialog with
+explicit independent file selection, field display, confirmations and review.
+The Tools route has no MappingStore/Project Session dependency. Immutable
+WritebackRequest/WritebackAssessment objects pass to the unchanged XW-1 service;
+all monetary, milestone, UDF, matching and publication decisions remain there.
+Discovery is an incomplete assessment, never export approval. The UI clears the
+review after changes and uses a non-daemon worker plus queue/after callbacks;
+workers never update Tk. App close waits for actual completion so late publication
+is reported truthfully. No new persistence, worker framework or dependency is added.

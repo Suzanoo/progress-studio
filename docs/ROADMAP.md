@@ -26,28 +26,28 @@ Accepted at `main @ b16ddb0`, tag `progress-studio-v1.1-stable`.
   cutoff movement, monthly checkpoint collision, WBS outline, Save/Close/Reopen.
 - See [Weekly Compact contract](WEEKLY_COMPACT.md).
 
-## Current accepted baseline — BU-1
+## Current accepted baseline — XW-1
 
-`main @ de125d4`, tag `bu1-boq-amount-update-stable`.
-The 2026-11-04 Product Owner authorization records BU-1 automated regression,
-Windows Desktop and Product Owner acceptance as passed and integrated. This is
-accepted baseline evidence, not a claim of new native testing in XW-1.
-WU-2 duration behavior remains accepted.
+`main @ c928d59`, tag `xw1-p6-xml-writeback-stable`.
+BU-1 and XW-1 are accepted, integrated and closed. The Product Owner records XW-1
+Windows automated verification, real NKC1 proof and native P6 compatibility as
+passed. This is accepted evidence, not new native testing in XW-2.
 
 ## BOQ Update and XML Amount Writeback
 
 The [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) owns accepted directions
-and X1–X5 decisions. XW-1 implementation alone was authorized on 2026-11-04.
+and decisions. [P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) owns engine/Desktop
+behavior and remaining native acceptance boundaries.
 
 | Milestone | Status |
 | --- | --- |
 | BU-1 — Amount-only BOQ Update | Accepted and integrated |
-| XW-1 — P6 writeback engine proof | Implemented for engineering handoff; PO acceptance and native P6 compatibility unproven |
-| XW-2 — Reviewed desktop export | Unauthorized; depends on accepted XW-1 |
-| BR-0 — Structural BOQ identity/reconciliation design | Unauthorized for implementation |
+| XW-1 — P6 writeback engine proof | Accepted and closed |
+| XW-2 — Reviewed desktop export | Implemented for engineering handoff; native Windows UX / PO acceptance / Git integration pending |
+| XW-3 / BR-0 | Unauthorized for implementation |
 
-[P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) documents the engine and proof.
-No Desktop export screen, MSP/batch writeback or structural BOQ revision is added.
+XW-2 adds a Tools command and one review/export dialog using the accepted engine.
+No MSP/batch writeback, XML merging or structural BOQ revision is added.
 
 ## Deferred investigation (not authorized implementation)
 

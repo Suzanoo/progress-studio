@@ -285,3 +285,16 @@ again for a later revision. Legacy projects need a verified original BOQ or an
 embedded snapshot. Failed validation or persistence retains the live project;
 a recovery copy may remain if the final write fails. A post-save display error
 explicitly reports that the save succeeded and asks you to reopen the project.
+
+## Export Activity Amounts to Primavera P6 XML
+
+Use **Tools > Export Amounts to P6 XML...** without a Project Session or BOQ.
+Select the saved Workbook explicitly. If amounts were changed in Mapping, first
+Export Mapped Workbook and select that output. Choose the target XML and named
+Activity Cost field (or reviewed creation). Confirm monetary intent, recalculate
+formulas in Excel and Save when applicable, then Review Amounts and warnings.
+Export XML opens Save for a new file; inputs and existing outputs are never
+overwritten. Import the new file into P6 separately. See the
+[writeback workflow](XML_AMOUNT_WRITEBACK.md#desktop-operation--xw-2) for review,
+formula-cache limitations, cancellation and recovery. XW-2 native UX/PO acceptance
+is pending; XW-1 compatibility acceptance remains accepted.

@@ -75,4 +75,5 @@ def build_help(parent, navigate):
     label(body, "guide.rebuild_note")
     label(body, "guide.optional", "Section.TLabel")
     label(body, "guide.ev_note")
+    label(body, "xw.guide")
     ttk.Button(body, text=tr("guide.back"), command=lambda: navigate("home")).pack(anchor="w", pady=8)

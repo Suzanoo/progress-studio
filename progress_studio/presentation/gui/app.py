@@ -192,6 +192,8 @@ class ProgressStudioDesktopApp(tk.Tk):
         tools_menu.add_command(label=tr('Import Workspace'), command=lambda: self._show_workspace("import"))
         tools_menu.add_command(label=tr('Payment Workspace'), command=lambda: self._show_workspace("payment"))
         tools_menu.add_command(label=tr('Rebuild Workspace'), command=lambda: self._show_workspace("rebuild"))
+        tools_menu.add_separator()
+        tools_menu.add_command(label=tr('xw.title'), command=self._open_xml_writeback)
         menu.add_cascade(label=tr('Tools'), menu=tools_menu)
 
         help_menu = tk.Menu(menu, tearoff=False)
@@ -442,7 +444,20 @@ class ProgressStudioDesktopApp(tk.Tk):
         except OSError:
             pass
 
+    def _open_xml_writeback(self) -> None:
+        from progress_studio.presentation.gui.xml_writeback_dialog import XmlWritebackDialog
+        dialog = getattr(self, '_xml_writeback_dialog', None)
+        if dialog is not None and dialog.winfo_exists():
+            dialog.lift()
+            return
+        self._xml_writeback_dialog = XmlWritebackDialog(self)
+
     def _close_application(self) -> None:
+        dialog = getattr(self, '_xml_writeback_dialog', None)
+        if dialog is not None and dialog.winfo_exists() and dialog.busy:
+            dialog.request_close()
+            dialog.lift()
+            return  # Keep Tk alive until the worker's actual outcome is displayed.
         if self.finance_workspace.busy:
             messagebox.showwarning(tr('Financial Forecast'), tr('Wait for the finance operation to finish before closing.'))
             return
