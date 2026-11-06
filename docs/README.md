@@ -12,6 +12,7 @@
 - [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
 - [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
 - [Payment Input](PAYMENT_INPUT.md) — Amount snapshots, cumulative WBS summaries and deferred BOQ projection.
+- [BOQ Payment Projection](BOQ_PAYMENT_PROJECTION.md) — BP-1 read-only service, source compatibility and verification; BP-2 deferred.
 - [Payment Breakdown](PAYMENT_BREAKDOWN.md)
 - [Roadmap/status](ROADMAP.md) — accepted XW-1 baseline; XW-2 handoff and deferred work.
 - [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and X1–X5 decisions; XW-1 accepted; XW-2 handoff; BR-0 unauthorized.
