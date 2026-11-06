@@ -36,10 +36,10 @@ def _created_mapping_input(tmp_path: Path, populated_payment: bool):
         payment = wb["Payment Input"]
         for row in range(8, payment.max_row + 1):
             if payment.cell(row, 1).value == "ACT":
-                for col in range(5, payment.max_column + 1):
+                for col in range(6, 6 + int(payment["B4"].value)):
                     payment.cell(row, col).value = None
                 if populated_payment:
-                    payment.cell(row, 5, 0.5)
+                    payment.cell(row, 6, 0.5)
         assert len(wb["main"]._charts) == len(wb["main_monthly"]._charts) == 1
         wb.save(created)
     finally:

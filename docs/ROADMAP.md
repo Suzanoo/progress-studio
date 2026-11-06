@@ -69,3 +69,14 @@ Version metadata remains 2.3.0 until the owner authorizes release numbering.
 The [pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md) records the old
 P0–P11 and WIN tracks. It is not the current release status or an authorization
 to resume historical milestones. New milestones require PO authorization.
+
+## Payment Input PI-1
+
+PI-1 is authorized and implemented for engineering handoff against `8156050`
+(XW-2 stable baseline). Native Excel and PO acceptance remain pending.
+See [Payment Input](PAYMENT_INPUT.md). BP-1/BP-2 BOQ projection and separate
+values-only Project snapshot are planning-approved only, not implemented.
+
+PI-1 cumulative WBS correction: fixed full-Amount display with derived sparse states,
+zero-only WBS presentation and no COV rows; engineering verification passed (1,159 tests; 6 skipped); Coordinator review pending.
+Acceptance remains HOLD; BP-1/BP-2 remain unauthorized.

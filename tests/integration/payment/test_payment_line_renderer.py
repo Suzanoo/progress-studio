@@ -65,19 +65,19 @@ def _payment_input(progress: Path, path: Path) -> Path:
     PaymentInputWorkbook().create(progress, path, 3)
     wb = load_workbook(path)
     ws = wb["Payment Input"]
-    # P01 begins at column E in the lightweight tree layout. Clear generated
+    # P01 begins at column F in the lightweight tree layout. Clear generated
     # suggestions first, then make P01 intentionally sparse with two points.
     for row in range(8, ws.max_row + 1):
         if ws.cell(row, 1).value == "ACT":
-            for col in range(5, 8):
+            for col in range(6, 9):
                 ws.cell(row, col).value = None
     activity_rows = {
         ws.cell(row, 3).value: row
         for row in range(8, ws.max_row + 1)
         if ws.cell(row, 1).value == "ACT"
     }
-    ws.cell(activity_rows["A1000"], 5, 0.60)
-    ws.cell(activity_rows["A1010"], 5, 0.25)
+    ws.cell(activity_rows["A1000"], 6, 0.60)
+    ws.cell(activity_rows["A1010"], 6, 0.25)
     wb.save(path)
     wb.close()
     return path
@@ -140,13 +140,13 @@ def test_ms_pay61_renders_three_colored_vertical_backbones(tmp_path: Path) -> No
         for row in range(8, ws.max_row + 1)
         if ws.cell(row, 1).value == "ACT"
     }
-    # Tree layout: E=P01, F=P02, G=P03. Keep all three periods sparse.
-    ws.cell(activity_rows["A1000"], 5, 0.25)
-    ws.cell(activity_rows["A1000"], 6, 0.60)
-    ws.cell(activity_rows["A1000"], 7, 1.00)
-    ws.cell(activity_rows["A1010"], 5).value = None
-    ws.cell(activity_rows["A1010"], 6, 0.25)
-    ws.cell(activity_rows["A1010"], 7, 1.00)
+    # Tree layout: F=P01, G=P02, H=P03. Keep all three periods sparse.
+    ws.cell(activity_rows["A1000"], 6, 0.25)
+    ws.cell(activity_rows["A1000"], 7, 0.60)
+    ws.cell(activity_rows["A1000"], 8, 1.00)
+    ws.cell(activity_rows["A1010"], 6).value = None
+    ws.cell(activity_rows["A1010"], 7, 0.25)
+    ws.cell(activity_rows["A1010"], 8, 1.00)
     wb.save(payment)
     wb.close()
 
@@ -222,12 +222,12 @@ def test_ms_pay65_default_render_includes_every_populated_payment(tmp_path: Path
         if ws.cell(row, 1).value == "ACT"
     }
     # Populate all three available periods in this fixture.
-    ws.cell(activity_rows["A1000"], 5, 0.25)
-    ws.cell(activity_rows["A1000"], 6, 0.60)
-    ws.cell(activity_rows["A1000"], 7, 1.00)
-    ws.cell(activity_rows["A1010"], 5, 0.25)
-    ws.cell(activity_rows["A1010"], 6, 0.50)
-    ws.cell(activity_rows["A1010"], 7, 1.00)
+    ws.cell(activity_rows["A1000"], 6, 0.25)
+    ws.cell(activity_rows["A1000"], 7, 0.60)
+    ws.cell(activity_rows["A1000"], 8, 1.00)
+    ws.cell(activity_rows["A1010"], 6, 0.25)
+    ws.cell(activity_rows["A1010"], 7, 0.50)
+    ws.cell(activity_rows["A1010"], 8, 1.00)
     wb.save(payment)
     wb.close()
 

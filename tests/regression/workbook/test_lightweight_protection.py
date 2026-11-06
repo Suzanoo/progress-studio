@@ -76,11 +76,11 @@ def test_rb72_payment_input_unlocks_only_activity_percentages(tmp_path) -> None:
         )
 
         # Tree identity is protected.
-        for col in range(1, 5):
+        for col in range(1, 6):
             assert ws.cell(activity_row, col).protection.locked is True
 
         # Payment percentages are editable for ACT rows only.
-        for col in range(5, 8):
+        for col in range(6, 9):
             assert ws.cell(activity_row, col).protection.locked is False
             assert ws.cell(wbs_row, col).protection.locked is True
     finally:

@@ -46,7 +46,8 @@ def build_workbook_guide(workbook) -> None:
          "KPI, S-Curve and Activity Progress follow the selected period."),
         ("4  MONTHLY", "main_monthly is linked to weekly data in main. "
          "Do not type progress directly into main_monthly. F9 / Save refreshes formulas; use Rebuild when a generated view must be regenerated."),
-        ("5  PAYMENT", "Payment Input contains payment requirements. Payment shows payment lines. "
+        ("5  PAYMENT", "Payment Input contains editable Activity requirements, locked Amount snapshots and cumulative WBS summaries (exact zero hidden; no COV rows). "
+         "Prepare refreshes Amount; F9 / Save recalculates summaries. Blank is not zero. Payment shows payment lines. "
          "Use Progress Studio → Rebuild Payment when payment configuration changes."),
     ]
     row = 6

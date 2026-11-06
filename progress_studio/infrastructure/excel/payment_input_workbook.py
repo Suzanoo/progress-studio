@@ -13,6 +13,9 @@ from progress_studio.infrastructure.excel.payment_input_reader import PaymentInp
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookError, PaymentWorkbookSnapshotter
 
 
+from progress_studio.infrastructure.excel.payment_input_summary import amount_reference, add_amount_summaries, project_summary_tree
+
+
 class PaymentInputWorkbook:
     """Create/validate the small user-editable Payment Requirement payload."""
 
@@ -39,7 +42,7 @@ class PaymentInputWorkbook:
         if validation.project_start is None or validation.project_finish is None:
             raise PaymentWorkbookError("Project Start / Finish could not be read from the main sheet.")
 
-        tree_rows = self.snapshotter.payment_tree_rows(source)
+        tree_rows = project_summary_tree(self.snapshotter.payment_tree_rows(source))
         activity_rows = [row for row in tree_rows if row["row_type"] == "ACT"]
         if not activity_rows:
             raise PaymentWorkbookError("No Activity rows were found in the main sheet.")
@@ -61,7 +64,7 @@ class PaymentInputWorkbook:
         ws["B4"] = periods
         ws["B2"].number_format = ws["B3"].number_format = "dd-mmm-yy"
 
-        fixed_headers = ("Type", "WBS", "Activity ID", "Activity Name")
+        fixed_headers = ("Type", "WBS", "Activity ID", "Activity Name", "Amount")
         for col, label in enumerate(fixed_headers, start=1):
             ws.cell(self.HEADER_ROW, col, label)
         ws.cell(self.DATE_ROW, 1, "Payment Date")
@@ -116,13 +119,17 @@ class PaymentInputWorkbook:
                         cell.value = value
             out_row += 1
 
-        ws.freeze_panes = "E8"
+        add_amount_summaries(ws, tree_rows, periods)
         # Intentionally no AutoFilter: hierarchy rows should stay visually attached to their children.
         ws.column_dimensions["A"].width = 8
         ws.column_dimensions["B"].width = 14
         ws.column_dimensions["C"].width = 18
         ws.column_dimensions["D"].width = 42
         output.parent.mkdir(parents=True, exist_ok=True)
+        from progress_studio.infrastructure.excel.workbook_protection import _protect_payment_input
+        from progress_studio.infrastructure.excel.calculation_policy import configure_user_driven_save_recalculation
+        _protect_payment_input(ws)
+        configure_user_driven_save_recalculation(wb)
         wb.save(output)
         wb.close()
 
@@ -140,6 +147,7 @@ class PaymentInputWorkbook:
         workbook,
         preserved: PaymentInputData | None = None,
         periods: int | None = None,
+        formula_amounts: dict | None = None,
     ) -> dict[str, int]:
         """Rebuild the embedded Payment Input from current ``main``.
 
@@ -151,10 +159,10 @@ class PaymentInputWorkbook:
             raise PaymentWorkbookError("Worksheet 'main' was not found.")
 
         main = workbook["main"]
-        model = self._model_from_main_sheet(main)
+        model = self._model_from_main_sheet(main, formula_amounts)
         project_start = model["project_start"]
         project_finish = model["project_finish"]
-        tree_rows = model["tree_rows"]
+        tree_rows = project_summary_tree(model["tree_rows"])
         if project_start is None or project_finish is None:
             raise PaymentWorkbookError("Project Start / Finish could not be read from the main sheet.")
 
@@ -169,6 +177,15 @@ class PaymentInputWorkbook:
                 1,
             )
         periods = max(min(int(periods), 120), 1)
+
+        period_ids = [p.period_id for p in preserved.periods] if preserved is not None else []
+        if any(p.requirements for p in (preserved.periods[periods:] if preserved else ())):
+            raise PaymentWorkbookError("Cannot remove payment periods containing requirements.")
+        period_ids = period_ids[:periods]
+        next_number = max((int(p[1:]) for p in period_ids), default=0) + 1
+        while len(period_ids) < periods:
+            period_ids.append(f"P{next_number:02d}")
+            next_number += 1
 
         preserved_values: dict[tuple[str, str], float] = {}
         if preserved is not None:
@@ -197,14 +214,14 @@ class PaymentInputWorkbook:
         ws["A5"] = "Eligible dates are calculated from the latest required Activity point."
         ws["A5"].font = Font(italic=True, color="666666")
 
-        fixed_headers = ("Type", "WBS", "Activity ID", "Activity Name")
+        fixed_headers = ("Type", "WBS", "Activity ID", "Activity Name", "Amount")
         for col, label in enumerate(fixed_headers, start=1):
             ws.cell(self.HEADER_ROW, col, label)
         header_fill = PatternFill("solid", fgColor="1F4E78")
         header_font = Font(color="FFFFFF", bold=True)
         for idx in range(1, periods + 1):
             col = idx + len(fixed_headers)
-            ws.cell(self.HEADER_ROW, col, f"P{idx:02d}")
+            ws.cell(self.HEADER_ROW, col, period_ids[idx - 1])
             ws.column_dimensions[get_column_letter(col)].width = 11
         for cell in ws[self.HEADER_ROW]:
             cell.fill = header_fill
@@ -243,7 +260,7 @@ class PaymentInputWorkbook:
                 if activity_id in preserved_ids:
                     preserved_count += 1
                     values = [
-                        preserved_values.get((activity_id, f"P{idx:02d}"))
+                        preserved_values.get((activity_id, period_ids[idx - 1]))
                         for idx in range(1, periods + 1)
                     ]
                 else:
@@ -263,7 +280,7 @@ class PaymentInputWorkbook:
             f"{removed_count} removed"
         )
         ws["D5"].font = Font(italic=True, color="666666")
-        ws.freeze_panes = "E8"
+        add_amount_summaries(ws, tree_rows, periods)
         ws.column_dimensions["A"].width = 8
         ws.column_dimensions["B"].width = 14
         ws.column_dimensions["C"].width = 18
@@ -277,7 +294,7 @@ class PaymentInputWorkbook:
         }
 
     @staticmethod
-    def _model_from_main_sheet(ws: Worksheet) -> dict:
+    def _model_from_main_sheet(ws: Worksheet, formula_amounts: dict | None = None) -> dict:
         header_row = None
         headers: dict[str, int] = {}
         for row in range(1, min(ws.max_row, 30) + 1):
@@ -301,13 +318,18 @@ class PaymentInputWorkbook:
                 timescale.append((col, value.date() if hasattr(value, "date") else value))
 
         project_start = project_finish = None
+        activity_starts, activity_finishes = [], []
         tree_rows = []
+        seen = set()
         for row in range(header_row + 1, ws.max_row + 1):
             row_type = str(ws.cell(row, headers["row type"]).value or "").strip().lower()
             pa = str(ws.cell(row, headers["p/a"]).value or "").strip().upper()
             if pa != "P":
                 continue
             if row_type == "project summary":
+                tree_rows.append({"row_type": "PROJECT", "wbs": str(ws.cell(row, headers["wbs"]).value or "").strip(),
+                    "activity_id": "", "activity_name": str(ws.cell(row, headers["description"]).value or "").strip(),
+                    "outline_level": 0, "weekly_plan": ()})
                 start = ws.cell(row, headers["plan start"]).value
                 finish = ws.cell(row, headers["plan finish"]).value
                 if isinstance(start, date):
@@ -326,6 +348,18 @@ class PaymentInputWorkbook:
                 "weekly_plan": (),
             }
             if row_type == "activity":
+                for column, target in (("plan start", activity_starts), ("plan finish", activity_finishes)):
+                    value = ws.cell(row, headers[column]).value
+                    if isinstance(value, date):
+                        target.append(value.date() if hasattr(value, "date") else value)
+                identity = item["activity_id"]
+                if not identity or identity in seen:
+                    raise PaymentWorkbookError(f"Blank or duplicate main Activity ID: {identity!r}")
+                seen.add(identity)
+                raw = ws.cell(row, headers["amount"]).value if "amount" in headers else None
+                cached = (formula_amounts or {}).get(identity)
+                item["amount"] = (cached[1] if isinstance(raw, str) and raw.startswith("=")
+                                  and cached and cached[0] == raw else amount_reference(raw))
                 weekly = []
                 for col, week_start in timescale:
                     value = ws.cell(row, col).value
@@ -335,8 +369,8 @@ class PaymentInputWorkbook:
             tree_rows.append(item)
 
         return {
-            "project_start": project_start,
-            "project_finish": project_finish,
+            "project_start": project_start or min(activity_starts, default=None),
+            "project_finish": project_finish or max(activity_finishes, default=None),
             "tree_rows": tree_rows,
         }
 

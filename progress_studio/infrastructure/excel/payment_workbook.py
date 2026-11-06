@@ -219,7 +219,7 @@ class PaymentWorkbookSnapshotter:
     def payment_tree_rows(self, workbook_path: Path) -> list[dict]:
         """Read the lightweight WBS/activity hierarchy and weekly Plan values from main.
 
-        Only Plan-side WBS/Activity rows are returned. WBS rows carry hierarchy context;
+        Plan-side Project/WBS/Activity rows are returned. Summary rows carry hierarchy context;
         Activity rows additionally carry the weekly incremental Plan values used to
         generate sparse fake payment requirements.
         """
@@ -265,6 +265,7 @@ class PaymentWorkbookSnapshotter:
         outline_col = cols.get("outline level")
         pa_col = cols.get("p/a")
         result: list[dict] = []
+        seen = set()
         for row in rows:
             row_num = int(row.attrib.get("r", "0"))
             if row_num <= header_row:
@@ -276,10 +277,10 @@ class PaymentWorkbookSnapshotter:
                     cells[self._letters_to_col(m.group(1))] = cell
 
             row_type = self._cell_text(cells.get(cols["row type"]), shared).strip().lower() if cells.get(cols["row type"]) is not None else ""
-            if row_type not in {"wbs", "activity"}:
+            if row_type not in {"project summary", "wbs", "activity"}:
                 continue
             pa = self._cell_text(cells.get(pa_col), shared).strip().upper() if pa_col and cells.get(pa_col) is not None else "P"
-            if pa and pa != "P":
+            if pa_col and pa != "P":
                 continue
 
             wbs = self._cell_text(cells.get(cols["wbs"]), shared).strip() if cells.get(cols["wbs"]) is not None else ""
@@ -291,16 +292,19 @@ class PaymentWorkbookSnapshotter:
                 except ValueError:
                     outline = 0
 
-            if row_type == "wbs":
+            if row_type in {"project summary", "wbs"}:
                 result.append({
-                    "row_type": "WBS", "wbs": wbs, "activity_id": "",
+                    "row_type": "PROJECT" if row_type == "project summary" else "WBS", "wbs": wbs, "activity_id": "",
                     "activity_name": name, "outline_level": outline, "weekly_plan": (),
                 })
                 continue
 
             activity_id = self._cell_text(cells.get(cols["activity id"]), shared).strip() if cells.get(cols["activity id"]) is not None else ""
-            if not activity_id:
-                continue
+            if not activity_id or activity_id in seen:
+                raise PaymentWorkbookError(f"Blank or duplicate main Activity ID: {activity_id!r}")
+            seen.add(activity_id)
+            amount_cell = cells.get(cols.get("amount"))
+            amount, amount_formula = self._amount_reference(amount_cell, shared)
             weekly = []
             for col, d in sorted(week_dates.items()):
                 cell = cells.get(col)
@@ -318,8 +322,33 @@ class PaymentWorkbookSnapshotter:
             result.append({
                 "row_type": "ACT", "wbs": wbs, "activity_id": activity_id,
                 "activity_name": name, "outline_level": outline, "weekly_plan": tuple(weekly),
+                "amount": amount, "amount_formula": amount_formula,
             })
         return result
+
+    @classmethod
+    def _amount_reference(cls, cell, shared):
+        from progress_studio.infrastructure.excel.payment_input_summary import amount_reference
+        if cell is None:
+            return amount_reference(None), None
+        formula = cell.find(f"{{{MAIN_NS}}}f")
+        expression = "=" + (formula.text or "") if formula is not None else None
+        raw = cls._cell_text(cell, shared)
+        if expression and not raw:
+            return "Formula unavailable", expression
+        if cell.get("t", "n") != "n":
+            return "Invalid Amount", expression
+        try:
+            value = float(raw) if raw else None
+        except ValueError:
+            value = raw
+        return amount_reference(value), expression
+
+    def formula_amounts(self, workbook_path: Path) -> dict:
+        """Saved formula results keyed by exact Activity ID and formula expression."""
+        return {r["activity_id"]: (r["amount_formula"], r["amount"])
+                for r in self.payment_tree_rows(workbook_path)
+                if r["row_type"] == "ACT" and r.get("amount_formula")}
 
     def activity_plan_profiles(self, workbook_path: Path) -> list[dict]:
         """Backward-compatible activity-only view used by existing payment code/tests."""

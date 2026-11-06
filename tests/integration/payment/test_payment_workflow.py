@@ -49,15 +49,15 @@ def test_generate_fake_payment_input_is_single_sheet_and_lightweight(tmp_path: P
         assert ws["B6"].value == "WBS"
         assert ws["C6"].value == "Activity ID"
         assert ws["D6"].value == "Activity Name"
-        assert ws["E6"].value == "P01"
-        assert ws["S6"].value == "P15"
-        assert ws["A8"].value == "ACT"
-        assert ws["C8"].value == "A1000"
-        assert ws["D8"].value == "Mobilization"
-        assert ws["C10"].value == "A1020"
-        assert ws["S7"].value is not None
-        assert ws["E8"].value is None  # fixture has no weekly plan payload
-        assert ws["E8"].number_format == "0%"
+        assert ws["F6"].value == "P01"
+        assert ws["T6"].value == "P15"
+        assert ws["A9"].value == "ACT"
+        assert ws["C9"].value == "A1000"
+        assert ws["D9"].value == "Mobilization"
+        assert ws["C11"].value == "A1020"
+        assert ws["T7"].value is not None
+        assert ws["F9"].value is None  # fixture has no weekly plan payload
+        assert ws["F9"].number_format == "0%"
         assert ws.auto_filter.ref is None
     finally:
         wb.close()
@@ -82,7 +82,7 @@ def test_validate_payment_input_reports_missing_activity(tmp_path: Path) -> None
 
     wb = load_workbook(payment)
     ws = wb["Payment Input"]
-    ws["C9"] = "A9999"
+    ws["C10"] = "A9999"
     wb.save(payment)
     wb.close()
 
@@ -115,9 +115,9 @@ def test_fake_payment_uses_activity_name_and_sparse_plan_suggestions(tmp_path: P
     wb = load_workbook(output)
     try:
         ws = wb["Payment Input"]
-        assert ws["D8"].value == "Mobilization"
-        assert ws["E8"].value == 1.0
-        assert ws["E8"].number_format == "0%"
+        assert ws["D9"].value == "Mobilization"
+        assert ws["F9"].value == 1.0
+        assert ws["F9"].number_format == "0%"
         assert ws.auto_filter.ref is None
     finally:
         wb.close()
@@ -143,14 +143,14 @@ def test_fake_payment_includes_wbs_parent_rows(tmp_path: Path) -> None:
     wb = load_workbook(output)
     try:
         ws = wb["Payment Input"]
-        assert [ws.cell(r, 1).value for r in range(8, 11)] == ["WBS", "WBS", "ACT"]
-        assert ws["B8"].value == "1"
-        assert ws["D8"].value == "Foundation Works"
-        assert ws["B9"].value == "1.1"
-        assert ws["D9"].value == "Footing"
-        assert ws["C10"].value == "A1000"
-        assert ws["D10"].value == "Footing Concrete"
-        assert ws["E8"].value is None and ws["E9"].value is None
+        assert [ws.cell(r, 1).value for r in range(9, 12)] == ["WBS", "WBS", "ACT"]
+        assert ws["B9"].value == "1"
+        assert ws["D9"].value == "Foundation Works"
+        assert ws["B10"].value == "1.1"
+        assert ws["D10"].value == "Footing"
+        assert ws["C11"].value == "A1000"
+        assert ws["D11"].value == "Footing Concrete"
+        assert ws["F9"].data_type == 'f'
         assert ws.auto_filter.ref is None
     finally:
         wb.close()

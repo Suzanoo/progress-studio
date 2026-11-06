@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
+import re
 
 from openpyxl.cell.cell import Cell
 from openpyxl.formula.tokenizer import Tokenizer, TokenizerError
@@ -205,13 +206,17 @@ def _protect_payment_input(ws) -> None:
     # percentages are user-editable.
     header_row = 6
     first_data_row = 8
-    first_payment_col = 5
+    payment_cols = {c.column for c in ws[header_row]
+                    if re.fullmatch(r"P\d+", str(c.value or "").strip().upper())}
+    # Legacy standalone inputs also expose editable Payment Dates in row 7.
+    if str(ws.cell(7, 1).value or "").strip() == "Payment Date":
+        for col in payment_cols:
+            ws.cell(7, col).protection = Protection(locked=False)
 
     for row in range(first_data_row, ws.max_row + 1):
-        if str(ws.cell(row, 1).value or "").strip().upper() != "ACT":
-            continue
-        for col in range(first_payment_col, ws.max_column + 1):
-            _set_unlocked(ws.cell(row, col))
+        activity = str(ws.cell(row, 1).value or "").strip().upper() == "ACT"
+        for col in range(1, ws.max_column + 1):
+            ws.cell(row, col).protection = Protection(locked=not (activity and col in payment_cols))
 
 
 def apply_final_sheet_protection(workbook) -> tuple[str, ...]:

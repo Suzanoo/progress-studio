@@ -62,6 +62,11 @@ The Payment Workspace contains two separate workflows.
 
 ### 3.1 Standard Payment
 
+Payment Input includes locked Amount references and cumulative WBS Requirement
+summaries (no COV rows). Prepare refreshes Amount; F9 / Save recalculates WBS
+summaries after requirement edits. Blank remains distinct from zero.
+See [Payment Input](PAYMENT_INPUT.md) for statuses and formula-cache limitations.
+
 `Payment Input` stores persistent payment requirements. Standard Payment
 rendering uses the current workbook schedule/progress structure to
 position `Payment` output.

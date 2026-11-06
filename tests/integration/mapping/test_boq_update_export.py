@@ -45,9 +45,14 @@ def test_updated_project_exports_new_amounts_preserving_workbook_inputs(tmp_path
     for name,values in protected.items():
         actual=list(w[name].values)
         if name=='Payment Input':
-            # The existing exporter refreshes its reconciliation status at D5;
-            # editable requirements and every other cell must be preserved.
+            # Reconciliation refreshes D5 and PI-1 Amount snapshots. All
+            # requirements and helper formulas must otherwise be preserved.
             status=list(actual[4]);status[3]=values[4][3];actual[4]=tuple(status)
+            for i, record in enumerate(actual):
+                if record[0] in {'ACT', 'WBS'}:
+                    assert record[4] == 2000
+                    normalized=list(record);normalized[4]=values[i][4]
+                    actual[i]=tuple(normalized)
         assert tuple(actual)==values
     assert w['main'].cell(row,h['plan duration']).data_type=='f'
     assert 'BOQ Activity Mapping' in w.sheetnames

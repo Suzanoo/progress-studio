@@ -99,30 +99,34 @@ class PaymentService:
         output = Path(output_workbook)
         if not source.is_file():
             raise PaymentWorkbookError(f"Workbook was not found: {source}")
-        if output.resolve() != source.resolve():
-            output.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, output)
-
-        preserved = None
-        try:
-            preserved = self.payment_reader.read(source)
-        except PaymentWorkbookError:
-            preserved = None
-
-        wb = load_workbook(output)
+        # Validate existing requirements before publishing anything. A malformed
+        # existing Input must not be mistaken for an absent sheet and regenerated.
+        wb = load_workbook(source, keep_vba=source.suffix.lower() == ".xlsm", keep_links=True)
+        temp_path = None
         try:
             if "main" not in wb.sheetnames:
                 raise PaymentWorkbookError("Worksheet 'main' was not found.")
+            preserved = (self.payment_reader.read(source)
+                         if "Payment Input" in wb.sheetnames else None)
+            formula_amounts = self.snapshotter.formula_amounts(source)
             stats = self.payment_input.embed(
-                wb,
-                preserved=preserved,
-                periods=periods,
+                wb, preserved=preserved, periods=periods, formula_amounts=formula_amounts,
             )
             finalize_workbook(wb, mode="snapshot", include_guide=True)
-            wb.save(output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            fd, name = tempfile.mkstemp(prefix=f".{output.stem}.payment-input.",
+                                        suffix=output.suffix, dir=output.parent)
+            os.close(fd)
+            temp_path = Path(name)
+            wb.save(temp_path)
+            restore_opaque_workbook_parts(source, temp_path)
+            validate_xlsx_tables(temp_path)
+            os.replace(temp_path, output)
             return stats
         finally:
             wb.close()
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
 
     def prepare_payment_breakdown(
         self,
@@ -247,6 +251,7 @@ class PaymentService:
                 wb,
                 preserved=preserved,
                 periods=periods,
+                formula_amounts=self.snapshotter.formula_amounts(source),
             )
 
             # Payment is generated; remove stale content before saving the source

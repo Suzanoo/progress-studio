@@ -24,9 +24,9 @@ def test_embedded_payment_input_has_no_payment_date_row(tmp_path: Path) -> None:
     try:
         ws = wb["Payment Input"]
         assert ws["A6"].value == "Type"
-        assert ws["E6"].value == "P01"
+        assert ws["F6"].value == "P01"
         assert ws["A7"].value is None
-        assert ws["E7"].value is None
+        assert ws["F7"].value is None
         assert "Eligible dates are calculated" in ws["A5"].value
     finally:
         wb.close()
@@ -42,7 +42,7 @@ def test_embedded_payment_input_reconcile_preserves_user_percentages(tmp_path: P
     wb = load_workbook(source)
     ws = wb["Payment Input"]
     row = next(r for r in range(8, ws.max_row + 1) if ws.cell(r, 3).value == "A1000")
-    ws.cell(row, 5).value = 0.37
+    ws.cell(row, 6).value = 0.37
     wb.save(source)
     wb.close()
 
@@ -58,7 +58,7 @@ def test_embedded_payment_input_reconcile_preserves_user_percentages(tmp_path: P
     try:
         ws = wb["Payment Input"]
         row = next(r for r in range(8, ws.max_row + 1) if ws.cell(r, 3).value == "A1000")
-        assert ws.cell(row, 5).value == 0.37
+        assert ws.cell(row, 6).value == 0.37
     finally:
         wb.close()
 
