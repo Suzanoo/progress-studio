@@ -89,6 +89,15 @@ class PaymentFrame(ttk.Frame):
         self._build_workbook_card(panel, 2)
         self._build_prepare_card(panel, 3)
         self._build_breakdown_card(panel, 4)
+        ttk.Button(panel, text=tr('bp2.0'), command=self._open_boq_payment).grid(row=5, column=0, sticky='w', pady=8)
+
+    def _open_boq_payment(self):
+        from progress_studio.presentation.gui.boq_payment_dialog import BOQPaymentDialog
+        dialog = getattr(self, '_boq_payment_dialog', None)
+        if dialog is not None and dialog.winfo_exists():
+            dialog.lift()
+            return
+        self._boq_payment_dialog = BOQPaymentDialog(self)
 
     def _build_workbook_card(
         self,

@@ -1,14 +1,14 @@
 # BP-1 BOQ Payment Projection
 
-Status: implementation handoff; Product Owner acceptance pending.
+Status: BP-1 accepted; stable tag `bp1-boq-payment-projection-stable`.
 Baseline: `33512821d059d99fbf2c90dda207a6c4d2127dd4`.
 
 ## Scope and entry point
 
 BP-1 provides a read-only Python service. It does not add a desktop action,
 write an Excel report, change Payment Input, or calculate certified payment.
-BP-2 remains deferred. Its future values-only Project worksheet should use the
-existing main-sheet palette and BOQ hierarchy, with only useful columns.
+BP-2 consumes this service without changing projection semantics. See
+[BOQ Payment Export](BOQ_PAYMENT_EXPORT.md) for the separate snapshot workbook.
 
 ```python
 from pathlib import Path

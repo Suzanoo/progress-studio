@@ -2,7 +2,7 @@
 
 PI-1 is implemented for engineering review against `main @ 8156050`.
 Native Windows Excel acceptance and Product Owner acceptance remain pending.
-BP-1/BP-2 are planning-approved only; no BOQ projection/export is implemented.
+BP-1 is accepted. BP-2 export is a separate derived workbook; see [BOQ Payment Export](BOQ_PAYMENT_EXPORT.md).
 
 ## Prepare and edit
 
@@ -96,7 +96,7 @@ Prepare validates before saving, stages output in the destination directory,
 reuses opaque package preservation, validates tables and atomically publishes.
 Failure before publication leaves the original and any existing output intact.
 
-## Future BOQ Payment projection (BP-1/BP-2, planning only)
+## BOQ Payment projection boundaries (BP-1/BP-2)
 
 Only explicit Mapping Shares establish eligible BOQ-to-Activity relationships.
 Activity Amount alone never implies mapping, including monetary Activities such
