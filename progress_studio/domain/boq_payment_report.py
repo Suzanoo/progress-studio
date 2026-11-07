@@ -75,3 +75,48 @@ def report_rows(projection):
             result.append(ReportRow(item.key,item.wbs,item.description,item.unit,item.quantity,item.amount,status,max(level,0),False,
                 tuple(tuple(getattr(p,f) for p in entry.periods) for f in fields)))
     return tuple(result)
+
+
+@dataclass(frozen=True)
+class KnownProjectedTotals:
+    cumulative: tuple[Decimal | None, ...]
+    period: tuple[Decimal | None, ...]
+    status: str
+
+
+def known_projected_totals(projection):
+    """Aggregate known leaf contributions only; never fill unknown money with zero.
+
+    Opening known baseline is zero. Later period deltas require both endpoints
+    of the same leaf contribution; a missing endpoint is excluded, not zeroed.
+    Complete Project Summary remains independently governed by report_rows.
+    """
+    leaves = [entry for entry in projection.items if entry.item.role == 'item']
+    keys = [entry.item.key for entry in leaves]
+    if len(keys) != len(set(keys)):
+        raise ValueError('Duplicate BOQ leaf identity')
+    cumulative, period = [], []
+    incomplete = False
+    for index in range(len(projection.periods)):
+        known, deltas = [], []
+        for entry in leaves:
+            row = entry.periods[index]
+            amount = entry.item.amount
+            if amount is None or amount < 0:
+                incomplete = True
+                continue
+            current = row.known_amount
+            previous = Decimal(0) if index == 0 else entry.periods[index - 1].known_amount
+            if current is not None:
+                known.append(current)
+                if previous is not None:
+                    deltas.append(current - previous)
+            if amount > 0 and (row.cumulative_amount is None or current is None or previous is None):
+                incomplete = True
+        cumulative.append(sum(known, Decimal(0)) if known else None)
+        period.append(sum(deltas, Decimal(0)) if deltas else None)
+    status = ('Incomplete coverage — known contributions only' if incomplete
+              else 'Known contributions — not certified payment')
+    if not any(value is not None for value in cumulative):
+        status = 'Unavailable — no determinable contributions'
+    return KnownProjectedTotals(tuple(cumulative), tuple(period), status)

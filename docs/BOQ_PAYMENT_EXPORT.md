@@ -54,3 +54,17 @@ Engineer verification:
 followed by full `python -m pytest -q` and real NKC1 export/projection comparison.
 Native Windows acceptance: open without repair; grouping/palette readability;
 all view selectors + F9 + save/reopen; Trace selections; print-preview readability.
+
+
+## BP-2.1 Known Projected Amount
+
+Amount row 5 is a frozen/repeated-print monetary summary following B3's view.
+It aggregates distinct leaf known Amounts, including partial mapped contributions,
+without adding hierarchy/subtotal values or redistributing unknown money.
+Period mode sums signed changes with a zero opening baseline; later changes
+require known endpoints for the same leaf. No known contributions displays
+Unavailable rather than zero. Valid zero displays 0.00 in this summary.
+The visible coverage warning is independent of color and remains for incomplete
+positive-Amount or invalid-Amount descendants. The existing Project Summary
+continues to withhold complete totals when coverage is incomplete.
+No Activity input, BP-1 mathematics or Payment eligibility is changed.

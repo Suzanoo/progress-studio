@@ -8,7 +8,7 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.pagebreak import Break
 from openpyxl.utils import get_column_letter as letter
-from progress_studio.domain.boq_payment_report import report_rows
+from progress_studio.domain.boq_payment_report import report_rows, known_projected_totals
 from progress_studio.infrastructure.excel.export_theme import DEFAULT_ACTIVITY_DATA_PALETTE as PALETTE
 from progress_studio.infrastructure.excel.styles import HEADER_FILL, PROJECT_FILL, ACTIVITY_PLAN_FILL
 from progress_studio.infrastructure.excel.calculation_policy import request_initial_manual_excel_recalculation
@@ -64,6 +64,11 @@ def render(projection, cancelled=lambda:False):
     wb.defined_names.add(DefinedName('BP_Items',attr_text=f"'_BP_Data'!$A${meta}:$A${meta+len(leaves)-1}"))
     for i,p in enumerate(projection.periods):literal(data.cell(cursor+i,1),p)
     wb.defined_names.add(DefinedName('BP_Periods',attr_text=f"'_BP_Data'!$A${cursor}:$A${cursor+periods-1}"))
+    known = known_projected_totals(projection)
+    known_start = cursor + periods + 2
+    for offset, values in enumerate((known.cumulative, known.period)):
+        for p, value in enumerate(values):
+            literal(data.cell(known_start + offset, p + 1), 'Unavailable' if value is None else value)
     for ws,base,modes in [(pct,0,('Cumulative %','Period %')),(amt,2,('Cumulative Amount','Period Amount'))]:
         ws['A1']='BOQ Payment — Project';ws['A1'].font=Font(size=18,bold=True,color='1F4E78');ws.row_dimensions[1].height=28;ws['A2']='Projected Requirements — not certified payment'
         ws['A3']='View';ws['B3']=modes[0];dropdown(ws,'B3','"'+','.join(modes)+'"')
@@ -71,7 +76,21 @@ def render(projection, cancelled=lambda:False):
         ws['F3']='Open Trace';ws['F3'].hyperlink=Hyperlink(ref="F3",location="'Trace'!A1");ws['F3'].style='Hyperlink'
         valid=f'OR($B$3="{modes[0]}",$B$3="{modes[1]}")'
         ws['G3']=f'=IF({valid},$B$3,"Invalid view")'
-        for c,h in enumerate(('WBS','BOQ Item','Unit','Qty','BOQ Amount','Mapping / status')+projection.periods,1):literal(ws.cell(6,c),h)
+        if base == 2:
+            ws.merge_cells('A5:E5')
+            ws['A5'] = 'Known Projected Amount — not certified payment'
+            ws['F5'] = known.status
+            ws['F5'].alignment = Alignment(wrap_text=True, vertical='center')
+            ws.row_dimensions[5].height = 42
+            for p in range(periods):
+                col = letter(p + 1)
+                ref = f"INDEX('_BP_Data'!${col}${known_start}:${col}${known_start+1},IF($B$3=\"{modes[0]}\",1,2))"
+                ws.cell(5, p + 7, f'=IF(NOT({valid}),"Invalid view",{ref})')
+                ws.cell(5, p + 7).number_format = '#,##0.00;[Red]-#,##0.00;0.00'
+            for cell in ws[5]:
+                cell.fill = PatternFill('solid', fgColor=PROJECT_FILL)
+                cell.font = Font(bold=True, color='000000')
+        for c,h in enumerate(('WBS' ,'BOQ Item','Unit','Qty','BOQ Amount','Mapping / status')+projection.periods,1):literal(ws.cell(6,c),h)
         for p,source in enumerate(projection.period_sources):literal(ws.cell(7,7+p),source.payment_date);ws.cell(7,7+p).number_format='dd-mmm-yy'
         for i,row in enumerate(rows):
             check();r=8+i
