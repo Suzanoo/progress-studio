@@ -12,17 +12,19 @@ from tests.unit.payment.test_boq_payment_projection import run,item,payment
 from progress_studio.domain.boq_payment_projection import project
 from progress_studio.domain.mapping_models import AllocationRecord
 from tests.integration.payment.test_boq_payment_projection_service import fixture
+from tests.integration.payment.test_payment_report_snapshot import source_fixture, patch_caches
 
 
 def reviewed(tmp_path,projection=None):
     source=tmp_path/'source.bin';source.write_bytes(b'original')
-    return ExportReview(projection or run(),((source,digest(source)),),True)
+    payment=source_fixture(tmp_path/'payment.xlsx')
+    return ExportReview(projection or run(),((source,digest(source)),(payment,digest(payment))),True)
 
 
 def test_four_matrices_and_schema(tmp_path):
     result=run();r=reviewed(tmp_path,result);out=tmp_path/'report.xlsx'
     BOQPaymentExportService().export(r,out,acknowledge_revision=True)
-    w=load_workbook(out);assert w.sheetnames==['Percentage','Amount','Trace','_BP_Data']
+    w=load_workbook(out);assert w.sheetnames==['Percentage','Amount','Trace','Payment Input','Payment','_BP_Data']
     rows=report_rows(result);n=len(rows);d=w['_BP_Data']
     for mode in range(4):
         for i,row in enumerate(rows):
@@ -87,7 +89,9 @@ def test_literal_text_and_unavailable(tmp_path):
 
 
 def test_real_reader_review_and_revision_ack(tmp_path):
-    session,current,boq=fixture(tmp_path);service=BOQPaymentExportService();r=service.review(session,current,boq)
+    session,current,boq=fixture(tmp_path)
+    w=load_workbook(current);w.create_sheet('Payment');w.save(current);w.close();patch_caches(current)
+    service=BOQPaymentExportService();r=service.review(session,current,boq)
     assert r.revision_required
     with pytest.raises(ValueError,match='Acknowledge'):service.export(r,tmp_path/'out.xlsx')
     service.export(r,tmp_path/'out.xlsx',acknowledge_revision=True)

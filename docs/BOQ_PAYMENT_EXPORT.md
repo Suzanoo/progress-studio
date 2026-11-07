@@ -1,6 +1,6 @@
 # BP-2 BOQ Payment Workbook Export
 
-Status: implementation handoff; Coordinator review and Product Owner acceptance pending.
+Status: BP-2 accepted. BP-2.1/BP-3 implementation handoff; their acceptance remains pending.
 Baseline: `cc6d1476882dc6899cb503aa085c6d6068c06692` (accepted BP-1).
 
 In Payment, choose **Export BOQ Payment Workbook**. Select a saved Project Session,
@@ -9,8 +9,8 @@ hashes/revision and diagnostics, acknowledge applicable revision differences,
 then export a new `.xlsx` destination. Existing files and input aliases are refused.
 Unsaved Mapping UI or Excel edits are not imported or saved implicitly.
 
-The output contains Percentage, Amount, Trace, and hidden/protected `_BP_Data` in
-that order. The first two tabs retain the same Project hierarchy. Their native
+The output contains Percentage, Amount, Trace, Payment Input, Payment, and
+hidden/protected `_BP_Data` in that order after BP-3. The first two tabs retain the same Project hierarchy. Their native
 selectors choose Cumulative or Period views over immutable BP-1 numerical data.
 **Select → F9 → Read/Print/Save**. Formula caches may be empty until the spreadsheet
 engine calculates. These are projected Requirements, not certified payment.
@@ -68,3 +68,43 @@ The visible coverage warning is independent of color and remains for incomplete
 positive-Amount or invalid-Amount descendants. The existing Project Summary
 continues to withhold complete totals when coverage is incomplete.
 No Activity input, BP-1 mathematics or Payment eligibility is changed.
+
+
+## BP-3 Payment informational snapshots
+
+Export requires the selected source workbook to contain both `Payment Input` and
+`Payment`. Both are protected read-only saved-value snapshots, never new editable
+Payment inputs and never a second Payment engine. Source content stays at its
+original coordinates. A snapshot banner and source/hash note replace the A1 title;
+other labels, Thai text, styles, periods, numeric zeros, negative values, saved
+blank strings, merged ranges, row/column dimensions and outline levels are retained.
+Cached source error values are preserved and counted in Review diagnostics.
+
+No cell formulas, data validations or hyperlinks are copied to these snapshots.
+Local conditional formatting may use frozen same-sheet helper values exclusively;
+this preserves source warning/100% presentation without live business calculations.
+Dependent names/foreign-sheet formatting fail closed. Source pictures are retained.
+Charts use literal cached series; missing chart caches or unsupported DrawingML
+shapes fail closed instead of silently dropping content. No external links,
+macros or source table controls are imported. Snapshot protection can restrict
+native outline interaction; grouped rows are expanded so all saved Activity detail
+remains readable. Hidden helper columns and manually hidden ungrouped rows retain
+the source state. Frozen panes use actual split coordinates, not a scrolled
+origin. For recognized Activity headers, an oversized frozen body is reduced to
+the header so expanded static detail remains readable; initial view returns to
+the first unfrozen cell. Source files and cell coordinates are unchanged.
+
+Missing formula caches block review/export with a precise cell and instruction to
+recalculate/save the source first. A genuine saved empty string is a valid blank,
+not a missing cache or numeric zero. Numeric cache freshness cannot be established
+from XLSX alone: Review, Trace and snapshot banners explicitly say it is unverified.
+Even if a stored value is stale, export never silently recalculates Payment or
+substitutes a derived projection. Recalculate/save the selected source before
+export; edits to source after Review invalidate export via existing source hashes.
+Snapshot values remain fixed after report dropdown/F9 changes. To update them,
+edit/save/Rebuild the source Payment workbook as appropriate, then re-export.
+
+BP-3 is an incremental package on top of the exact BP-2.1 package. Source integrity,
+revision acknowledgement, cancellation and no-overwrite publication remain owned
+by the existing export service. The two original report worksheets remain
+unprotected for grouping; snapshot tabs and internal data are protected.
