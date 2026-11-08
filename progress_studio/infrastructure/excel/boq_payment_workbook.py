@@ -8,7 +8,7 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.pagebreak import Break
 from openpyxl.utils import get_column_letter as letter
-from progress_studio.domain.boq_payment_report import report_rows, known_projected_totals
+from progress_studio.domain.boq_payment_report import report_rows, known_projected_totals, known_projected_percentages
 from progress_studio.infrastructure.excel.export_theme import DEFAULT_ACTIVITY_DATA_PALETTE as PALETTE
 from progress_studio.infrastructure.excel.styles import HEADER_FILL, PROJECT_FILL, ACTIVITY_PLAN_FILL
 from progress_studio.infrastructure.excel.calculation_policy import request_initial_manual_excel_recalculation
@@ -69,6 +69,26 @@ def render(projection, cancelled=lambda:False):
     for offset, values in enumerate((known.cumulative, known.period)):
         for p, value in enumerate(values):
             literal(data.cell(known_start + offset, p + 1), 'Unavailable' if value is None else value)
+    percentages = known_projected_percentages(projection, known)
+    percentage_start = known_start + 2
+    for offset, values in enumerate((percentages.cumulative, percentages.period)):
+        for p, value in enumerate(values):
+            literal(data.cell(percentage_start + offset, p + 1), 'Unavailable' if value is None else value)
+    # Exact completion flags survive Decimal -> Excel float rounding. Named
+    # snapshot ranges keep ownership explicit without moving prior Trace data.
+    completion_row = percentage_start + 2
+    for p, value in enumerate(percentages.cumulative):
+        data.cell(completion_row, p + 1, int(value == Decimal(1)))
+    literal(data.cell(completion_row + 1, 1), percentages.total_amount if percentages.total_amount is not None else 'Unavailable')
+    literal(data.cell(completion_row + 2, 1), percentages.status)
+    for name, start, end in (
+        ('BP_KnownAmounts', known_start, known_start + 1),
+        ('BP_KnownPercentages', percentage_start, percentage_start + 1),
+        ('BP_KnownCompletion', completion_row, completion_row),
+        ('BP_TotalBOQAmount', completion_row + 1, completion_row + 1),
+    ):
+        last_col = 'A' if name == 'BP_TotalBOQAmount' else letter(periods)
+        wb.defined_names.add(DefinedName(name, attr_text=f"'_BP_Data'!$A${start}:${last_col}${end}"))
     for ws,base,modes in [(pct,0,('Cumulative %','Period %')),(amt,2,('Cumulative Amount','Period Amount'))]:
         ws['A1']='BOQ Payment — Project';ws['A1'].font=Font(size=18,bold=True,color='1F4E78');ws.row_dimensions[1].height=28;ws['A2']='Projected Requirements — not certified payment'
         ws['A3']='View';ws['B3']=modes[0];dropdown(ws,'B3','"'+','.join(modes)+'"')
@@ -76,17 +96,26 @@ def render(projection, cancelled=lambda:False):
         ws['F3']='Open Trace';ws['F3'].hyperlink=Hyperlink(ref="F3",location="'Trace'!A1");ws['F3'].style='Hyperlink'
         valid=f'OR($B$3="{modes[0]}",$B$3="{modes[1]}")'
         ws['G3']=f'=IF({valid},$B$3,"Invalid view")'
-        if base == 2:
+        if base in (0, 2):
             ws.merge_cells('A5:E5')
-            ws['A5'] = 'Known Projected Amount — not certified payment'
-            ws['F5'] = known.status
+            ws['A5'] = ('Known Projected % of Total BOQ — not certified payment' if base == 0
+                        else 'Known Projected Amount — not certified payment')
+            if base == 0:
+                ws['A5'].alignment = Alignment(wrap_text=True, vertical='center')
+            ws['F5'] = percentages.status if base == 0 else known.status
+            summary_start = percentage_start if base == 0 else known_start
+            if base == 0:
+                denominator = (f'{percentages.total_amount:,.2f}' if percentages.total_amount is not None
+                               else 'Unavailable')
+                ws['A2'].value += f' | Total BOQ Amount: {denominator}'
             ws['F5'].alignment = Alignment(wrap_text=True, vertical='center')
             ws.row_dimensions[5].height = 42
             for p in range(periods):
                 col = letter(p + 1)
-                ref = f"INDEX('_BP_Data'!${col}${known_start}:${col}${known_start+1},IF($B$3=\"{modes[0]}\",1,2))"
+                ref = f"INDEX('_BP_Data'!${col}${summary_start}:${col}${summary_start+1},IF($B$3=\"{modes[0]}\",1,2))"
                 ws.cell(5, p + 7, f'=IF(NOT({valid}),"Invalid view",{ref})')
-                ws.cell(5, p + 7).number_format = '#,##0.00;[Red]-#,##0.00;0.00'
+                ws.cell(5, p + 7).number_format = ('0.0%;[Red]-0.0%;0.0%' if base == 0
+                                                         else '#,##0.00;[Red]-#,##0.00;0.00')
             for cell in ws[5]:
                 cell.fill = PatternFill('solid', fgColor=PROJECT_FILL)
                 cell.font = Font(bold=True, color='000000')
@@ -119,6 +148,10 @@ def render(projection, cancelled=lambda:False):
                 rule=FormulaRule(formula=[f'AND($B$3="Cumulative %",ISNUMBER({col}8),{col}8=1,ISNUMBER({prev}8),{prev}8=1)'])
                 rule.dxf=DifferentialStyle(numFmt=NumberFormat(numFmtId=164,formatCode=';;;'))
                 ws.conditional_formatting.add(f'{col}8:{col}{7+n}',rule)
+                summary_rule = FormulaRule(formula=[
+                    f'AND($B$3="Cumulative %",INDEX(BP_KnownCompletion,1,{p+1})=1,INDEX(BP_KnownCompletion,1,{p})=1)'])
+                summary_rule.dxf = DifferentialStyle(numFmt=NumberFormat(numFmtId=164,formatCode=';;;'))
+                ws.conditional_formatting.add(f'{col}5', summary_rule)
         ws.freeze_panes='G8';ws.sheet_properties.outlinePr.summaryBelow=False
         ws.sheet_view.showGridLines=False;ws.print_title_rows='1:7';ws.print_title_cols='A:F'
         ws.print_area=f'A1:{letter(6+periods)}{7+n}';ws.sheet_properties.pageSetUpPr.fitToPage=False

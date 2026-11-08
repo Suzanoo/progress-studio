@@ -34,7 +34,8 @@ def test_four_matrices_and_schema(tmp_path):
     assert w['Percentage']['B3'].value=='Cumulative %';assert w['Amount']['B3'].value=='Cumulative Amount'
     assert len(w['Percentage'].data_validations.dataValidation)==1
     assert len(w['Trace'].data_validations.dataValidation)==2
-    assert len(w['Percentage'].conditional_formatting)==2 and len(w['Amount'].conditional_formatting)==0
+    assert {str(rule.sqref) for rule in w['Percentage'].conditional_formatting} == {'H5', 'I5', 'H8:H9', 'I8:I9'}
+    assert len(w['Amount'].conditional_formatting)==0
     assert w.calculation.calcMode=='manual' and w.calculation.calcOnSave
     assert 'Invalid view' in w['Percentage']['G8'].value
     assert 'ISNUMBER' in next(iter(w['Percentage'].conditional_formatting._cf_rules.values()))[0].formula[0]

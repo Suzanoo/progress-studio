@@ -120,3 +120,32 @@ def known_projected_totals(projection):
     if not any(value is not None for value in cumulative):
         status = 'Unavailable — no determinable contributions'
     return KnownProjectedTotals(tuple(cumulative), tuple(period), status)
+
+
+@dataclass(frozen=True)
+class KnownProjectedPercentages:
+    total_amount: Decimal | None
+    cumulative: tuple[Decimal | None, ...]
+    period: tuple[Decimal | None, ...]
+    status: str
+
+
+def known_projected_percentages(projection, known: KnownProjectedTotals):
+    """Normalize existing known money by ALL distinct BOQ leaves, never subtotals."""
+    leaves = [entry.item for entry in projection.items if entry.item.role == 'item']
+    keys = [item.key for item in leaves]
+    if len(keys) != len(set(keys)):
+        raise ValueError('Duplicate BOQ leaf identity')
+    valid = bool(leaves) and all(
+        isinstance(item.amount, Decimal) and item.amount.is_finite() and item.amount >= 0
+        for item in leaves
+    )
+    total = sum((item.amount for item in leaves), Decimal(0)) if valid else None
+    reason = ('Invalid or missing total BOQ Amount' if total is None else
+              'No positive total BOQ Amount' if total == 0 else '')
+    def fractions(values):
+        return tuple(value / total if not reason and value is not None else None
+                     for value in values)
+    return KnownProjectedPercentages(total, fractions(known.cumulative),
+                                    fractions(known.period),
+                                    known.status + ('; ' + reason if reason else ''))

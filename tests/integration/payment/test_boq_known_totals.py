@@ -62,7 +62,10 @@ def test_frozen_printed_formula_row_and_snapshot(tmp_path):
     assert s.row_dimensions[5].outlineLevel==0 and not s.protection.sheet
     assert 'Invalid view' in s['G5'].value and 'Cumulative Amount' in s['G5'].value
     assert s['G5'].number_format.endswith(';0.00')
-    data=w['_BP_Data']; assert [data.cell(data.max_row-1,c).value for c in range(1,4)]==[100,40,40]
-    assert [data.cell(data.max_row,c).value for c in range(1,4)]==[100,-60,0]
+    data=w['_BP_Data']; _, address = next(w.defined_names['BP_KnownAmounts'].destinations)
+    from openpyxl.utils.cell import range_boundaries
+    _, start, _, end = range_boundaries(address)
+    assert [data.cell(start,c).value for c in range(1,4)]==[100,40,40]
+    assert [data.cell(end,c).value for c in range(1,4)]==[100,-60,0]
     assert 'A5:E5' in s.merged_cells and len(s.data_validations.dataValidation)==1
     w.close()

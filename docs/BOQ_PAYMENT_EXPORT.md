@@ -1,6 +1,6 @@
 # BP-2 BOQ Payment Workbook Export
 
-Status: BP-2 accepted. BP-2.1/BP-3 implementation handoff; their acceptance remains pending.
+Status: BP-2/BP-2.1/BP-3 accepted. BP-3.1 implementation handoff; acceptance pending.
 Baseline: `cc6d1476882dc6899cb503aa085c6d6068c06692` (accepted BP-1).
 
 In Payment, choose **Export BOQ Payment Workbook**. Select a saved Project Session,
@@ -108,3 +108,31 @@ BP-3 is an incremental package on top of the exact BP-2.1 package. Source integr
 revision acknowledgement, cancellation and no-overwrite publication remain owned
 by the existing export service. The two original report worksheets remain
 unprotected for grouping; snapshot tabs and internal data are protected.
+
+## BP-3.1 Known Projected Percentage
+
+Percentage row 5 uses the same BP-2.1 known monetary results divided by the
+complete Total BOQ Amount: all distinct catalog leaf items, including unmapped
+and partial items, excluding subtotals. Cumulative and signed Period modes use
+that same fixed denominator. Negative changes are retained. This is known
+projected contribution, not complete project progress or certified payment.
+The independent coverage warning remains visible even when a number is available.
+
+Missing, invalid, non-finite or negative leaf Amounts make the denominator
+unavailable. Zero total Amount also produces Unavailable, never a fabricated zero
+percentage. An unavailable numerator remains Unavailable; valid numeric zero
+shows 0.0% in this headline (body zero formatting remains unchanged). First exact
+completion is visible, consecutive exact completion is visually suppressed only
+in Cumulative %, and a return after a decrease is visible. Exact Decimal completion
+flags prevent near-100 values from being suppressed after float conversion.
+
+Normalization is stored in protected `_BP_Data`; Excel only selects a snapshot
+vector through B3. Invalid selectors show Invalid view. Row 5 remains outside
+outline groups and inside frozen/repeated print headers. The six worksheets,
+Amount summary, Trace, Payment snapshots and source/export safeguards are unchanged.
+P6 Payment Input WBS and BOQ report hierarchy differ; their percentages need not match.
+
+Verification: run `tests/integration/payment/test_boq_percentage_summary.py`, the
+existing known-totals/export/snapshot tests, full regression, and real NKC1 proof.
+Native Excel: inspect row 5 and coverage, switch both views with F9 and save/reopen,
+check print titles/grouping, and confirm unchanged Amount/Trace/Payment snapshots.
