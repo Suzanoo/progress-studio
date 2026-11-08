@@ -136,3 +136,19 @@ Verification: run `tests/integration/payment/test_boq_percentage_summary.py`, th
 existing known-totals/export/snapshot tests, full regression, and real NKC1 proof.
 Native Excel: inspect row 5 and coverage, switch both views with F9 and save/reopen,
 check print titles/grouping, and confirm unchanged Amount/Trace/Payment snapshots.
+
+## BP-3.2 Cumulative Amount completion display
+
+Amount body rows hide consecutive exact completed values only in Cumulative
+Amount mode. The first completion, a genuine decrease and a return to completion
+remain visible. Underlying amounts/formulas remain unchanged. Period Amount is
+unchanged. Exact Decimal flags are snapshotted before conversion to Excel numbers;
+rounded near-completion never establishes completion.
+
+A leaf requires a valid positive Amount and complete projection at exactly 100%.
+Groups/project rows additionally require all positive descendant leaves to be
+exactly complete; incomplete known contributions cannot imply completion. Zero
+Amount alone cannot establish completion. Existing zero/unavailable display and
+warnings remain intact. The Known Projected Amount headline (row 5) deliberately
+stays visible: it measures known contributions, not a complete-project state.
+No Payment Input, Payment snapshots, Mapping or projection mathematics changes.

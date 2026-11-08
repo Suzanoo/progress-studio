@@ -149,3 +149,29 @@ def known_projected_percentages(projection, known: KnownProjectedTotals):
     return KnownProjectedPercentages(total, fractions(known.cumulative),
                                     fractions(known.period),
                                     known.status + ('; ' + reason if reason else ''))
+
+
+def amount_completion_states(projection, rows):
+    """Exact full-completion display flags; never equate known money to completion.
+
+    Groups require every positive leaf to be complete. Zero-value leaves retain
+    their accepted status but cannot create monetary completion on their own.
+    """
+    leaves = [entry for entry in projection.items if entry.item.role == 'item']
+    by_key = {entry.item.key: entry for entry in leaves}
+    result = []
+    for row in rows:
+        members = ([entry for entry in leaves if row.key == '__project_summary__'
+                    or entry.item.wbs.startswith(row.wbs + '.')]
+                   if row.group else [by_key[row.key]])
+        positive = [entry for entry in members if entry.item.amount is not None
+                    and entry.item.amount > 0]
+        valid = row.amount is not None and row.amount > 0 and bool(positive)
+        result.append(tuple(
+            bool(valid and row.values[2][p] == row.amount and all(
+                entry.periods[p].status == 'Complete'
+                and entry.periods[p].cumulative_fraction == Decimal(1)
+                and entry.periods[p].cumulative_amount == entry.item.amount
+                for entry in positive))
+            for p in range(len(projection.periods))))
+    return tuple(result)

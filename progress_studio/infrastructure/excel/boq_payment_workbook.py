@@ -8,7 +8,7 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.pagebreak import Break
 from openpyxl.utils import get_column_letter as letter
-from progress_studio.domain.boq_payment_report import report_rows, known_projected_totals, known_projected_percentages
+from progress_studio.domain.boq_payment_report import report_rows, known_projected_totals, known_projected_percentages, amount_completion_states
 from progress_studio.infrastructure.excel.export_theme import DEFAULT_ACTIVITY_DATA_PALETTE as PALETTE
 from progress_studio.infrastructure.excel.styles import HEADER_FILL, PROJECT_FILL, ACTIVITY_PLAN_FILL
 from progress_studio.infrastructure.excel.calculation_policy import request_initial_manual_excel_recalculation
@@ -89,6 +89,12 @@ def render(projection, cancelled=lambda:False):
     ):
         last_col = 'A' if name == 'BP_TotalBOQAmount' else letter(periods)
         wb.defined_names.add(DefinedName(name, attr_text=f"'_BP_Data'!$A${start}:${last_col}${end}"))
+    amount_flags_start = completion_row + 4
+    for i, flags in enumerate(amount_completion_states(projection, rows)):
+        for p, flag in enumerate(flags):
+            data.cell(amount_flags_start + i, p + 1, int(flag))
+    wb.defined_names.add(DefinedName('BP_AmountCompletion', attr_text=
+        f"'_BP_Data'!$A${amount_flags_start}:${letter(periods)}${amount_flags_start+n-1}"))
     for ws,base,modes in [(pct,0,('Cumulative %','Period %')),(amt,2,('Cumulative Amount','Period Amount'))]:
         ws['A1']='BOQ Payment — Project';ws['A1'].font=Font(size=18,bold=True,color='1F4E78');ws.row_dimensions[1].height=28;ws['A2']='Projected Requirements — not certified payment'
         ws['A3']='View';ws['B3']=modes[0];dropdown(ws,'B3','"'+','.join(modes)+'"')
@@ -152,6 +158,15 @@ def render(projection, cancelled=lambda:False):
                     f'AND($B$3="Cumulative %",INDEX(BP_KnownCompletion,1,{p+1})=1,INDEX(BP_KnownCompletion,1,{p})=1)'])
                 summary_rule.dxf = DifferentialStyle(numFmt=NumberFormat(numFmtId=164,formatCode=';;;'))
                 ws.conditional_formatting.add(f'{col}5', summary_rule)
+        if base == 2:
+            from openpyxl.styles.differential import DifferentialStyle
+            from openpyxl.styles.numbers import NumberFormat
+            for p in range(1, periods):
+                col = letter(p + 7)
+                rule = FormulaRule(formula=[
+                    f'AND($B$3="Cumulative Amount",INDEX(BP_AmountCompletion,ROW()-7,{p+1})=1,INDEX(BP_AmountCompletion,ROW()-7,{p})=1)'])
+                rule.dxf = DifferentialStyle(numFmt=NumberFormat(numFmtId=164,formatCode=';;;'))
+                ws.conditional_formatting.add(f'{col}8:{col}{7+n}', rule)
         ws.freeze_panes='G8';ws.sheet_properties.outlinePr.summaryBelow=False
         ws.sheet_view.showGridLines=False;ws.print_title_rows='1:7';ws.print_title_cols='A:F'
         ws.print_area=f'A1:{letter(6+periods)}{7+n}';ws.sheet_properties.pageSetUpPr.fitToPage=False
