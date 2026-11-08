@@ -55,13 +55,55 @@ class PaymentFrame(ttk.Frame):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        panel = ttk.Frame(
-            self,
-            style="Surface.TFrame",
-            padding=24,
-        )
-        panel.pack(fill="both", expand=True)
+        # Scroll the complete Payment workspace, including the BOQ Payment card.
+        # Bind wheel events only while the pointer is over this workspace.
+        container = ttk.Frame(self, style="Surface.TFrame")
+        container.pack(fill="both", expand=True)
+        canvas = tk.Canvas(container, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        panel = ttk.Frame(canvas, style="Surface.TFrame", padding=24)
+        window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
         panel.columnconfigure(0, weight=1)
+
+        def update_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def update_width(event):
+            canvas.itemconfigure(window_id, width=event.width)
+
+        panel.bind("<Configure>", update_region)
+        canvas.bind("<Configure>", update_width)
+
+        def wheel(event):
+            if not canvas.winfo_exists():
+                return
+            if getattr(event, "num", None) == 4:
+                step = -1
+            elif getattr(event, "num", None) == 5:
+                step = 1
+            else:
+                delta = getattr(event, "delta", 0)
+                if not delta:
+                    return
+                step = -1 if delta > 0 else 1
+            canvas.yview_scroll(step, "units")
+            return "break"
+
+        def enter(_event):
+            canvas.bind_all("<MouseWheel>", wheel)
+            canvas.bind_all("<Button-4>", wheel)
+            canvas.bind_all("<Button-5>", wheel)
+
+        def leave(_event):
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
+        container.bind("<Enter>", enter)
+        container.bind("<Leave>", leave)
 
         ttk.Label(
             panel,
@@ -89,8 +131,34 @@ class PaymentFrame(ttk.Frame):
         self._build_workbook_card(panel, 2)
         self._build_prepare_card(panel, 3)
         self._build_breakdown_card(panel, 4)
-        ttk.Button(panel, text=tr('bp2.0'), command=self._open_boq_payment).grid(row=5, column=0, sticky='w', pady=8)
-        ttk.Button(panel, text=tr('bp4.prepare'), command=self._prepare_boq_requirements).grid(row=6, column=0, sticky='w', pady=8)
+        self._build_boq_payment_card(panel, 5)
+
+    def _build_boq_payment_card(self, parent: ttk.Frame, row: int) -> None:
+        """Present the accepted Prepare -> Save -> Export sequence."""
+        card = ttk.Frame(parent, style="Card.TFrame", padding=16)
+        card.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        card.columnconfigure(1, weight=1)
+        ttk.Label(card, text="4", style="Section.TLabel").grid(
+            row=0, column=0, sticky="nw", padx=(0, 10)
+        )
+        ttk.Label(card, text="BOQ Payment", style="Section.TLabel").grid(
+            row=0, column=1, sticky="w"
+        )
+        ttk.Label(
+            card,
+            text="Prepare manual BOQ requirements, save the input workbook, then export the report.",
+            style="Muted.TLabel",
+            wraplength=760,
+        ).grid(row=1, column=1, sticky="w", pady=(3, 10))
+        actions = ttk.Frame(card, style="Surface.TFrame")
+        actions.grid(row=2, column=1, sticky="w")
+        ttk.Button(
+            actions, text=tr('bp4.prepare'), command=self._prepare_boq_requirements
+        ).pack(side="left")
+        ttk.Label(actions, text="  Save in Excel  ", style="Muted.TLabel").pack(side="left")
+        ttk.Button(
+            actions, text=tr('bp2.0'), command=self._open_boq_payment
+        ).pack(side="left")
 
     def _prepare_boq_requirements(self):
         from progress_studio.presentation.gui.boq_payment_dialog import BOQPaymentDialog

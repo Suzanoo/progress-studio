@@ -13,7 +13,7 @@ class BOQPaymentDialog(tk.Toplevel):
     def __init__(self,parent,service=None,*,prepare=False):
         super().__init__(parent)
         self.prepare=prepare
-        self.title(tr('bp4.prepare' if prepare else 'bp2.0'));self.geometry('950x650');self.transient(parent.winfo_toplevel())
+        self.title(tr('bp4.prepare' if prepare else 'bp2.0'));self.geometry('900x480');self.minsize(740,380);self.transient(parent.winfo_toplevel())
         from progress_studio.services.boq_requirement_prepare import BOQRequirementPrepareService
         self.service=service or (BOQRequirementPrepareService() if prepare else BOQPaymentExportService());self.review=None;self.busy=False
         self.events=queue.Queue();self.cancel=threading.Event();self.controls=[]
@@ -25,14 +25,23 @@ class BOQPaymentDialog(tk.Toplevel):
             entry=ttk.Entry(body,textvariable=self.variables[i]);entry.grid(row=i,column=1,sticky='ew');self.controls.append(entry)
             button=ttk.Button(body,text='Browse...',command=lambda i=i:self.pick(i));button.grid(row=i,column=2);self.controls.append(button)
             self.variables[i].trace_add('write',lambda *_:self.invalidate())
+        # Source review precedes acknowledgement; export remains in the footer.
+        self.review_button=ttk.Button(body,text=tr('bp2.6'),command=self.assess)
+        self.review_button.grid(row=3,column=0,columnspan=3,sticky='w',pady=(10,4))
         self.ack_button=ttk.Checkbutton(body,text=tr('bp2.5'),variable=self.ack,command=self.sync)
-        self.ack_button.grid(row=3,column=0,columnspan=3,sticky='w')
-        self.review_button=ttk.Button(body,text=tr('bp2.6'),command=self.assess);self.review_button.grid(row=4,column=0,columnspan=2,sticky='w')
-        self.export_button=ttk.Button(body,text=tr('bp4.save' if prepare else 'bp2.7'),command=self.export);self.export_button.grid(row=4,column=2)
-        self.text=ScrolledText(body,height=20,wrap='word',state='disabled');self.text.grid(row=5,column=0,columnspan=3,sticky='nsew');body.rowconfigure(5,weight=1)
-        ttk.Label(body,textvariable=self.status,wraplength=850).grid(row=6,column=0,columnspan=3,sticky='w')
-        self.progress=ttk.Progressbar(body,mode='indeterminate');self.progress.grid(row=7,column=0,columnspan=3,sticky='ew')
-        self.close_button=ttk.Button(body,text='Close',command=self.close);self.close_button.grid(row=8,column=2)
+        self.ack_button.grid(row=4,column=0,columnspan=3,sticky='w',pady=(0,6))
+        self.text=ScrolledText(body,height=9,wrap='word',state='disabled')
+        self.text.grid(row=5,column=0,columnspan=3,sticky='nsew',pady=(0,6))
+        body.rowconfigure(5,weight=1)
+        ttk.Label(body,textvariable=self.status,wraplength=820).grid(row=6,column=0,columnspan=3,sticky='w')
+        self.progress=ttk.Progressbar(body,mode='indeterminate')
+        self.progress.grid(row=7,column=0,columnspan=3,sticky='ew',pady=(5,8))
+        footer=ttk.Frame(body)
+        footer.grid(row=8,column=0,columnspan=3,sticky='e')
+        self.close_button=ttk.Button(footer,text='Close',command=self.close)
+        self.close_button.pack(side='left',padx=(0,8))
+        self.export_button=ttk.Button(footer,text=tr('bp4.save' if prepare else 'bp2.7'),command=self.export)
+        self.export_button.pack(side='left')
         self.protocol('WM_DELETE_WINDOW',self.close);self.sync()
 
     def invalidate(self):
