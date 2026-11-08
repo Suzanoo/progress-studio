@@ -7,6 +7,7 @@ VISIBLE_SHEETS = (
     "Weekly Compact",
     "main_monthly",
     "Payment Input",
+    "BOQ Requirement Input",
     "Payment-Breakdown",
     "Payment",
     "Dashboard",

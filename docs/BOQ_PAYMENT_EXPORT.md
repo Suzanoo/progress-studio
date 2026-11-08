@@ -152,3 +152,7 @@ Amount alone cannot establish completion. Existing zero/unavailable display and
 warnings remain intact. The Known Projected Amount headline (row 5) deliberately
 stays visible: it measures known contributions, not a complete-project state.
 No Payment Input, Payment snapshots, Mapping or projection mathematics changes.
+
+## BP-4 manual planned BOQ requirements
+
+See [BOQ_MANUAL_REQUIREMENTS.md](BOQ_MANUAL_REQUIREMENTS.md) for the accepted Prepare → Input → Save → Export workflow, disjoint manual origin, Row 5 combined known planned contributions, revision/conflict safeguards and Trace coverage. The six-sheet report and BP-3 values-only Payment snapshots are preserved.

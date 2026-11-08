@@ -36,7 +36,7 @@ def report_rows(projection):
         for p in range(len(projection.periods)):
             ok = complete and all(x.periods[p].cumulative_amount is not None for x in positive)
             cumulative = sum((x.periods[p].cumulative_amount for x in positive), Decimal(0)) if ok else None
-            delta_ok = ok and all(x.periods[p].incremental_amount is not None for x in positive)
+            delta_ok = (complete if hasattr(projection, 'mapped_projection') else ok) and all(x.periods[p].incremental_amount is not None for x in positive)
             delta = sum((x.periods[p].incremental_amount for x in positive), Decimal(0)) if delta_ok else None
             for target, value in zip(values, (cumulative / total if ok else None,
                     delta / total if delta_ok else None, cumulative, delta)):
@@ -105,6 +105,11 @@ def known_projected_totals(projection):
             if amount is None or amount < 0:
                 incomplete = True
                 continue
+            if getattr(entry, 'origin', '') == 'Manual BOQ':
+                if row.known_amount is not None:known.append(row.known_amount)
+                if row.incremental_amount is not None:deltas.append(row.incremental_amount)
+                if amount > 0 and (row.known_amount is None or row.incremental_amount is None):incomplete = True
+                continue
             current = row.known_amount
             previous = Decimal(0) if index == 0 else entry.periods[index - 1].known_amount
             if current is not None:
@@ -117,7 +122,8 @@ def known_projected_totals(projection):
         period.append(sum(deltas, Decimal(0)) if deltas else None)
     status = ('Incomplete coverage — known contributions only' if incomplete
               else 'Known contributions — not certified payment')
-    if not any(value is not None for value in cumulative):
+    if not any(value is not None for value in cumulative) and not (
+            hasattr(projection, 'mapped_projection') and any(value is not None for value in period)):
         status = 'Unavailable — no determinable contributions'
     return KnownProjectedTotals(tuple(cumulative), tuple(period), status)
 
@@ -169,7 +175,7 @@ def amount_completion_states(projection, rows):
         valid = row.amount is not None and row.amount > 0 and bool(positive)
         result.append(tuple(
             bool(valid and row.values[2][p] == row.amount and all(
-                entry.periods[p].status == 'Complete'
+                (entry.periods[p].status == 'Complete' or getattr(entry, 'origin', '') == 'Manual BOQ')
                 and entry.periods[p].cumulative_fraction == Decimal(1)
                 and entry.periods[p].cumulative_amount == entry.item.amount
                 for entry in positive))

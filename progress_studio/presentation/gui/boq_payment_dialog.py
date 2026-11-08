@@ -10,10 +10,12 @@ from progress_studio.services.boq_payment_export import BOQPaymentExportService
 
 
 class BOQPaymentDialog(tk.Toplevel):
-    def __init__(self,parent,service=None):
+    def __init__(self,parent,service=None,*,prepare=False):
         super().__init__(parent)
-        self.title(tr('bp2.0'));self.geometry('950x650');self.transient(parent.winfo_toplevel())
-        self.service=service or BOQPaymentExportService();self.review=None;self.busy=False
+        self.prepare=prepare
+        self.title(tr('bp4.prepare' if prepare else 'bp2.0'));self.geometry('950x650');self.transient(parent.winfo_toplevel())
+        from progress_studio.services.boq_requirement_prepare import BOQRequirementPrepareService
+        self.service=service or (BOQRequirementPrepareService() if prepare else BOQPaymentExportService());self.review=None;self.busy=False
         self.events=queue.Queue();self.cancel=threading.Event();self.controls=[]
         self.variables=[tk.StringVar(self) for _ in range(3)];self.ack=tk.BooleanVar(self,False)
         self.status=tk.StringVar(self,tr('bp2.1'))
@@ -26,7 +28,7 @@ class BOQPaymentDialog(tk.Toplevel):
         self.ack_button=ttk.Checkbutton(body,text=tr('bp2.5'),variable=self.ack,command=self.sync)
         self.ack_button.grid(row=3,column=0,columnspan=3,sticky='w')
         self.review_button=ttk.Button(body,text=tr('bp2.6'),command=self.assess);self.review_button.grid(row=4,column=0,columnspan=2,sticky='w')
-        self.export_button=ttk.Button(body,text=tr('bp2.7'),command=self.export);self.export_button.grid(row=4,column=2)
+        self.export_button=ttk.Button(body,text=tr('bp4.save' if prepare else 'bp2.7'),command=self.export);self.export_button.grid(row=4,column=2)
         self.text=ScrolledText(body,height=20,wrap='word',state='disabled');self.text.grid(row=5,column=0,columnspan=3,sticky='nsew');body.rowconfigure(5,weight=1)
         ttk.Label(body,textvariable=self.status,wraplength=850).grid(row=6,column=0,columnspan=3,sticky='w')
         self.progress=ttk.Progressbar(body,mode='indeterminate');self.progress.grid(row=7,column=0,columnspan=3,sticky='ew')
@@ -57,7 +59,7 @@ class BOQPaymentDialog(tk.Toplevel):
         if self.busy or self.review is None:return
         review=self.review;ack=self.ack.get()
         if review.revision_required and not ack:return
-        path=filedialog.asksaveasfilename(parent=self,defaultextension='.xlsx',filetypes=[('Excel','*.xlsx')],initialfile='BOQ_Payment.xlsx')
+        path=filedialog.asksaveasfilename(parent=self,defaultextension='.xlsx',filetypes=[('Excel','*.xlsx')],initialfile='BOQ_Requirements_Source.xlsx' if getattr(self,'prepare',False) else 'BOQ_Payment.xlsx')
         if path and self.review is review and not self.busy:self.start('export',(review,Path(path),ack))
 
     def start(self,action,payload):
@@ -80,7 +82,7 @@ class BOQPaymentDialog(tk.Toplevel):
         if error:
             self.review=None;self.status.set(str(error));content=tr('bp2.10')
         elif action=='export':
-            self.review=None;self.status.set(f'Exported: {value}');content=tr('bp2.11')
+            self.review=None;self.status.set(f'Exported: {value}');content=tr('bp4.next' if getattr(self,'prepare',False) else 'bp2.11')
         else:
             self.review=value;self.ack.set(False);self.status.set(tr('bp2.12'))
             p=value.projection

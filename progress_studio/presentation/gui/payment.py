@@ -90,6 +90,11 @@ class PaymentFrame(ttk.Frame):
         self._build_prepare_card(panel, 3)
         self._build_breakdown_card(panel, 4)
         ttk.Button(panel, text=tr('bp2.0'), command=self._open_boq_payment).grid(row=5, column=0, sticky='w', pady=8)
+        ttk.Button(panel, text=tr('bp4.prepare'), command=self._prepare_boq_requirements).grid(row=6, column=0, sticky='w', pady=8)
+
+    def _prepare_boq_requirements(self):
+        from progress_studio.presentation.gui.boq_payment_dialog import BOQPaymentDialog
+        BOQPaymentDialog(self, prepare=True)
 
     def _open_boq_payment(self):
         from progress_studio.presentation.gui.boq_payment_dialog import BOQPaymentDialog

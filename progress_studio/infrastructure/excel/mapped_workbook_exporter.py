@@ -285,6 +285,8 @@ class MappedWorkbookExporter:
                     # populated requirements yet; leave Payment absent until later.
                     pass
 
+            from progress_studio.infrastructure.excel.boq_input_package import preserve_input
+            preserve_input(payment_source, temp_file)
             validate_xlsx_tables(temp_file)
             _atomic_replace(temp_file, output_file)
             return ExportResult(output_file, validation, amount_rows, mapping_rows, migration)

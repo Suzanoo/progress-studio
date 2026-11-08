@@ -12,6 +12,7 @@
 - [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
 - [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
 - [Payment Input](PAYMENT_INPUT.md) — Amount snapshots, cumulative WBS summaries and deferred BOQ projection.
+- [Manual BOQ requirements](BOQ_MANUAL_REQUIREMENTS.md) — BP-4 Prepare, persistent signed Period % and composed planned reports.
 - [BOQ Payment Export](BOQ_PAYMENT_EXPORT.md) — BP-2 separate workbook, review/export and acceptance workflow.
 - [BOQ Payment Projection](BOQ_PAYMENT_PROJECTION.md) — BP-1 read-only service, source compatibility and verification; BP-2 export documented separately.
 - [Payment Breakdown](PAYMENT_BREAKDOWN.md)

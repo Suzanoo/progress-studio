@@ -11,6 +11,8 @@ from progress_studio.infrastructure.excel.boq_payment_workbook import render
 from progress_studio.infrastructure.excel.payment_report_snapshot import inspect_snapshots, append_payment_snapshots
 from progress_studio.infrastructure.excel.payment_workbook import PaymentWorkbookSnapshotter
 from progress_studio.domain.boq_payment_projection import Diagnostic
+from progress_studio.domain.boq_manual_requirements import compose
+from progress_studio.infrastructure.excel.boq_requirement_input import read_input
 
 
 def digest(path):
@@ -33,6 +35,7 @@ class BOQPaymentExportService:
         # explicit acknowledgement. BP-1 compatibility/relink rules still apply.
         snapshot_info=inspect_snapshots(paths[1], cancelled)
         result=BOQPaymentProjectionService().calculate(paths[0],paths[1],accept_revision=True,boq_path=paths[2] if len(paths)>2 else None)
+        result=compose(result,read_input(paths[1],result))
         if cancelled():raise InterruptedError('BOQ export cancelled')
         if any(digest(p)!=h for p,h in before):raise ValueError('Source changed during review')
         diagnostics = tuple(Diagnostic('PaymentSnapshot', i.sheet,
