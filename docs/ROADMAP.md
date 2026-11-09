@@ -30,7 +30,7 @@ The accepted BP-4 workflow is **Prepare BOQ Requirements → BOQ Requirement Inp
 | **NS-1 — Rebuild weight-basis conversion** | Open investigation question; no automatic conversion authorized. |
 | **NS-2 — Actual progress preservation on Rebuild** | Open investigation question; no conflict policy authorized. |
 | **XW-3 / BR-0 structural BOQ work** | No production implementation authorization. |
-| **DOC-1 — GitHub presentation and documentation** | Documentation-only refresh in preparation; no code/release changes. |
+| **DOC-1 — GitHub presentation and documentation** | Accepted and closed by PO; documentation-only, no code/release changes. |
 
 ## Explicit exclusions
 
