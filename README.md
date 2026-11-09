@@ -60,10 +60,6 @@ flowchart LR
 
 The exported BOQ payment workbook is a **separate report**. It is not a replacement for the source BOQ or the Payment Input workbook. See [manual requirements](docs/BOQ_MANUAL_REQUIREMENTS.md), [payment projection](docs/BOQ_PAYMENT_PROJECTION.md), and [payment export](docs/BOQ_PAYMENT_EXPORT.md).
 
-### Screenshots
-
-Screenshots will be added after review of actual application captures with project/customer details removed. No mockups are presented as product screenshots.
-
 ## Quick start
 
 **Windows desktop:** for an existing authorized portable distribution, extract the complete folder and run `ProgressStudio.exe`. If using an installer, follow its installation wizard. **This README does not claim a new public release or offer an unverified download.**
