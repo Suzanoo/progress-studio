@@ -1,57 +1,44 @@
-# Progress Studio documentation
+# Progress Studio — Documentation
 
-## Current authority
+[← Product overview](../README.md) · [Project status](ROADMAP.md) · [Changelog](../CHANGELOG.md)
 
-- [Product README](../README.md) — product, installation and workflow.
-- [User workflow](USER_WORKFLOW.md) — Create, Excel updates, optional Mapping/Payment and Rebuild.
-- [Architecture](ARCHITECTURE.md) — technical ownership; executable behavior is protected by tests.
-- [V1.1 product experience](V1_1_PRODUCT_EXPERIENCE.md) — accepted UI/localization design and original acceptance checklist.
-- [Weekly Compact](WEEKLY_COMPACT.md) — accepted V1 and Final Presentation contract.
-- [Next steps](NEXT_STEPS.md) — deferred questions; not implementation authorization.
-- [Weight selection](WEIGHT_SELECTION.md)
-- [EV monetary sources](EV_MONETARY_SOURCES.md) — Activity Amount / BOQ BAC and milestone semantics.
-- [EV live contract](EV_LIVE_CONTRACT.md) — live progress/date/refresh boundaries.
-- [Payment Input](PAYMENT_INPUT.md) — Amount snapshots, cumulative WBS summaries and deferred BOQ projection.
-- [Manual BOQ requirements](BOQ_MANUAL_REQUIREMENTS.md) — BP-4 Prepare, persistent signed Period % and composed planned reports.
-- [BOQ Payment Export](BOQ_PAYMENT_EXPORT.md) — BP-2 separate workbook, review/export and acceptance workflow.
-- [BOQ Payment Projection](BOQ_PAYMENT_PROJECTION.md) — BP-1 read-only service, source compatibility and verification; BP-2 export documented separately.
-- [Payment Breakdown](PAYMENT_BREAKDOWN.md)
-- [Roadmap/status](ROADMAP.md) — accepted XW-1 baseline; XW-2 handoff and deferred work.
-- [BOQ Update / XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) — accepted directions and X1–X5 decisions; XW-1 accepted; XW-2 handoff; BR-0 unauthorized.
-- [P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) — accepted XW-1 engine, XW-2 Desktop review/export, output safety and acceptance boundaries.
-- [Changelog](../CHANGELOG.md)
+This index separates **using the application**, **understanding features**, and **engineering contracts**. Accepted contracts remain authoritative; the landing page is an overview, not a replacement specification.
 
-## Collaboration authority
+## Start here — users and planning teams
 
-- [Coordinator Contract](COORDINATOR_CONTRACT.md)
-- [Engineer Contract](ENGINEER_CONTRACT.md)
-- [Engineer Workflow](ENGINEER_WORKFLOW.md)
+| Topic | Document |
+| --- | --- |
+| Create, update, and rebuild workbooks | [User workflow](USER_WORKFLOW.md) |
+| Desktop navigation and ENG/THA | [V1.1 product experience](V1_1_PRODUCT_EXPERIENCE.md) |
+| Weekly/Monthly and compact presentation | [Weekly Compact](WEEKLY_COMPACT.md) |
+| Payment Input and Breakdown | [Payment Input](PAYMENT_INPUT.md) · [Payment Breakdown](PAYMENT_BREAKDOWN.md) |
 
-These replace CHATGPT_CONTRACT.md, WORK_CONTRACT.md and WORK_SKILL.md.
-Historical agent assignments do not override the current role contracts.
+## Features and reporting contracts
 
-## Engineering and distribution
+| Topic | Document |
+| --- | --- |
+| Equal / Duration / Amount | [Weight selection](WEIGHT_SELECTION.md) |
+| Earned Value sources and Live behavior | [EV monetary sources](EV_MONETARY_SOURCES.md) · [EV Live](EV_LIVE_CONTRACT.md) |
+| BOQ Mapping revision and update | [BOQ Update and XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) |
+| BOQ projection and Excel export | [BOQ Payment Projection](BOQ_PAYMENT_PROJECTION.md) · [BOQ Payment Export](BOQ_PAYMENT_EXPORT.md) |
+| Manual BOQ payment requirements (BP-4) | [BOQ Manual Requirements](BOQ_MANUAL_REQUIREMENTS.md) |
+| Reviewed P6 Amount writeback | [P6 XML Amount Writeback](XML_AMOUNT_WRITEBACK.md) |
 
-- [Development](DEVELOPMENT.md)
-- [Testing](TESTING.md)
-- [Release checklist](RELEASE_CHECKLIST.md)
-- [Windows build guide](../packaging/windows/WINDOWS_BUILD_GUIDE.md)
-- [Windows portable contract](WIN1_WINDOWS_PORTABLE_BUILD.md)
+**Payment reports are projections and planned requirements, not certified payments.** XML writeback is a reviewed, separate-file export; do not assume it changes original P6 XML or Excel inputs.
 
-## Retained Finance reference — hidden from normal V1.1 navigation
+## Engineering and collaboration
 
-Underlying accepted Finance implementation and tests remain supported; no calculations
-were redesigned for V1.1.
+- [Architecture](ARCHITECTURE.md) · [Development](DEVELOPMENT.md) · [Testing](TESTING.md)
+- [Coordinator Contract](COORDINATOR_CONTRACT.md) · [Engineer Contract](ENGINEER_CONTRACT.md) · [Engineer Workflow](ENGINEER_WORKFLOW.md)
+- [Release checklist](RELEASE_CHECKLIST.md) · [Windows build guide](../packaging/windows/WINDOWS_BUILD_GUIDE.md) · [Windows portable contract](WIN1_WINDOWS_PORTABLE_BUILD.md)
 
-- [Financial Forecast calculation contract](FINANCIAL_FORECAST_CONTRACT.md)
-- [Finance workbook](FF2_WORKBOOK.md)
-- [Finance desktop reference](FF3_DESKTOP.md)
+## Status and history
 
-## History, not current product authority
+- [Roadmap / milestone status](ROADMAP.md) — current status summary; not blanket implementation authorization
+- [Next steps](NEXT_STEPS.md) — deferred questions requiring investigation/approval
+- [Changelog](../CHANGELOG.md) — release and milestone history
+- [Pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md) · [EV-1 derivation notes](history/EV1_NOTES.md) — historical references
 
-- [Pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md)
-- [EV-1 derivation notes](history/EV1_NOTES.md)
-- `history/` contains milestone/freeze/acceptance records and obsolete v2.3 user guides.
-- `regressions/` contains useful investigations; current contracts and tests take precedence.
+## Retained Finance references
 
-Old roadmap schedules and BOQ-only EV assumptions are historical, not new work.
+Finance remains hidden from normal V1.1 navigation; these are engineering references, **not a new user-facing release claim**: [Financial Forecast contract](FINANCIAL_FORECAST_CONTRACT.md), [Finance workbook](FF2_WORKBOOK.md), [Finance desktop](FF3_DESKTOP.md).

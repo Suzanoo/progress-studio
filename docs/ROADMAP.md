@@ -1,82 +1,43 @@
-# Progress Studio roadmap and status
+# Progress Studio — Roadmap and milestone status
 
-## Accepted V1 baseline
+**Documentation synchronization:** 2026-11-09. **Reference:** accepted `main @ 15d8568` (BP-4 UI refinement). This is a source/documentation status record, **not** a claim that a new installer or public release was published. Accepted PO evidence and milestone tags remain authoritative; the current HEAD must be verified before integration.
 
-main `d0db778`, tag `progress-studio-v1-stable`.
-PO accepted regression reference: 797 passed, 6 skipped, 6 subtests passed, 0 failed.
-This is a historical accepted result, not the current working-tree test result.
+[← Product overview](../README.md) · [Documentation index](README.md) · [Open investigations](NEXT_STEPS.md)
 
-- MS-1 Equal / Duration: completed and accepted.
-- MS-2 XML Amount weighting and Monthly % Complete fix: completed and accepted.
-- EV Monetary Sources: completed, including Activity Amount / BOQ Mapping,
-  milestone BAC / zero Progress Weight / 0–100 earning.
-- MS-3 Planning Overview / Mini Gantt: **CANCELLED** by the Product Owner.
-- MS-4 Full Regression Closure: completed; Payment label expectations aligned.
+## Accepted and closed
 
-## V1.1 — Product experience (accepted)
+| Area | Milestone | Accepted evidence / reference |
+| --- | --- | --- |
+| Product foundation | V1, V1.1 | `progress-studio-v1-stable`, `progress-studio-v1.1-stable` |
+| Progress reporting | Weekly Compact V1 and Final Presentation | `weekly-compact-v1-stable`, `weekly-compact-final-presentation-stable` |
+| Amount workflow | A1 Amount-First; WU-1 Cutoff Placement; WU-2 Duration Columns | `amount-first-a1-stable`, `wu1-cutoff-placement-stable`, `wu2-duration-columns-stable` |
+| BOQ Update | BU-1 Amount-only BOQ Update | `bu1-boq-amount-update-stable` |
+| P6 XML | XW-1 Engine and XW-2 Desktop Integration | `xw1-p6-xml-writeback-stable`; XW-2 accepted as the baseline for subsequent PI-1 work |
+| Payment Input | PI-1 Activity Amount / WBS Rollup | `pi1-payment-input-rollup-stable` |
+| BOQ Payment | BP-1 Projection | `bp1-boq-payment-projection-stable` |
+| BOQ Payment | BP-2 Separate Workbook Export | Accepted before BP-3 work; see [BOQ Payment Export](BOQ_PAYMENT_EXPORT.md) |
+| BOQ Payment | BP-3.2 Amount Completion | `bp32-amount-completion-stable` |
+| BOQ Payment | BP-4 Manual BOQ Requirements | `bp4-manual-boq-requirements-stable`; UI refinement `main @ 15d8568` (PO Native UI PASS) |
 
-Accepted at `main @ b16ddb0`, tag `progress-studio-v1.1-stable`.
+The accepted BP-4 workflow is **Prepare BOQ Requirements → BOQ Requirement Input → Save → Export BOQ Payment Workbook**. Activity-mapped and manual known planned requirements are composed in the report with separate origin and coverage evidence. BOQ projections are **not certified payment**.
 
-## Weekly Compact — accepted
+## Open, deferred, or separately authorized
 
-- V1: `main @ c9087ea`, tag `weekly-compact-v1-stable`.
-- Final Presentation: `main @ 17cc3f3`, tag `weekly-compact-final-presentation-stable`.
-- Windows full regression: 839 passed, 6 skipped, 6 subtests passed, 0 failed.
-- Product Owner Desktop Excel acceptance: PASS, including F9, Actual edit/F9,
-  cutoff movement, monthly checkpoint collision, WBS outline, Save/Close/Reopen.
-- See [Weekly Compact contract](WEEKLY_COMPACT.md).
-
-## Current accepted baseline — XW-1
-
-`main @ c928d59`, tag `xw1-p6-xml-writeback-stable`.
-BU-1 and XW-1 are accepted, integrated and closed. The Product Owner records XW-1
-Windows automated verification, real NKC1 proof and native P6 compatibility as
-passed. This is accepted evidence, not new native testing in XW-2.
-
-## BOQ Update and XML Amount Writeback
-
-The [initiative plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) owns accepted directions
-and decisions. [P6 Amount writeback](XML_AMOUNT_WRITEBACK.md) owns engine/Desktop
-behavior and remaining native acceptance boundaries.
-
-| Milestone | Status |
+| Topic | Status / boundary |
 | --- | --- |
-| BU-1 — Amount-only BOQ Update | Accepted and integrated |
-| XW-1 — P6 writeback engine proof | Accepted and closed |
-| XW-2 — Reviewed desktop export | Implemented for engineering handoff; native Windows UX / PO acceptance / Git integration pending |
-| XW-3 / BR-0 | Unauthorized for implementation |
+| **XW-DP — XML Decimal Precision** | PO approved two-decimal XML output direction; implementation and regression acceptance **not completed**. Do not claim shipped. |
+| **Weekly Compact scrolling performance** | Investigation/proof requested; no accepted production change established in this status record. Preserve accepted visuals and live behavior. |
+| **NS-1 — Rebuild weight-basis conversion** | Open investigation question; no automatic conversion authorized. |
+| **NS-2 — Actual progress preservation on Rebuild** | Open investigation question; no conflict policy authorized. |
+| **XW-3 / BR-0 structural BOQ work** | No production implementation authorization. |
+| **DOC-1 — GitHub presentation and documentation** | Documentation-only refresh in preparation; no code/release changes. |
 
-XW-2 adds a Tools command and one review/export dialog using the accepted engine.
-No MSP/batch writeback, XML merging or structural BOQ revision is added.
+## Explicit exclusions
 
-## Deferred investigation (not authorized implementation)
+- **MS-3 Mini Gantt:** cancelled by PO; do not list as an upcoming feature.
+- Finance/AI navigation: hidden in the accepted V1.1 desktop product; retained Finance implementation is not advertised as an active UI feature.
+- Native P6 import may apply its own precision behavior; acceptance of XW-1/XW-2 does not establish the separately proposed XW-DP two-decimal rule.
 
-See [Next Steps](NEXT_STEPS.md) for Amount conversion at Rebuild and Actual
-progress preservation when incoming data already contains Actual values.
+## Historical evidence
 
-## V1.1 accepted scope
-
-Modern/simple ttk presentation, A layout / C theme / A S-curve icon;
-Home and Help flows; target-first Rebuild; ENG/THA on next launch;
-Finance/AI navigation hidden; README sheet protection explanation;
-product README and documentation organization.
-
-No new workbook engine, custom password, Finance/EV formula redesign or Mini Gantt.
-Version metadata remains 2.3.0 until the owner authorizes release numbering.
-
-## Historical planning
-
-The [pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md) records the old
-P0–P11 and WIN tracks. It is not the current release status or an authorization
-to resume historical milestones. New milestones require PO authorization.
-
-## Payment Input PI-1
-
-PI-1 is authorized and implemented for engineering handoff against `8156050`
-(XW-2 stable baseline). Native Excel and PO acceptance remain pending.
-See [Payment Input](PAYMENT_INPUT.md). BP-1/BP-2 BOQ projection and separate
-values-only Project snapshot are planning-approved only, not implemented.
-
-PI-1 cumulative WBS correction: fixed full-Amount display with derived sparse states,
-zero-only WBS presentation and no COV rows; engineering verification passed (1,159 tests; 6 skipped); Coordinator review pending.
-Acceptance remains HOLD; BP-1/BP-2 remain unauthorized.
+Historical accepted test counts are retained in [Changelog](../CHANGELOG.md) and feature contracts. They are **not** a claim of a current full-regression run. The [pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md) is archival and does not authorize old milestones.

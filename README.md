@@ -1,101 +1,109 @@
-<p align="center"><img src="progress_studio/assets/brand/progress_studio_icon.png" width="88" alt="Progress Studio S-curve icon"></p>
+<p align="center">
+  <img src="progress_studio/assets/brand/progress_studio_icon.png" width="96" alt="Progress Studio S-curve icon">
+</p>
 
-# Progress Studio
+<h1 align="center">Progress Studio</h1>
+<p align="center"><strong>Plan in P6 or MSP. Report progress in Excel.</strong></p>
+<p align="center">Construction progress reporting · BOQ mapping · Payment requirements · S-curves</p>
 
-**Plan in P6 or MSP. Report progress in Excel.**
+<p align="center">
+  <a href="#workflow">Workflow</a> ·
+  <a href="#capabilities">Capabilities</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="docs/ROADMAP.md">Project status</a>
+</p>
 
-Progress Studio connects your schedule XML to a practical weekly/monthly Excel
-progress workbook. Keep your scheduling tool and familiar Excel reporting workflow;
-stop rebuilding the same S-curve workbook by hand.
+---
 
-## Why it exists
+## From construction schedule to useful reporting
 
-Planning teams often maintain schedules in Primavera P6 or Microsoft Project,
-then recreate progress tables and S-curves in Excel for reporting. Progress Studio
-bridges that gap. It is a focused desktop reporting tool, not a replacement
-scheduling system or an accounting application.
+Planning teams work in **Oracle Primavera P6** or **Microsoft Project**, but progress reviews often happen in **Excel**. Progress Studio connects those workflows so teams can spend less time rebuilding reporting workbooks by hand.
 
-## Product flow
+It is a **desktop application for construction reporting**, not a replacement scheduling system, certified-payment system, or accounting platform.
 
-1. Export **P6 XML** or **MSP XML**.
-2. **Create** an Excel workbook: choose Weight basis, Weekly cutoff and Plan distribution.
-3. Open Excel, review the plan/S-curve and enter progress in editable cells in `main`.
-4. **F9 and Save** recalculate formulas. Use **Rebuild** when generated views or
-   structural inputs need refreshing; it starts from the saved workbook, not XML.
+## Workflow
 
-**BOQ Mapping** and **Payment** are optional, not mandatory setup steps.
-**Earned Value** is available through Rebuild.
+```mermaid
+flowchart LR
+    A[Primavera P6 / Microsoft Project XML] --> B[Progress Studio]
+    B --> C[Progress workbook]
+    B --> D[BOQ mapping and payment preparation]
+    C --> E[Weekly / Monthly Excel reports]
+    D --> F[BOQ payment projection and export]
+```
 
-## What you can do
+1. **Create:** import a P6/MSP XML schedule, choose a weighting basis, weekly cutoff, and plan distribution, then generate a Progress workbook.
+2. **Update:** enter actual progress in editable Excel cells; use **F9 and Save** to recalculate. Optionally map BOQ amounts, prepare Payment Input, or prepare manual BOQ requirements.
+3. **Report:** refresh generated views using **Rebuild**, or export separate BOQ payment reports from the reviewed payment workflow.
 
-- Import P6 and MSP XML without changing source scheduling data.
-- Choose **Equal**, **Duration**, or an explicitly selected numeric **Amount** field.
-- Generate weekly/monthly Plan and Actual reporting, Dashboard and S-curve views.
-- Allocate BOQ amounts to activities with **Mapping**.
-- Prepare persistent **Payment Input** and generate **Payment Breakdown**.
-- Rebuild **Progress** or **Payment** using their existing **Snapshot / Live** workflows.
-- Generate live **Earned Value** using **Activity Amount** or **BOQ Mapping** as the
-  monetary source; retain PV/EV, WBS performance and source-specific detail.
-- Use an **ENG / THA** desktop interface and a short in-app **Help / Quick Guide**.
-  Language changes apply on the next application launch.
+> **Important:** Excel recalculation is not the same as a Python Rebuild. Snapshot reports must be refreshed using their owning operation. BOQ payment projections are planning/reporting outputs, **not certified payments**.
 
-Live does not mean every change needs only F9: structural BAC/source changes
-require EV refresh, and Python-generated snapshots require their owning rebuild.
-Equal/Duration weights are not money. See [EV monetary sources](docs/EV_MONETARY_SOURCES.md).
+## Capabilities
 
-## Product status
+| Area | What it provides |
+| --- | --- |
+| **Progress & S-curves** | Weekly/monthly Plan and Actual, dashboard, progress views, and a compact weekly presentation. |
+| **Weight selection** | Equal, Duration, or selected Amount; Amount is not assumed to be money without appropriate source evidence. |
+| **BOQ Mapping** | Allocate BOQ item amounts to schedule activities with saved mapping shares. |
+| **Payment Input** | Prepare activity payment requirements and Amount-weighted WBS rollups. |
+| **BOQ Payment Projection** | Project mapped activity requirements to BOQ items with explicit coverage and diagnostics. |
+| **BOQ Payment Export** | Generate a separate Excel report with Percentage, Amount, Trace, and protected snapshot data. |
+| **Manual BOQ Requirements** | Prepare, save, and include manually entered BOQ requirements alongside activity-mapped requirements, with origin separation. |
+| **Earned Value** | Live EV reporting using Activity Amount or BOQ Mapping monetary sources. |
+| **P6 XML Amount Writeback** | Reviewed export of selected workbook Amounts to a separate P6 XML file; source files are preserved. |
+| **ENG / THA desktop UI** | Select interface language; changes take effect on next application launch. Workbook formulas and sheet identities remain unchanged. |
 
-Accepted source milestones:
+### Payment workflow
 
-- V1: `d0db778` (`progress-studio-v1-stable`).
-- V1.1: `b16ddb0` (`progress-studio-v1.1-stable`).
-- Weekly Compact V1: `c9087ea` (`weekly-compact-v1-stable`).
-- Weekly Compact Final Presentation: `17cc3f3` (`weekly-compact-final-presentation-stable`).
+**Prepare BOQ Requirements → Edit and Save BOQ Requirement Input in Excel → Export BOQ Payment Workbook**
 
-The Final Presentation was accepted in Desktop Excel after F9, edit/recalculation,
-cutoff movement, WBS outline, and Save/Close/Reopen checks. Windows full regression:
-839 passed, 6 skipped, 6 subtests passed, 0 failed. This is source/workbook
-acceptance, not a claim that a new installer or distribution was released.
-Mini Gantt is **cancelled**, not a planned feature.
-Finance implementation is retained for compatibility but hidden from normal V1.1
-navigation. No Finance workflow is advertised here.
+The exported BOQ payment workbook is a **separate report**. It is not a replacement for the source BOQ or the Payment Input workbook. See [manual requirements](docs/BOQ_MANUAL_REQUIREMENTS.md), [payment projection](docs/BOQ_PAYMENT_PROJECTION.md), and [payment export](docs/BOQ_PAYMENT_EXPORT.md).
 
-## Quick start / Windows
+### Screenshots
 
-For an existing authorized portable build, extract the whole folder and run
-`ProgressStudio.exe` (do not copy the EXE alone).
-For an installer, follow the installation wizard.
+Screenshots will be added after review of actual application captures with project/customer details removed. No mockups are presented as product screenshots.
 
-To build from source, use the step-by-step
-[Windows build guide](packaging/windows/WINDOWS_BUILD_GUIDE.md).
-Release artifacts, signing and Desktop acceptance must be verified by the repository
-owner; the documentation does not imply a new downloadable release has been published.
+## Quick start
 
-## Documentation
+**Windows desktop:** for an existing authorized portable distribution, extract the complete folder and run `ProgressStudio.exe`. If using an installer, follow its installation wizard. **This README does not claim a new public release or offer an unverified download.**
 
-- [User workflow](docs/USER_WORKFLOW.md)
-- [V1.1 desktop experience and acceptance](docs/V1_1_PRODUCT_EXPERIENCE.md)
-- [Weight selection](docs/WEIGHT_SELECTION.md)
-- [Earned Value monetary sources](docs/EV_MONETARY_SOURCES.md)
-- [Payment Breakdown](docs/PAYMENT_BREAKDOWN.md)
-- [Weekly Compact presentation](docs/WEEKLY_COMPACT.md)
-- [Open next-step questions](docs/NEXT_STEPS.md)
-- [Documentation index](docs/README.md)
-- [Changelog](CHANGELOG.md) / [Roadmap and status](docs/ROADMAP.md)
-
-## Development / tests
-
-Requires Python 3.10+ with Tkinter. Existing compatibility entry points remain:
-`desktop.py`, `main.py`, `progress-studio` and `progress-studio-cli`.
+**Run from source** (Python 3.10+ with Tkinter):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 python desktop.py
-python -m pytest
 ```
 
-See [Development](docs/DEVELOPMENT.md), [Testing](docs/TESTING.md),
-[Architecture](docs/ARCHITECTURE.md) and [Release checklist](docs/RELEASE_CHECKLIST.md).
-Workbook formulas, sheet names and source identities are not translated.
+See the [Windows build guide](packaging/windows/WINDOWS_BUILD_GUIDE.md) for building distribution artifacts.
+
+## Documentation
+
+| I want to… | Start here |
+| --- | --- |
+| Create and update a workbook | [User workflow](docs/USER_WORKFLOW.md) |
+| Understand weighting and Earned Value | [Weight selection](docs/WEIGHT_SELECTION.md) · [EV monetary sources](docs/EV_MONETARY_SOURCES.md) |
+| Work with BOQ payment reports | [BOQ projection](docs/BOQ_PAYMENT_PROJECTION.md) · [BOQ export](docs/BOQ_PAYMENT_EXPORT.md) · [Manual requirements](docs/BOQ_MANUAL_REQUIREMENTS.md) |
+| Write Amounts back to P6 XML | [P6 XML writeback](docs/XML_AMOUNT_WRITEBACK.md) |
+| Find project status and open work | [Roadmap](docs/ROADMAP.md) · [Next steps](docs/NEXT_STEPS.md) |
+| Develop or verify the application | [Development](docs/DEVELOPMENT.md) · [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md) |
+
+Browse the full [documentation index](docs/README.md) or [Changelog](CHANGELOG.md).
+
+## Project status and boundaries
+
+Accepted source milestones include Progress Studio V1/V1.1, Weekly Compact, BOQ Update, XML writeback, Payment Input, and BP-1 through BP-4. See the [Roadmap](docs/ROADMAP.md) for milestone-level status and deferred investigations.
+
+- **XW-DP (two-decimal XML writeback)** is a separately authorized investigation/implementation task; **not claimed as shipped here**.
+- Mini Gantt was **cancelled**. Finance code remains available for compatibility but is hidden from normal V1.1 navigation.
+- This repository's source milestones do not establish that a new installer or signed public release has been published.
+
+## Development and tests
+
+```powershell
+python -m pytest -q
+```
+
+See [Engineering workflow](docs/ENGINEER_WORKFLOW.md) and [Release checklist](docs/RELEASE_CHECKLIST.md). No new release version is asserted by this documentation refresh.

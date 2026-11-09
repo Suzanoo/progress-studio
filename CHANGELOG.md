@@ -1,5 +1,17 @@
 # Changelog
 
+## Documentation and recent accepted milestones — 2026-11-09
+
+- **DOC-1 (documentation refresh):** reorganized product README, documentation index and roadmap. No application behavior, version number, or public distribution changed.
+- **BP-4 — Manual BOQ Requirements:** accepted Prepare → BOQ Requirement Input → Save → Export workflow; combined mapped and manual planned requirements with separate provenance/coverage. Stable tag `bp4-manual-boq-requirements-stable`.
+- **BP-4 UI refinement:** accepted Payment page order, compact export dialog, vertical scrolling and mouse wheel. Committed as `15d8568` after PO Native UI PASS.
+- **BP-3.2:** Amount Completion accepted; stable tag `bp32-amount-completion-stable`.
+- **BP-2:** separate BOQ Payment Workbook Export accepted; Percentage, Amount, Trace and protected `_BP_Data` reporting contract.
+- **BP-1 / PI-1:** BOQ payment projection and Payment Input WBS rollup accepted; tags `bp1-boq-payment-projection-stable`, `pi1-payment-input-rollup-stable`.
+- **BU-1 / XW-1 / XW-2:** Amount-only BOQ Update and P6 XML Amount Writeback workflow accepted. Two-decimal XML writeback (**XW-DP**) is separate, not yet shipped.
+
+> This summary records accepted source milestones, not a new signed installer, version bump, or current regression run. Earlier changelog entries are retained below unchanged.
+
 ## Weekly Compact Final Presentation — accepted, 17cc3f3
 
 - Weekly physical timeline with Monthly Gantt body and monthly bottom data
