@@ -94,6 +94,7 @@ class Projection:
     diagnostics: tuple[Diagnostic, ...]
     provenance: tuple[tuple[str, str], ...] = ()
     period_sources: tuple[PeriodSource, ...] = ()
+    activity_names: tuple[tuple[str, str], ...] = ()
 
 
 def project(catalog, allocations, payment, activity_ids):
@@ -186,3 +187,4 @@ def project(catalog, allocations, payment, activity_ids):
         result.append(ItemProjection(item,tuple(rows)))
     return Projection('bp1-derived-requirements-v1',periods,tuple(result),tuple(diagnostics),
                       period_sources=tuple(PeriodSource(p.period_id,p.column_index,p.payment_date) for p in payment.periods))
+

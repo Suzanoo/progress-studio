@@ -55,7 +55,7 @@ def test_saved_values_styles_controls_and_unicode(tmp_path):
     infos=append_payment_snapshots(target,path,digest(path));assert [i.formulas for i in infos]==[3,3]
     out=tmp_path/'snapshot.xlsx';target.save(out);target.close();BOQPaymentExportService.validate(out)
     w=load_workbook(out)
-    assert w.sheetnames==['Percentage','Amount','Trace','Payment Input','Payment','_BP_Data']
+    assert w.sheetnames==['Percentage','Amount','BOQ Mapping','Activity Mapping','Payment Input','Payment','_BP_Data']
     for name in ('Payment Input','Payment'):
         s=w[name];assert s['D2'].value==0 and s['D3'].value==-2.5 and s['D4'].value is None
         assert s['C2'].value==0 and s['E2'].value=='=literal text' and s['E2'].data_type=='s'

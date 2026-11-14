@@ -204,13 +204,13 @@ def append_payment_snapshots(target, source_path, source_hash, cancelled=lambda:
             if name=='Payment Input' and not any(c.value is not None for c in list(sheet[1])[1:8]) and not any(r.min_row==1 for r in sheet.merged_cells.ranges):
                 sheet.merge_cells('A1:H1')
             sheet.row_dimensions[1].height=max(original.row_dimensions[1].height or 15,42)
-            sheet['A1'].comment=Comment(f'Source: {Path(source_path).name}\nSHA-256: {source_hash}\nWorksheet: {name}\nSaved cached values are preserved without recalculating Payment. Recalculate/save source before export. See Trace for revision diagnostics.','Progress Studio')
+            sheet['A1'].comment=Comment(f'Source: {Path(source_path).name}\nSHA-256: {source_hash}\nWorksheet: {name}\nSaved cached values are preserved without recalculating Payment. Recalculate/save source before export. See Amount for revision diagnostics.','Progress Studio')
             sheet.oddHeader.center.text='Read-only Payment snapshot'
             sheet.protection.sheet=True;sheet.protection.password=WORKBOOK_SHEET_PASSWORD
             sheet.protection.selectLockedCells=False
             sheet.sheet_state='visible'
         # Keep reports prominent and internal data last.
-        target._sheets.sort(key=lambda s: ('Percentage','Amount','Trace','Payment Input','Payment','_BP_Data').index(s.title))
+        target._sheets.sort(key=lambda s: ('Percentage','Amount','BOQ Mapping','Activity Mapping','Payment Input','Payment','_BP_Data').index(s.title))
     finally:
         source.close();payload.close()
     return info

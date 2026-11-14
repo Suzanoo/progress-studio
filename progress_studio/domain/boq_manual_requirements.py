@@ -91,4 +91,4 @@ def compose(projection, records):
     return CompositeProjection(projection.policy, projection.periods, entries,
         projection.diagnostics + tuple(diagnostics) + (Diagnostic('ManualBOQ', 'Planned requirements',
             f'{len(records)} wholly unmapped input rows; blank is unknown; signed Period % of full BOQ Amount'),),
-        projection.provenance, projection.period_sources, projection)
+        projection.provenance, projection.period_sources, projection.activity_names, projection)

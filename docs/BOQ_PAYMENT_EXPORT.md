@@ -1,7 +1,7 @@
 # BP-2 BOQ Payment Workbook Export
 
-Status: BP-2/BP-2.1/BP-3 accepted. BP-3.1 implementation handoff; acceptance pending.
-Baseline: `cc6d1476882dc6899cb503aa085c6d6068c06692` (accepted BP-1).
+Status: BP-1 through BP-4 accepted. TR-1 final Mapping correction awaiting acceptance.
+Correction baseline: accepted `8de0103` (consolidated delivery).
 
 In Payment, choose **Export BOQ Payment Workbook**. Select a saved Project Session,
 current saved Payment Workbook, and optionally a compatible BOQ. Review the source
@@ -9,8 +9,9 @@ hashes/revision and diagnostics, acknowledge applicable revision differences,
 then export a new `.xlsx` destination. Existing files and input aliases are refused.
 Unsaved Mapping UI or Excel edits are not imported or saved implicitly.
 
-The output contains Percentage, Amount, Trace, Payment Input, Payment, and
-hidden/protected `_BP_Data` in that order after BP-3. The first two tabs retain the same Project hierarchy. Their native
+The output contains Percentage, Amount, BOQ Mapping, Activity Mapping,
+Payment Input, Payment, and hidden/protected `_BP_Data` in that order after the
+authorized TR-1 worksheet separation. The first two tabs retain the same Project hierarchy. Their native
 selectors choose Cumulative or Period views over immutable BP-1 numerical data.
 **Select → F9 → Read/Print/Save**. Formula caches may be empty until the spreadsheet
 engine calculates. These are projected Requirements, not certified payment.
@@ -31,10 +32,7 @@ and descendants preceding parents are rejected as ambiguous hierarchy.
 Exact numeric zero is visually blank in report grids. Consecutive exact 100% is
 suppressed only in Cumulative %. Underlying values remain numeric; near-zero and
 near-100 values are not suppressed based on rounding. Period negatives are retained.
-Trace uses unique Item and Period selectors. Navigation only opens Trace; it does
-not transfer a selected row. Trace retains every contributor, raw/derived state,
-current/previous contribution, signed change, known Amount and source cell. The
-source/reconciliation diagnostics follow the trace table. Raw blank is preserved.
+Amount provides all-period values and links to its source lineage, diagnostics and known Amount subtotals by origin. Navigation opens the target sheet. Raw period evidence remains in the protected snapshot.
 
 Sources are hashed at Review and checked again around export. A changed source
 invalidates the reviewed export. Temporary output is validated before atomic,
@@ -53,7 +51,7 @@ Engineer verification:
 `python -m pytest -q tests/integration/payment/test_boq_payment_export.py`
 followed by full `python -m pytest -q` and real NKC1 export/projection comparison.
 Native Windows acceptance: open without repair; grouping/palette readability;
-all view selectors + F9 + save/reopen; Trace selections; print-preview readability.
+all view selectors + F9 + save/reopen; Mapping selections; print-preview readability.
 
 
 ## BP-2.1 Known Projected Amount
@@ -97,7 +95,7 @@ the first unfrozen cell. Source files and cell coordinates are unchanged.
 Missing formula caches block review/export with a precise cell and instruction to
 recalculate/save the source first. A genuine saved empty string is a valid blank,
 not a missing cache or numeric zero. Numeric cache freshness cannot be established
-from XLSX alone: Review, Trace and snapshot banners explicitly say it is unverified.
+from XLSX alone: Review, Amount diagnostics and snapshot banners explicitly say it is unverified.
 Even if a stored value is stale, export never silently recalculates Payment or
 substitutes a derived projection. Recalculate/save the selected source before
 export; edits to source after Review invalidate export via existing source hashes.
@@ -128,14 +126,14 @@ flags prevent near-100 values from being suppressed after float conversion.
 
 Normalization is stored in protected `_BP_Data`; Excel only selects a snapshot
 vector through B3. Invalid selectors show Invalid view. Row 5 remains outside
-outline groups and inside frozen/repeated print headers. The six worksheets,
-Amount summary, Trace, Payment snapshots and source/export safeguards are unchanged.
+outline groups and inside frozen/repeated print headers. The report worksheets,
+Amount summary, Payment snapshots and source/export safeguards are unchanged.
 P6 Payment Input WBS and BOQ report hierarchy differ; their percentages need not match.
 
 Verification: run `tests/integration/payment/test_boq_percentage_summary.py`, the
 existing known-totals/export/snapshot tests, full regression, and real NKC1 proof.
 Native Excel: inspect row 5 and coverage, switch both views with F9 and save/reopen,
-check print titles/grouping, and confirm unchanged Amount/Trace/Payment snapshots.
+check print titles/grouping, and confirm unchanged Amount and Payment snapshots.
 
 ## BP-3.2 Cumulative Amount completion display
 
@@ -155,4 +153,12 @@ No Payment Input, Payment snapshots, Mapping or projection mathematics changes.
 
 ## BP-4 manual planned BOQ requirements
 
-See [BOQ_MANUAL_REQUIREMENTS.md](BOQ_MANUAL_REQUIREMENTS.md) for the accepted Prepare → Input → Save → Export workflow, disjoint manual origin, Row 5 combined known planned contributions, revision/conflict safeguards and Trace coverage. The six-sheet report and BP-3 values-only Payment snapshots are preserved.
+See [BOQ_MANUAL_REQUIREMENTS.md](BOQ_MANUAL_REQUIREMENTS.md) for the accepted Prepare → Input → Save → Export workflow, disjoint manual origin, Row 5 combined known planned contributions, revision/conflict safeguards and coverage diagnostics. The BP-3 values-only Payment snapshots are preserved; TR-1 adds dedicated Mapping worksheets.
+
+## TR-1 Mapping inspection
+
+BOQ Mapping and Activity Mapping each have an independent B2 selector. Select an identity and press F9. Each detail line shows the original saved share and the BOQ leaf Amount multiplied by that share. Both views reference the same immutable allocation. Display uses two decimals and totals use unrounded allocations.
+
+BOQ Mapping row 7 shows total share and allocated Amount. Partial mapping uses only the saved shares. Activity Mapping row 7 shows only the total Amount, because each share has its own BOQ basis. Missing or invalid monetary bases make affected allocations and their totals unavailable. Where there are no saved relationships the allocation total is zero and the status explains the empty list. Manual BOQ requirements do not create relationships. The lookup ranges include the complete fan-out of the selected identity.
+
+Export a new workbook to obtain the seven-sheet layout. Existing exports retain their saved layout. The Amount diagnostics link opens an appendix outside the normal report print area. Source diagnostics and mapped/manual subtotals can be inspected there without selecting a period.

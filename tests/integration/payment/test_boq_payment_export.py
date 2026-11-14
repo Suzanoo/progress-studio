@@ -24,7 +24,7 @@ def reviewed(tmp_path,projection=None):
 def test_four_matrices_and_schema(tmp_path):
     result=run();r=reviewed(tmp_path,result);out=tmp_path/'report.xlsx'
     BOQPaymentExportService().export(r,out,acknowledge_revision=True)
-    w=load_workbook(out);assert w.sheetnames==['Percentage','Amount','Trace','Payment Input','Payment','_BP_Data']
+    w=load_workbook(out);assert w.sheetnames==['Percentage','Amount','BOQ Mapping','Activity Mapping','Payment Input','Payment','_BP_Data']
     rows=report_rows(result);n=len(rows);d=w['_BP_Data']
     for mode in range(4):
         for i,row in enumerate(rows):
@@ -33,7 +33,7 @@ def test_four_matrices_and_schema(tmp_path):
     assert not w['Percentage'].protection.sheet and w['Percentage'].freeze_panes=='G8'
     assert w['Percentage']['B3'].value=='Cumulative %';assert w['Amount']['B3'].value=='Cumulative Amount'
     assert len(w['Percentage'].data_validations.dataValidation)==1
-    assert len(w['Trace'].data_validations.dataValidation)==2
+    assert 'Payment Trace' not in w.sheetnames
     assert {str(rule.sqref) for rule in w['Percentage'].conditional_formatting} == {'H5', 'I5', 'H8:H9', 'I8:I9'}
     assert {str(rule.sqref) for rule in w['Amount'].conditional_formatting} == {'H8:H9', 'I8:I9'}
     assert w.calculation.calcMode=='manual' and w.calculation.calcOnSave
@@ -118,6 +118,6 @@ def test_raw_blank_sentinel_and_all_contributors():
     # A and B are retained for every period. B before-first raw cell is blank,
     # its derived requirement is numeric zero. Neither becomes an explicit entry.
     assert d.cell(start+1,3).value=='[blank]' and d.cell(start+1,4).value==0
-    assert '[blank]' in w['Trace']['C9'].value
     assert d.cell(meta,4).value==2
     w.close()
+

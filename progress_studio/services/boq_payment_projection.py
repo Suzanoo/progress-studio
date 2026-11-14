@@ -103,4 +103,6 @@ class BOQPaymentProjectionService:
             for p in paths:
                 if hashlib.sha256(p.read_bytes()).hexdigest()!=hashes[str(p.resolve())]:raise ValueError('Source changed during calculation')
             provenance=tuple(sorted(hashes.items()))+(('saved_progress_sha256',session.progress.sha256),('saved_boq_sha256',session.boq.sha256),('mapping_saved_at',session.saved_at),('boq_sheet',session.boq_sheet))
-            return replace(result,diagnostics=result.diagnostics+tuple(diagnostics),provenance=provenance)
+            return replace(result,diagnostics=result.diagnostics+tuple(diagnostics),provenance=provenance,
+                activity_names=tuple((identity,str(values["description"] or "")) for identity,values in sorted(current.items())))
+

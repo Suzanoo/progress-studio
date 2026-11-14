@@ -82,7 +82,7 @@ class BOQPaymentExportService:
             names=z.namelist()
             if any('vbaproject' in n.lower() or 'activex' in n.lower() or 'externallinks' in n.lower() for n in names):raise ValueError('Forbidden output dependency')
             root=ET.fromstring(z.read('xl/workbook.xml'));sheets=root.find('s:sheets',ns)
-            if [x.attrib['name'] for x in sheets]!=['Percentage','Amount','Trace','Payment Input','Payment','_BP_Data']:raise ValueError('Invalid report schema')
+            if [x.attrib['name'] for x in sheets]!=['Percentage','Amount','BOQ Mapping','Activity Mapping','Payment Input','Payment','_BP_Data']:raise ValueError('Invalid report schema')
             if sheets[-1].attrib.get('state')!='hidden':raise ValueError('Snapshot must be hidden')
             sheet_map=PaymentWorkbookSnapshotter._sheet_map(z)
             data=ET.fromstring(z.read(sheet_map['_BP_Data']))

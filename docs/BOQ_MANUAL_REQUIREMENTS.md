@@ -5,7 +5,7 @@
 Payment workspace: **Prepare BOQ Requirements → BOQ Requirement Input → Save → Export BOQ Payment Workbook**.
 Select the saved Project Session, current Payment source workbook and optional compatible BOQ revision. Review diagnostics and acknowledge applicable revisions. Prepare publishes a new source `.xlsx`; it never overwrites an existing file or the inputs. Continue with this new source for subsequent edits and exports.
 
-`BOQ Requirement Input` is the persistent editable source. The separate six-sheet BOQ Payment report remains a derived snapshot; edits to its report cells are never imported. No Activity Payment Rebuild is necessary to use saved BOQ requirements. Activity Payment Input, eligibility, Payment Position and certified Payment snapshots retain their accepted semantics.
+`BOQ Requirement Input` is the persistent editable source. The separate seven-sheet BOQ Payment report remains a derived snapshot; edits to its report cells are never imported. No Activity Payment Rebuild is necessary to use saved BOQ requirements. Activity Payment Input, eligibility, Payment Position and certified Payment snapshots retain their accepted semantics.
 
 ## Input and calculation contract
 
@@ -25,7 +25,9 @@ Input references are locked; numeric period cells are unlocked. Identity columns
 
 ## Report and trace
 
-The six worksheets remain Percentage, Amount, Trace, Payment Input, Payment, _BP_Data. No additional exported input worksheet is introduced. Trace selectors show Manual BOQ origin, raw signed Period %, cumulative prefix state, period/cumulative amounts, source cell and diagnostics. Mapped/manual known Amount subtotals are separately available for the selected period. Per-period manual coverage reports counts, valid Amount coverage and invalid Amount row counts; these are not Activity Mapping coverage or certified payment. A4220 reconciliation and unmapped Amount diagnostics retain their separate meanings.
+The seven worksheets are Percentage, Amount, BOQ Mapping, Activity Mapping, Payment Input, Payment and _BP_Data. The Amount diagnostics appendix includes source/reconciliation diagnostics and mapped/manual subtotals across all periods. Manual requirements never create Activity Mapping relationships. The protected snapshot retains the underlying manual values, source cells and availability states.
+
+Per-period manual coverage retains item counts, valid Amount coverage and invalid Amount counts. Activity reconciliation and unmapped BOQ amounts remain separate diagnostics.
 
 Dropdown → F9 → Read/Print/Save remains the report workflow. Re-export restores report edits. Workbook formulas are presentation-only; the projection snapshot remains immutable and protected. BP-4 does not add a Rebuild target, persistence store, partial allocation engine, Finance, EV or XML behavior.
 

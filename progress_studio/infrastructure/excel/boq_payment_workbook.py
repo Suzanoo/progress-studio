@@ -30,7 +30,7 @@ def dropdown(ws, cell, formula):
 def render(projection, cancelled=lambda:False):
     rows=report_rows(projection);n=len(rows);periods=len(projection.periods)
     wb=Workbook();wb.remove(wb.active)
-    pct=wb.create_sheet('Percentage');amt=wb.create_sheet('Amount');trace=wb.create_sheet('Trace');data=wb.create_sheet('_BP_Data')
+    pct=wb.create_sheet('Percentage');amt=wb.create_sheet('Amount');data=wb.create_sheet('_BP_Data')
     data.sheet_state='hidden';data.protection.sheet=True;data.protection.password=WORKBOOK_SHEET_PASSWORD
     wb.properties.title='Progress Studio BOQ Payment Projection';wb.properties.subject='BP2_DERIVED_REPORT_V1_NOT_BOQ_SOURCE'
     def check():
@@ -43,10 +43,10 @@ def render(projection, cancelled=lambda:False):
             for p,value in enumerate(row.values[mode]):literal(data.cell(1+mode*n+i,p+1),'Unavailable' if value is None else value)
     leaves=[x for x in projection.items if x.item.role=='item']
     meta=4*n+2;trace_start=meta+len(leaves)+2;cursor=trace_start
-    labels=[];maximum=0
+    labels = []
     for i,item in enumerate(leaves):
         check();label=f'{item.item.wbs} | {item.item.description} | {item.item.key}';labels.append(label)
-        count=len(item.periods[0].contributions);maximum=max(maximum,count)
+        count=len(item.periods[0].contributions)
         for c,v in enumerate((label,item.item.key,cursor-trace_start+1,count),1):literal(data.cell(meta+i,c),v)
         previous={}
         for p in item.periods:
@@ -118,11 +118,13 @@ def render(projection, cancelled=lambda:False):
         manual_known = known_projected_totals(replace(projection,items=tuple(e for e in leaves if getattr(e,'origin','')=='Manual BOQ')))
         for i, values in enumerate((mapped_known.cumulative,mapped_known.period,manual_known.cumulative,manual_known.period)):
             for j, value in enumerate(values,1):literal(data.cell(subtotal_start+i,j),'Unavailable' if value is None else value)
+    from progress_studio.infrastructure.excel.boq_mapping_trace_workbook import prepare_mapping_trace, render_mapping_sheets
+    mapping, first_activity = prepare_mapping_trace(wb, projection, cancelled)
     for ws,base,modes in [(pct,0,('Cumulative %','Period %')),(amt,2,('Cumulative Amount','Period Amount'))]:
         ws['A1']='BOQ Payment — Project';ws['A1'].font=Font(size=18,bold=True,color='1F4E78');ws.row_dimensions[1].height=28;ws['A2']='Projected Requirements — not certified payment'
         ws['A3']='View';ws['B3']=modes[0];dropdown(ws,'B3','"'+','.join(modes)+'"')
         ws['A4']='Select view → F9 → Read / Print / Save. Re-export to recover report edits.'
-        ws['F3']='Open Trace';ws['F3'].hyperlink=Hyperlink(ref="F3",location="'Trace'!A1");ws['F3'].style='Hyperlink'
+        ws['F3']='BOQ Mapping';ws['F3'].hyperlink=Hyperlink(ref="F3",location="'BOQ Mapping'!A1");ws['F3'].style='Hyperlink'
         valid=f'OR($B$3="{modes[0]}",$B$3="{modes[1]}")'
         ws['G3']=f'=IF({valid},$B$3,"Invalid view")'
         if base in (0, 2):
@@ -201,50 +203,31 @@ def render(projection, cancelled=lambda:False):
         for c in range(7,7+periods):ws.column_dimensions[letter(c)].width=15
         for cell in ws[6]:cell.fill=PatternFill('solid',fgColor=HEADER_FILL);cell.font=Font(color='FFFFFF',bold=True)
         ws.row_dimensions[6].height=30
-    trace['A1']='BOQ Payment — Trace';trace['A2']='BOQ Item';trace['B2']=labels[0];dropdown(trace,'B2','=BP_Items')
-    trace['A3']='Period';trace['B3']=projection.periods[0];dropdown(trace,'B3','=BP_Periods')
-    trace['A4']='Select Item and Period, then F9. Navigation links do not select an item.'
-    trace['A5']='Known contributions are not final totals for incomplete mappings.'
-    trace['P2']=f'=IFERROR(MATCH(B2,BP_Items,0),0)';trace['P3']='=IFERROR(MATCH(B3,BP_Periods,0),0)'
-    trace['P4']=f'=IF(P2=0,0,INDEX(_BP_Data!D{meta}:D{meta+len(leaves)-1},P2))'
-    trace['P5']=f'=IF(P2=0,0,INDEX(_BP_Data!C{meta}:C{meta+len(leaves)-1},P2))'
-    trace['P6']='=IF(P2=0,0,INDEX(BP_ManualIndex,P2))'
-    trace['A6']='=IF(OR(P2=0,P3=0),"Invalid selector",IF(P6>0,"Manual BOQ planned requirement — not certified payment",IF(P4=0,"Unmapped — no explicit allocations",B3)))'
-    headers=('Activity ID','Mapping Share','Raw Requirement','Derived Requirement','State','Previous contribution','Current contribution','Signed change','Known Amount','Source cell','Status','Mapping coverage','Input coverage')
-    manual_headers=('Origin','Raw Period %','Cumulative %','Period Amount','Cumulative Amount','State','Source cell','BOQ key','Mapping status','Amount status','Warnings','','')
-    for c,h in enumerate(headers,1):trace.cell(8,c,f'=IF($P$6>0,"{manual_headers[c-1]}","{h}")')
-    for k in range(max(maximum,1)):
-        for c in range(1,14):
-            lookup=f"INDEX(_BP_Data!$A${trace_start}:$M${max(cursor-1,trace_start)},$P$5+($P$3-1)*$P$4+{k},{c})"
-            trace.cell(9+k,c,f'=IF(OR($P$2=0,$P$3=0),"Invalid selector",IF({k}>=$P$4,"",IF({lookup}="[blank]","",{lookup})))')
-            if manual_cursor > manual_start:
-                original_formula = trace.cell(9+k,c).value[1:]
-                manual_lookup = f"INDEX(_BP_Data!$A${manual_start}:$M${manual_cursor-1},$P$6+$P$3-1,{c})"
-                trace.cell(9+k,c,f'=IF(AND($P$6>0,$P$3>0),IF({k}=0,{manual_lookup},""),{original_formula})')
-            if c in (2,3,4,6,7,8,12,13):trace.cell(9+k,c).number_format='0.0%;[Red]-0.0%;0.0%'
-            if c==9:trace.cell(9+k,c).number_format='#,##0.00;[Red]-#,##0.00;0.00'
-    if manual_cursor > manual_start:
-        from openpyxl.styles.differential import DifferentialStyle
-        from openpyxl.styles.numbers import NumberFormat
-        for col in ('D','E'):
-            rule=FormulaRule(formula=['$P$6>0'])
-            rule.dxf=DifferentialStyle(numFmt=NumberFormat(numFmtId=164,formatCode='#,##0.00;[Red]-#,##0.00;0.00'))
-            trace.conditional_formatting.add(f'{col}9:{col}{8+max(maximum,1)}',rule)
-    line=maximum+12;trace.cell(line,1,'Source lineage / diagnostics')
-    for key,value in projection.provenance:
-        line+=1;literal(trace.cell(line,1),key);literal(trace.cell(line,2),value)
-    for d in projection.diagnostics:
-        line+=1
-        for c,v in enumerate((d.code,d.identity,d.detail),1):literal(trace.cell(line,c),v)
+    render_mapping_sheets(wb, mapping, first_activity, labels[0])
+    # Keep lineage and origin totals accessible beside the all-period overview.
+    line = n + 10
+    amt['E3'] = 'Diagnostics'
+    amt['E3'].hyperlink = Hyperlink(ref='E3', location=f"'Amount'!A{line}")
+    amt['E3'].style = 'Hyperlink'
+    amt.cell(line, 1, 'Source lineage / diagnostics')
+    for key, value in projection.provenance:
+        line += 1
+        literal(amt.cell(line, 1), key)
+        literal(amt.cell(line, 2), value)
+    for diagnostic in projection.diagnostics:
+        line += 1
+        for col, value in enumerate((diagnostic.code, diagnostic.identity, diagnostic.detail), 1):
+            literal(amt.cell(line, col), value)
     if hasattr(projection, 'mapped_projection'):
-        line+=2;trace.cell(line,1,'Known Amount by origin (selected period; not certified payment)')
-        for i,label in enumerate(('Mapped cumulative','Mapped period','Manual cumulative','Manual period')):
-            line+=1;trace.cell(line,1,label)
-            trace.cell(line,2,f'=IF($P$3=0,"Invalid selector",INDEX(_BP_Data!$A${subtotal_start+i}:${letter(periods)}${subtotal_start+i},1,$P$3))').number_format='#,##0.00;[Red]-#,##0.00;0.00'
-    trace.column_dimensions['P'].hidden=True;trace.column_dimensions['A'].width=28;trace.column_dimensions['B'].width=65
-    for c in range(3,14):trace.column_dimensions[letter(c)].width=24
-    trace.freeze_panes='C9';trace.sheet_view.showGridLines=False
-    for cell in trace[8]:cell.fill=PatternFill('solid',fgColor=HEADER_FILL);cell.font=Font(color='FFFFFF',bold=True)
-    trace.row_dimensions[8].height=36
+        line += 2
+        amt.cell(line, 2, 'Known planned amounts by origin')
+        for col, period in enumerate(projection.periods, 7):
+            literal(amt.cell(line, col), period)
+        for offset, label in enumerate(('Mapped cumulative', 'Mapped period', 'Manual cumulative', 'Manual period')):
+            line += 1
+            amt.cell(line, 2, label)
+            for col in range(periods):
+                literal(amt.cell(line, col + 7), data.cell(subtotal_start + offset, col + 1).value)
+                amt.cell(line, col + 7).number_format = '#,##0.00;[Red]-#,##0.00;0.00'
     request_initial_manual_excel_recalculation(wb)
     return wb

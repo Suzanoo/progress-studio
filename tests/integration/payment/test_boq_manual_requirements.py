@@ -127,12 +127,11 @@ def test_manual_export_trace_and_immutable_snapshots(tmp_path):
     p=manual((.5,None,-.1));r=reviewed(tmp_path,p);out=tmp_path/'report.xlsx'
     BOQPaymentExportService().export(r,out,acknowledge_revision=True)
     w=load_workbook(out)
-    assert w.sheetnames==['Percentage','Amount','Trace','Payment Input','Payment','_BP_Data']
+    assert w.sheetnames==['Percentage','Amount','BOQ Mapping','Activity Mapping','Payment Input','Payment','_BP_Data']
     assert 'mapped + manual' in w['Amount']['A5'].value
-    assert 'BP_ManualIndex' in w['Trace']['P6'].value
-    assert 'Manual BOQ' in w['Trace']['A6'].value
+    assert 'BP_ManualIndex' in w.defined_names
     assert any(c.value=='BOQ Requirement Input!K9' for row in w['_BP_Data'] for c in row)
-    assert any(c.value=='Manual period' for row in w['Trace'] for c in row)
+    assert any(c.value=='Manual period' for row in w['Amount'] for c in row)
     w.close()
 
 
