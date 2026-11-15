@@ -132,6 +132,17 @@ class PaymentFrame(ttk.Frame):
         self._build_prepare_card(panel, 3)
         self._build_breakdown_card(panel, 4)
         self._build_boq_payment_card(panel, 5)
+        ttk.Button(panel, text=tr('pr2.title'), command=self._open_plan_report,
+                   style="Accent.TButton").grid(row=6, column=0, sticky="w", pady=(4, 10))
+
+    def _open_plan_report(self):
+        from progress_studio.presentation.gui.payment_plan_dialog import PaymentPlanDialog
+        dialog = getattr(self, '_payment_plan_dialog', None)
+        if dialog is not None and dialog.winfo_exists():
+            dialog.deiconify()
+            dialog.lift()
+            return
+        self._payment_plan_dialog = PaymentPlanDialog(self)
 
     def _build_boq_payment_card(self, parent: ttk.Frame, row: int) -> None:
         """Present the accepted Prepare -> Save -> Export sequence."""

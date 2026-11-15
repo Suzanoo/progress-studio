@@ -1,6 +1,6 @@
 # Payment Plan Report
 
-PR-0 design accepted. PR-1 provides the read-only Python foundation for review. One project-wide period schedule and one selection feed the future period and cumulative Word documents. Desktop preview and selection (PR-2), Word export and dynamic pagination (PR-3) are pending. WF-1 and WF-2 are deferred.
+PR-0 design accepted. PR-1 is integrated on the feature branch. One project-wide period schedule and one selection feed the future period and cumulative Word documents. PR-2 Desktop selection and preview is submitted for review. PR-3 Word export and dynamic pagination remain pending. WF-1 and WF-2 are deferred.
 
 ## Source
 
@@ -31,3 +31,13 @@ Per-period Value supplies raw fraction, delta, money, movement, display_fraction
 ## Verification
 
 Run the payment unit and integration suites. The separate PR-1 engineering evidence runner uses the six identified NKC1 files. It checks 239 × 28 Activity values, every PR-0 CSV row, full and partial selection, verified dates, unrounded money and boundary-specific visibility. Synthetic tests own unavailable states, stale and invalid inputs, sparse zero, threshold boundaries, adjustments, reopening and recompletion.
+
+## Desktop selection and preview (PR-2)
+
+Open **Payment → Payment Plan Report → Open payment workbook**. Review the project, file, monetary basis, period count and Source details. The dialog uses one read-only PR-1 snapshot. Opening a new file happens in the background. Failed opens preserve the previous source, reporting rows and preview. Opening a different revision with an active selection asks before switching.
+
+In **Select work**, expand a branch using its arrow. Click its checkbox or focus a row and press Space. Select project row replaces the selection with the project summary. Selected detail inside another selected row is labelled with its parent. Other represented rows show where their amount is included. Search keeps matching rows and their ancestors. Clearing search restores the prior expansion state. **Review selected rows** lists every explicit row regardless of filtering, collapse or preview suppression. The footer shows unique Activity count and fixed monetary basis against the whole project.
+
+In **Preview**, choose the period and either Period or Cumulative. The project-wide eligible date, flags, signed movements, suppression, retained cumulative money, known coverage and totals come from PR-1. A period with unresolved data remains accessible. Source details lists the diagnostic messages and the workbook fingerprint. Workbook descriptions, monetary provenance and underlying source diagnostics retain their source wording in either interface language.
+
+**Save selection** writes a separate versioned .paymentselection.json containing the explicit row keys, project, filename and source SHA-256. Open its matching workbook before **Restore selection**. Renaming or moving an identical workbook is supported. A changed revision, wrong project, malformed file or unknown key leaves the active selection intact. To use a revised workbook, review the new source and select its rows again. Selection files contain no copied payment amounts. Word export and pagination belong to PR-3.
