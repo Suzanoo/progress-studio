@@ -25,6 +25,7 @@ The accepted BP-4 workflow is **Prepare BOQ Requirements → BOQ Requirement Inp
 
 | Topic | Status / boundary |
 | --- | --- |
+| **Payment Plan Report** | PR-0 accepted. [PR-1 foundation](PAYMENT_PLAN_REPORT.md) submitted for engineering acceptance. PR-2 Desktop and PR-3 Word export pending. WF-1 and WF-2 deferred. |
 | **XW-DP — XML Decimal Precision** | PO approved two-decimal XML output direction; implementation and regression acceptance **not completed**. Do not claim shipped. |
 | **Weekly Compact scrolling performance** | Investigation/proof requested; no accepted production change established in this status record. Preserve accepted visuals and live behavior. |
 | **NS-1 — Rebuild weight-basis conversion** | Open investigation question; no automatic conversion authorized. |

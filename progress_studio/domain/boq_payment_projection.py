@@ -4,6 +4,8 @@ from decimal import Decimal, InvalidOperation
 from datetime import date
 from typing import Any
 
+from progress_studio.domain.payment_requirement_states import requirement_states
+
 D = Decimal
 TOLERANCE = D('1e-11')  # MappingStore 1e-9 percentage points, in fraction units.
 
@@ -129,27 +131,24 @@ def project(catalog, allocations, payment, activity_ids):
         shares[a.boq_key] = shares.get(a.boq_key, D(0)) + share
         if shares[a.boq_key] > 1 + TOLERANCE:
             raise ValueError('Overallocated BOQ item')
-    entered = {}
+    entered = {a: {} for a in ids}
     for period in payment.periods:
         for r in period.requirements:
-            key = (r.activity_id, period.period_id)
             value = number(r.required_fraction)
-            if r.activity_id not in ids or key in entered or not 0 <= value <= 1:
+            if (r.activity_id not in ids or period.period_id in entered[r.activity_id]
+                    or not 0 <= value <= 1):
                 raise ValueError('Invalid or duplicate Requirement')
-            entered[key] = (value, r.source_row, r.source_column)
-    states = {}; diagnostics = []
-    for a in sorted(ids):
-        known = any((a, p) in entered for p in periods)
-        latest = D(0); last_row = last_col = None; started = False; warning = False
-        for p in periods:
-            raw = entered.get((a, p))
-            if raw:
-                if raw[0] < latest:
-                    warning = True
-                    diagnostics.append(Diagnostic('DecreasingRequirement', a, p))
-                latest, last_row, last_col = raw; started = True
-            state = 'Explicit' if raw else 'Carried' if started else 'BeforeFirst' if known else 'Unknown'
-            states[a, p] = (latest if known else None, state, last_row, last_col, raw[0] if raw else None, warning)
+            entered[r.activity_id][period.period_id] = (value, r.source_row, r.source_column)
+    states = {}
+    diagnostics = []
+    for activity in sorted(ids):
+        previous = D(0)
+        for p, state in zip(periods, requirement_states(periods, entered[activity])):
+            states[activity, p] = state
+            if state.raw is not None and state.raw < previous:
+                diagnostics.append(Diagnostic('DecreasingRequirement', activity, p))
+            if state.fraction is not None:
+                previous = state.fraction
     result = []
     for item in catalog:
         if item.role != 'item':

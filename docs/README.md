@@ -20,6 +20,7 @@ This index separates **using the application**, **understanding features**, and 
 | Equal / Duration / Amount | [Weight selection](WEIGHT_SELECTION.md) |
 | Earned Value sources and Live behavior | [EV monetary sources](EV_MONETARY_SOURCES.md) · [EV Live](EV_LIVE_CONTRACT.md) |
 | BOQ Mapping revision and update | [BOQ Update and XML Writeback plan](BOQ_UPDATE_XML_WRITEBACK_PLAN.md) |
+| Activity and WBS payment plan reports | [Payment Plan Report](PAYMENT_PLAN_REPORT.md) |
 | BOQ projection and Excel export | [BOQ Payment Projection](BOQ_PAYMENT_PROJECTION.md) · [BOQ Payment Export](BOQ_PAYMENT_EXPORT.md) |
 | Manual BOQ payment requirements (BP-4) | [BOQ Manual Requirements](BOQ_MANUAL_REQUIREMENTS.md) |
 | Reviewed P6 Amount writeback | [P6 XML Amount Writeback](XML_AMOUNT_WRITEBACK.md) |
