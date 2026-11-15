@@ -3,7 +3,7 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from progress_studio.infrastructure.excel.payment_plan_source import read_payment_plan_source
@@ -48,6 +48,8 @@ class PaymentPlanDialog(tk.Toplevel):
         self.geometry('980x660')
         self.minsize(720, 505)
         self.model = None
+        self.workbook_path = None
+        self.export_cancel = None
         self.events = queue.Queue()
         self.busy = False
         self.poll_id = self.search_id = None
@@ -112,6 +114,11 @@ class PaymentPlanDialog(tk.Toplevel):
         self.action(bottom,'pr2.review',self.review_rows)
         self.action(bottom,'pr2.save',lambda:self.selection_file(True))
         self.action(bottom,'pr2.restore',lambda:self.selection_file(False))
+        export_bar = ttk.Frame(body)
+        export_bar.pack(fill='x', pady=(4, 0))
+        self.export_button = ttk.Button(export_bar, text=tr('pr3.export'), command=self.export,
+                                        style='Accent.TButton')
+        self.export_button.pack(side='right', padx=3)
         ttk.Button(bottom,text=tr('xw.close'),command=self.destroy).pack(side='right')
         self.query.trace_add('write',self.schedule_search)
         self.enable()
@@ -126,6 +133,13 @@ class PaymentPlanDialog(tk.Toplevel):
         self.controls.append(btn)
 
     def enable(self):
+        if self.export_cancel is not None:
+            self.export_button.configure(text=tr('pr3.cancel'))
+            self.export_button.state(['!disabled'])
+        else:
+            self.export_button.configure(text=tr('pr3.export'))
+            ready = self.model and self.model.keys and self.workbook_path and not self.busy
+            self.export_button.state(['!disabled' if ready else 'disabled'])
         self.open_button.state(['disabled' if self.busy else '!disabled'])
         for btn in self.controls:
             btn.state(['!disabled' if self.model and not self.busy else 'disabled'])
@@ -167,6 +181,7 @@ class PaymentPlanDialog(tk.Toplevel):
                     tr('pr2.title'),tr('pr2.replace'),parent=self):
                 self.source_status()
                 return
+            self.workbook_path = path
             self.model=candidate
             source=candidate.source
             self.source_label.set(tr('pr2.source',project=source.project,file=source.filename,
@@ -301,6 +316,7 @@ class PaymentPlanDialog(tk.Toplevel):
         self.refresh()
 
     def refresh(self):
+        self.enable()
         r=self.model.result
         state='empty' if not r.rows else 'full' if r.full_project else 'partial'
         self.scope.set(tr('pr2.scope',scope=tr('pr2.'+state),rows=len(r.rows),count=len(r.selected.activities),
@@ -367,7 +383,74 @@ class PaymentPlanDialog(tk.Toplevel):
         except (ValueError,OSError) as exc:
             self.problem(str(exc))
 
+    def export(self):
+        if self.export_cancel is not None:
+            self.export_cancel.set()
+            self.status.set(tr('pr3.cancelling'))
+            return
+        if self.busy or not self.model or not self.model.keys or not self.workbook_path:
+            return
+        parent = filedialog.askdirectory(parent=self, title=tr('pr3.destination'), mustexist=True)
+        if not parent:
+            return
+        name = simpledialog.askstring(tr('pr3.export'), tr('pr3.folder'),
+                                      initialvalue=self.model.source.project, parent=self)
+        if name is None:
+            return
+        source, selection, workbook = self.model.source, self.model.result, self.workbook_path
+        cancel = threading.Event()
+        self.export_cancel = cancel
+        self.busy = True
+        self.enable()
+        self.status.set(tr('pr3.start'))
+        events = queue.Queue()
+
+        def worker():
+            try:
+                from progress_studio.services.payment_plan_export import export_payment_plans, ExportCancelled
+                try:
+                    folder = export_payment_plans(source, selection, workbook, parent, name,
+                                                  cancelled=cancel.is_set,
+                                                  progress=lambda stage: events.put(('stage', stage)))
+                except ExportCancelled:
+                    events.put(('cancelled', None))
+                    return
+                events.put(('done', folder))
+            except Exception as exc:
+                events.put(('error', str(exc)))
+
+        def poll():
+            while True:
+                try:
+                    event, value = events.get_nowait()
+                except queue.Empty:
+                    self.poll_id = self.after(60, poll)
+                    return
+                if event == 'stage':
+                    if not cancel.is_set():
+                        self.status.set(tr('pr3.period' if value == 'PERIOD' else 'pr3.cumulative'))
+                    continue
+                self.poll_id = None
+                self.export_cancel = None
+                self.busy = False
+                self.enable()
+                if event == 'error':
+                    self.problem(tr('pr3.failed', error=value))
+                elif event == 'cancelled':
+                    self.status.set(tr('pr3.cancelled'))
+                else:
+                    self.status.set(tr('pr3.done', folder=value))
+                    messagebox.showinfo(tr('pr3.export'), self.status.get(), parent=self)
+                return
+
+        threading.Thread(target=worker, daemon=False).start()
+        self.poll_id = self.after(40, poll)
+
     def destroy(self):
+        if self.export_cancel is not None:
+            self.export_cancel.set()
+            self.status.set(tr('pr3.cancelling'))
+            return
         for job in (self.search_id,self.poll_id):
             if job is not None:
                 self.after_cancel(job)

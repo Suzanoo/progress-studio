@@ -519,3 +519,17 @@ GUIDE.update({
     'pr2.selection_file': ('Payment Plan selection', 'รายการงานสำหรับรายงานแผนการจ่ายเงิน'),
     'pr2.book': ('Payment workbook', 'ไฟล์งวดงาน'),
 })
+
+GUIDE.update({
+    'pr3.export': ('Export both Word reports…', 'ส่งออก Word ทั้งสองฉบับ…'),
+    'pr3.destination': ('Choose where to create the report folder', 'เลือกที่จัดเก็บโฟลเดอร์รายงาน'),
+    'pr3.folder': ('Name the new folder and report files. Choose an unused name.', 'ตั้งชื่อโฟลเดอร์ใหม่และไฟล์รายงาน เลือกชื่อที่ยังไม่มีในโฟลเดอร์ปลายทาง'),
+    'pr3.start': ('Checking the selected source and destination…', 'กำลังตรวจสอบต้นทางและปลายทาง…'),
+    'pr3.period': ('Preparing the period report…', 'กำลังสร้างรายงานเฉพาะงวด…'),
+    'pr3.cumulative': ('Preparing the cumulative report…', 'กำลังสร้างรายงานสะสม…'),
+    'pr3.cancel': ('Cancel export', 'ยกเลิกการส่งออก'),
+    'pr3.cancelling': ('Finishing the current step…', 'กำลังจบขั้นตอนปัจจุบัน…'),
+    'pr3.cancelled': ('Export cancelled.', 'ยกเลิกการส่งออกแล้ว'),
+    'pr3.failed': ('Export failed. Check the source, destination name and write access. {error}', 'ส่งออกไม่สำเร็จ ตรวจไฟล์ต้นทาง ชื่อโฟลเดอร์ปลายทาง และสิทธิ์เขียนไฟล์ รายละเอียด {error}'),
+    'pr3.done': ('Both Word reports are ready in {folder}', 'รายงาน Word ทั้งสองฉบับอยู่ใน {folder}'),
+})

@@ -34,6 +34,8 @@ datas = collect_data_files(
     ],
 )
 
+datas += collect_data_files("docx", includes=["templates/*"])
+
 a = Analysis(
     [str(LAUNCHER)],
     pathex=[str(REPO_ROOT)],

@@ -1,6 +1,6 @@
 # Payment Plan Report
 
-PR-0 design accepted. PR-1 is integrated on the feature branch. One project-wide period schedule and one selection feed the future period and cumulative Word documents. PR-2 Desktop selection and preview is submitted for review. PR-3 Word export and dynamic pagination remain pending. WF-1 and WF-2 are deferred.
+PR-0, PR-1 and PR-2 are accepted and integrated on the feature branch. PR-3 paired Word export is submitted for acceptance. WF-1 and WF-2 remain deferred.
 
 ## Source
 
@@ -40,4 +40,21 @@ In **Select work**, expand a branch using its arrow. Click its checkbox or focus
 
 In **Preview**, choose the period and either Period or Cumulative. The project-wide eligible date, flags, signed movements, suppression, retained cumulative money, known coverage and totals come from PR-1. A period with unresolved data remains accessible. Source details lists the diagnostic messages and the workbook fingerprint. Workbook descriptions, monetary provenance and underlying source diagnostics retain their source wording in either interface language.
 
-**Save selection** writes a separate versioned .paymentselection.json containing the explicit row keys, project, filename and source SHA-256. Open its matching workbook before **Restore selection**. Renaming or moving an identical workbook is supported. A changed revision, wrong project, malformed file or unknown key leaves the active selection intact. To use a revised workbook, review the new source and select its rows again. Selection files contain no copied payment amounts. Word export and pagination belong to PR-3.
+**Save selection** writes a separate versioned .paymentselection.json containing the explicit row keys, project, filename and source SHA-256. Open its matching workbook before **Restore selection**. Renaming or moving an identical workbook is supported. A changed revision, wrong project, malformed file or unknown key leaves the active selection intact. To use a revised workbook, review the new source and select its rows again. Selection files contain no copied payment amounts.
+
+
+## Export both Word reports (PR-3)
+
+From Payment → Payment Plan Report, open the saved workbook, select or restore reporting rows, then choose **Export both Word reports**. Choose an existing destination directory and enter a new folder name. The app creates that folder with two editable .docx files using its name as a prefix. For example, folder NKC1 contains NKC1_PERIOD_PAYMENT_PLAN_REPORT.docx and NKC1_CUMULATIVE_PAYMENT_PLAN_REPORT.docx. Both use the entire validated period sequence regardless of the preview tab or period.
+
+The exporter captures one PR-1 selection and source revision. It checks the workbook digest before generation and again before publication. Empty selection, a changed source, an invalid destination, or an existing folder stops publication. Choose another name to keep prior outputs. A staged sibling directory holds both documents until they pass ZIP integrity checks; a single directory rename publishes the pair. Cancel during generation discards the staged pair. Final publication is a short non-interruptible filesystem operation. Use a writable directory and leave room for the pair. Install the declared python-docx dependency in the application environment. Microsoft Word is needed only for native acceptance, editing or printing.
+
+Reports use English titles and labels with original project descriptions, including Thai. They show a scope register, source revision and basis, each planned eligible date, explanatory overlapping rows, signed movements, period issues and the independent selected total. Cumulative retention is shown even when all completed detail is suppressed. Missing final figures are labelled Unavailable; available known cumulative money and coverage are identified separately. Percentage/monetary formatting is for display. A4 portrait pages use dynamic Word table flow, repeated column headers, page numbers and kept totals. The first period begins after the register. No fixed number of periods per page is assumed.
+
+Verify source integrity, complete chronological sections, preview-to-document agreement in both modes, repeated/completed rows and retained amounts, signed adjustments, unknowns, cancellation and collisions. Render real NKC1 and a long multipage selection. PO acceptance covers the Desktop export, practical editing of both documents, pagination and print preview in Microsoft Word.
+
+### Product Owner approved deferrals
+
+- PR-I01 — Revision-aware selection restoration. The exact-revision policy remains active.
+- PR-I02 — Amount-First compatibility with workbook-entered Activity Amounts remains unverified.
+- PR-I03 — Compatibility with formula-based Amounts and requirements remains unverified beyond the current source restrictions.
