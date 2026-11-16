@@ -531,5 +531,11 @@ GUIDE.update({
     'pr3.cancelling': ('Finishing the current step…', 'กำลังจบขั้นตอนปัจจุบัน…'),
     'pr3.cancelled': ('Export cancelled.', 'ยกเลิกการส่งออกแล้ว'),
     'pr3.failed': ('Export failed. Check the source, destination name and write access. {error}', 'ส่งออกไม่สำเร็จ ตรวจไฟล์ต้นทาง ชื่อโฟลเดอร์ปลายทาง และสิทธิ์เขียนไฟล์ รายละเอียด {error}'),
+    'pr4.stale': ('Payment workbook changed. Open it again before reviewing this plan.', 'ไฟล์ Payment เปลี่ยนแล้ว กรุณาเปิดใหม่ก่อนตรวจแผน'),
+    'pr4.original': ('Original','ต้นฉบับ'),
+    'pr4.adjusted': ('Adjusted · {name}','แผนปรับ · {name}'),
+    'pr4.create': ('Create adjustment…','สร้างไฟล์ปรับแผน…'),
+    'pr4.open': ('Open adjustment…','เปิดไฟล์ปรับแผน…'),
+    'pr4.created': ('Edit cumulative percentages in {path}','แก้เปอร์เซ็นต์สะสมใน {path}'),
     'pr3.done': ('Both Word reports are ready in {folder}', 'รายงาน Word ทั้งสองฉบับอยู่ใน {folder}'),
 })

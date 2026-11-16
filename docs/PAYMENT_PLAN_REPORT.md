@@ -1,6 +1,6 @@
 # Payment Plan Report
 
-PR-0, PR-1 and PR-2 are accepted and integrated on the feature branch. PR-3 paired Word export is submitted for acceptance. WF-1 and WF-2 remain deferred.
+PR-0 through PR-3 are accepted. PR-4 adds a separate adjustment workbook and adjusted paired export. WF-1 and WF-2 remain deferred.
 
 ## Source
 
@@ -58,3 +58,6 @@ Verify source integrity, complete chronological sections, preview-to-document ag
 - PR-I01 — Revision-aware selection restoration. The exact-revision policy remains active.
 - PR-I02 — Amount-First compatibility with workbook-entered Activity Amounts remains unverified.
 - PR-I03 — Compatibility with formula-based Amounts and requirements remains unverified beyond the current source restrictions.
+
+## PR-4 adjusted payment plan
+Open the exact source Payment Workbook in Payment Plan Report. Select work and choose Create adjustment. Save to a fresh .xlsx name, enter cumulative percentages in the blue cells and save in Excel. Open adjustment restores the saved rows against that source after restart. Original returns to the unadjusted preview. Changing the selection clears the adjusted basis. Source details includes unresolved positions and included-child discrepancies. Blank requirements withhold adjusted export. Zero and final requirements below 100% are valid. Eligible dates and monetary bases stay fixed. Each independent ancestor contributes once. Preview and both Word reports use one reviewed result; both source and adjustment fingerprints are checked again at publication.

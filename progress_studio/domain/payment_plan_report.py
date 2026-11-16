@@ -126,9 +126,7 @@ class ReportSource:
         leaves = [self.leaves[a] for a in ids]
         basis = None if any(v.amount is None for v in leaves) else sum(
             (v.amount for v in leaves), ZERO)
-        previous_fraction = previous_money = ZERO
-        completed_before = False
-        values = []
+        points = []
         for j in range(len(self.periods)):
             known = [(v.amount, v.schedule[j].fraction) for v in leaves
                      if v.amount is not None and v.schedule[j].fraction is not None]
@@ -137,32 +135,37 @@ class ReportSource:
             money = subtotal if basis is not None and known_basis == basis else None
             fraction = leaves[0].schedule[j].fraction if activity else (
                 money / basis if basis and money is not None else None)
-            delta = difference(fraction, previous_fraction)
-            movement = difference(money, previous_money)
-            valid = fraction is not None and money is not None
-            complete = valid and fraction >= COMPLETE
-            previously_complete = previous_fraction is not None and previous_fraction >= COMPLETE
-            correction = (delta is not None and delta < 0) or (movement is not None and movement < 0)
-            changed = delta not in (None, ZERO) or movement not in (None, ZERO)
-            if not valid:
-                transition = 'unresolved'
-            elif complete and previously_complete:
-                transition = 'adjusted_complete' if changed else 'suppressed'
-            elif complete:
-                transition = 'recompleted' if completed_before else 'completed'
-            elif previously_complete:
-                transition = 'reopened'
-            else:
-                transition = 'open'
-            visible = transition != 'suppressed'
-            values.append(Value(fraction, delta, money, movement, subtotal if known or not ids else None,
-                                known_basis, len(known), Decimal(1) if complete else fraction,
-                                transition, correction, visible and (not valid or changed),
-                                visible and (not valid or fraction != ZERO or changed)))
-            completed_before |= complete
-            previous_fraction, previous_money = fraction, money
-        return Scope(tuple(ids), basis, tuple(values))
+            points.append((fraction, money, subtotal if known or not ids else None, known_basis, len(known)))
+        return Scope(tuple(ids), basis, tuple(series(points)))
 
 
 def difference(current, previous):
     return None if current is None or previous is None else current - previous
+
+
+def series(points):
+    previous = money_before = ZERO
+    completed = False
+    for fraction, money, known, basis, count in points:
+        delta = difference(fraction, previous)
+        movement = difference(money, money_before)
+        valid = fraction is not None and money is not None
+        done = valid and fraction >= COMPLETE
+        was_done = previous is not None and previous >= COMPLETE
+        changed = delta not in (None, ZERO) or movement not in (None, ZERO)
+        state = 'open'
+        if not valid:
+            state = 'unresolved'
+        elif done and was_done:
+            state = 'adjusted_complete' if changed else 'suppressed'
+        elif done:
+            state = 'recompleted' if completed else 'completed'
+        elif was_done:
+            state = 'reopened'
+        yield Value(fraction, delta, money, movement, known, basis, count,
+                    Decimal(1) if done else fraction, state,
+                    (delta or ZERO)<0 or (movement or ZERO)<0,
+                    state!='suppressed' and (not valid or changed),
+                    state!='suppressed' and (not valid or fraction!=ZERO or changed))
+        previous, money_before = fraction, money
+        completed |= done

@@ -15,7 +15,12 @@ class ExportCancelled(Exception):
 
 
 def export_payment_plans(source, selection, workbook, parent, name, *, cancelled=lambda: False,
-                         progress=lambda stage: None):
+                         progress=lambda stage: None, reviewed=None):
+    if reviewed is not None:
+        from dataclasses import replace
+        if selection is not reviewed.selection:
+            raise ValueError("Review the adjusted selection before export.")
+        source = replace(source, diagnostics=(*source.diagnostics, f"Adjusted plan: {reviewed.path.name} | SHA-256 {reviewed.revision}", *reviewed.issues))
     if not selection.rows or selection.revision != source.revision:
         raise ValueError('Select reporting rows from the current workbook.')
     if (not name or name != name.strip() or name.endswith('.') or len(name) > 80
@@ -30,6 +35,8 @@ def export_payment_plans(source, selection, workbook, parent, name, *, cancelled
             raise ExportCancelled()
     def validate():
         check()
+        if reviewed is not None:
+            reviewed.validate()
         if os.path.lexists(target):
             raise FileExistsError(f'Choose a new report folder. Already exists: {target}')
         if hashlib.sha256(Path(workbook).read_bytes()).hexdigest() != source.revision:

@@ -48,6 +48,8 @@ class PaymentPlanDialog(tk.Toplevel):
         self.geometry('980x660')
         self.minsize(720, 505)
         self.model = None
+        self.reviewed = None
+        self.plan_label = tk.StringVar(self,tr("pr4.original"))
         self.workbook_path = None
         self.export_cancel = None
         self.events = queue.Queue()
@@ -116,6 +118,10 @@ class PaymentPlanDialog(tk.Toplevel):
         self.action(bottom,'pr2.restore',lambda:self.selection_file(False))
         export_bar = ttk.Frame(body)
         export_bar.pack(fill='x', pady=(4, 0))
+        ttk.Label(body,textvariable=self.plan_label,anchor="w").pack(fill="x")
+        self.action(export_bar,"pr4.create",self.create_plan)
+        self.action(export_bar,"pr4.open",self.open_plan)
+        self.action(export_bar,"pr4.original",self.original_plan)
         self.export_button = ttk.Button(export_bar, text=tr('pr3.export'), command=self.export,
                                         style='Accent.TButton')
         self.export_button.pack(side='right', padx=3)
@@ -139,6 +145,7 @@ class PaymentPlanDialog(tk.Toplevel):
         else:
             self.export_button.configure(text=tr('pr3.export'))
             ready = self.model and self.model.keys and self.workbook_path and not self.busy
+            ready = ready and not (self.reviewed and self.reviewed.incomplete)
             self.export_button.state(['!disabled' if ready else 'disabled'])
         self.open_button.state(['disabled' if self.busy else '!disabled'])
         for btn in self.controls:
@@ -182,6 +189,7 @@ class PaymentPlanDialog(tk.Toplevel):
                 self.source_status()
                 return
             self.workbook_path = path
+            self.clear_adjustment()
             self.model=candidate
             source=candidate.source
             self.source_label.set(tr('pr2.source',project=source.project,file=source.filename,
@@ -209,6 +217,8 @@ class PaymentPlanDialog(tk.Toplevel):
             if leaf.schedule and leaf.schedule[0].origin == 'Unknown':
                 issues.append(tr('pr2.missing_schedule',activity=activity))
         issues.extend(p.id+'  '+issue for p in source.periods for issue in p.issues)
+        if self.reviewed:
+            issues.extend(self.reviewed.issues)
         return issues
 
     def source_status(self):
@@ -234,7 +244,7 @@ class PaymentPlanDialog(tk.Toplevel):
         frame=ttk.Frame(win,padding=12)
         frame.pack(fill='both',expand=True)
         ttk.Label(frame,text=self.scope.get()).pack(anchor='w',pady=3)
-        result=self.model.result
+        result=self.result
         ttk.Label(frame,text=tr('pr2.reconcile',selected=number(result.selected.basis),
                                 remaining=number(result.unselected.basis),
                                 project=number(result.project.basis))).pack(anchor='w',pady=3)
@@ -311,13 +321,14 @@ class PaymentPlanDialog(tk.Toplevel):
             self.apply(self.model.keys ^ {key})
 
     def apply(self,keys):
+        self.clear_adjustment()
         self.model.select(keys)
         self.paint_checks()
         self.refresh()
 
     def refresh(self):
         self.enable()
-        r=self.model.result
+        r=self.result
         state='empty' if not r.rows else 'full' if r.full_project else 'partial'
         self.scope.set(tr('pr2.scope',scope=tr('pr2.'+state),rows=len(r.rows),count=len(r.selected.activities),
                           all=len(r.project.activities),overlap=len(r.included_in)))
@@ -331,7 +342,7 @@ class PaymentPlanDialog(tk.Toplevel):
     def draw_preview(self):
         if not self.model or self.period.current()<0:
             return
-        result=self.model.result
+        result=self.result
         j=self.period.current()
         p=self.model.source.periods[j]
         self.date.set(tr('pr2.eligible')+'   '+(p.eligible.isoformat() if p.eligible else tr('pr2.unknown')))
@@ -362,6 +373,52 @@ class PaymentPlanDialog(tk.Toplevel):
         self.retained.set(tr('pr2.retained',visible=number(result.visible_known_money[j]),
                              kept=number(result.retained_money[j])) if cumulative else '')
 
+    @property
+    def result(self):
+        return self.reviewed.selection if self.reviewed else self.model.result
+
+    def clear_adjustment(self):
+        self.reviewed = None
+        self.plan_label.set(tr('pr4.original'))
+
+    def original_plan(self):
+        self.clear_adjustment()
+        self.refresh()
+        self.source_status()
+
+    def create_plan(self):
+        from progress_studio.infrastructure.excel.payment_plan_adjustment import create_adjustment
+        if not self.model.keys:
+            self.problem(tr('pr2.empty'))
+            return
+        path = filedialog.asksaveasfilename(parent=self,defaultextension='.xlsx',filetypes=[('Excel','*.xlsx')])
+        if path:
+            try:
+                create_adjustment(path,self.model.source,self.model.result)
+                self.status.set(tr('pr4.created',path=path))
+            except Exception as exc:
+                self.problem(str(exc))
+
+    def open_plan(self):
+        from hashlib import sha256
+        from progress_studio.infrastructure.excel.payment_plan_adjustment import read_adjustment
+        path = filedialog.askopenfilename(parent=self,filetypes=[('Excel','*.xlsx')])
+        if not path:
+            return
+        try:
+            if sha256(Path(self.workbook_path).read_bytes()).hexdigest()!=self.model.source.revision:
+                raise ValueError(tr('pr4.stale'))
+            plan = read_adjustment(path,self.model.source)
+        except Exception as exc:
+            self.problem(str(exc))
+            return
+        self.model.select([row.key for row in plan.selection.rows])
+        self.reviewed = plan
+        self.plan_label.set(tr('pr4.adjusted',name=plan.path.name))
+        self.paint_checks()
+        self.refresh()
+        self.source_status()
+
     def selection_file(self,save):
         kwargs=dict(parent=self,filetypes=[(tr('pr2.selection_file'),'*'+SUFFIX)])
         if save:
@@ -376,6 +433,7 @@ class PaymentPlanDialog(tk.Toplevel):
                 self.model.save(path)
             else:
                 self.model.restore(path)
+                self.clear_adjustment()
                 self.paint_checks()
                 self.refresh()
             self.source_status()
@@ -397,7 +455,8 @@ class PaymentPlanDialog(tk.Toplevel):
                                       initialvalue=self.model.source.project, parent=self)
         if name is None:
             return
-        source, selection, workbook = self.model.source, self.model.result, self.workbook_path
+        source, selection, workbook = self.model.source, self.result, self.workbook_path
+        reviewed = self.reviewed
         cancel = threading.Event()
         self.export_cancel = cancel
         self.busy = True
@@ -410,7 +469,7 @@ class PaymentPlanDialog(tk.Toplevel):
                 from progress_studio.services.payment_plan_export import export_payment_plans, ExportCancelled
                 try:
                     folder = export_payment_plans(source, selection, workbook, parent, name,
-                                                  cancelled=cancel.is_set,
+                                                  reviewed=reviewed, cancelled=cancel.is_set,
                                                   progress=lambda stage: events.put(('stage', stage)))
                 except ExportCancelled:
                     events.put(('cancelled', None))
