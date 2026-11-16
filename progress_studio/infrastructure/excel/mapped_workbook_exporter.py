@@ -109,15 +109,22 @@ class MappedWorkbookExporter:
             source_amount_field = creation_field(source_workbook)
             from progress_studio.infrastructure.excel.ev_monetary_inputs import SHEET as EV_INPUTS, write_inputs
             monetary_records = None
-            monetary_source = source_workbook
+            payment_source = Path(edited_workbook).expanduser().resolve() if edited_workbook is not None else progress_file
+            input_workbook = source_workbook
             if edited_workbook is not None:
-                monetary_source = load_workbook(edited_workbook, data_only=False)
+                input_workbook = load_workbook(payment_source, data_only=False)
             try:
-                if EV_INPUTS in monetary_source.sheetnames:
-                    monetary_records = [tuple(row) for row in monetary_source[EV_INPUTS].iter_rows(min_row=4,max_col=6,values_only=True) if row[0]]
+                # Mapping may reconcile an existing Payment Input on the authoritative
+                # workbook. Only an explicit Payment action may initialize one.
+                preserved_payment = (
+                    PaymentInputSparseReader().read(payment_source)
+                    if PaymentInputWorkbook.SHEET in input_workbook.sheetnames else None
+                )
+                if EV_INPUTS in input_workbook.sheetnames:
+                    monetary_records = [tuple(row) for row in input_workbook[EV_INPUTS].iter_rows(min_row=4,max_col=6,values_only=True) if row[0]]
             finally:
-                if monetary_source is not source_workbook:
-                    monetary_source.close()
+                if input_workbook is not source_workbook:
+                    input_workbook.close()
             can_generate = (
                 bool(working_tree_nodes)
                 and self._supports_main_rebuild(source_workbook)
@@ -162,15 +169,6 @@ class MappedWorkbookExporter:
             if progress_callback is not None and not can_generate:
                 for step, message in (("read", "Source workbook loaded."), ("main", "Main schedule prepared."), ("timescale", "Existing timescale preserved."), ("mapping", "Mapped amounts prepared."), ("progress", "Existing progress sheets preserved."), ("distribution", "Existing distribution preserved."), ("okd", "Existing OKD sheets preserved."), ("monthly", "Monthly main view prepared.")):
                     progress_callback(step, message, True)
-            # Payment Input is persistent user data. Read it sparsely from the
-            # edited workbook (or current source) before rebuilding generated sheets.
-            preserved_payment = None
-            payment_source = Path(edited_workbook).expanduser().resolve() if edited_workbook is not None else progress_file
-            try:
-                preserved_payment = PaymentInputSparseReader().read(payment_source)
-            except PaymentWorkbookError:
-                preserved_payment = None
-
             workbook = load_workbook(temp_file)
             migration = None
             payment_reconcile = None
@@ -231,13 +229,11 @@ class MappedWorkbookExporter:
 
                 # Payment Input is persistent and reconciled; Payment itself is a
                 # generated snapshot that will be replaced after this save.
-                try:
+                if preserved_payment is not None:
                     payment_reconcile = PaymentInputWorkbook().embed(
                         workbook,
                         preserved=preserved_payment,
                     )
-                except PaymentWorkbookError:
-                    payment_reconcile = None
 
                 from progress_studio.infrastructure.excel.duration_workbook import populate_durations
                 populate_durations(workbook)
@@ -265,8 +261,7 @@ class MappedWorkbookExporter:
             finally:
                 workbook.close()
 
-            # Payment is disposable/generated: always recreate it from the final
-            # main + embedded Payment Input. This also replaces any stale Payment sheet.
+            # Refresh the generated view only after reconciling an existing input.
             if payment_reconcile is not None:
                 try:
                     PaymentService().render_payment_backbones(
