@@ -45,8 +45,11 @@ class PaymentPlanDialog(tk.Toplevel):
         super().__init__(parent)
         self.title(tr('pr2.title'))
         self.transient(parent.winfo_toplevel())
-        self.geometry('980x660')
-        self.minsize(720, 505)
+        scale = self.winfo_fpixels('1i') / 96
+        width = min(round(980 * scale), self.winfo_screenwidth() - 36)
+        height = min(round(650 * scale), self.winfo_screenheight() - 90)
+        self.geometry(f'{width}x{height}')
+        self.minsize(min(width, 640), min(height, 460))
         self.model = None
         self.reviewed = None
         self.plan_label = tk.StringVar(self,tr("pr4.original"))
@@ -68,7 +71,7 @@ class PaymentPlanDialog(tk.Toplevel):
         self.filtering = False
         self.controls = []
         self.protocol('WM_DELETE_WINDOW', self.destroy)
-        body = ttk.Frame(self, padding=14, style='Surface.TFrame')
+        body = ttk.Frame(self, padding=10, style='Surface.TFrame')
         body.pack(fill='both', expand=True)
         top = ttk.Frame(body)
         top.pack(fill='x')
@@ -78,20 +81,39 @@ class PaymentPlanDialog(tk.Toplevel):
         self.action(top,'pr2.problems',self.details,'right')
         self.line(body,self.source_label)
         self.line(body,self.status)
+        footer = ttk.Frame(body)
+        footer.pack(side='bottom', fill='x', pady=(4,0))
+        ttk.Button(footer,text=tr('xw.close'),command=self.destroy).pack(side='left')
+        self.next_button = ttk.Button(footer,command=self.next_stage,style='Accent.TButton')
+        self.export_button = ttk.Button(footer,text=tr('pr3.export'),command=self.export,style='Accent.TButton')
+        self.back_button = ttk.Button(footer,text=tr('pu.back'),command=self.previous_stage)
         self.tabs = ttk.Notebook(body)
         self.tabs.pack(fill='both', expand=True, pady=6)
         select = ttk.Frame(self.tabs,padding=8)
+        adjust = ttk.Frame(self.tabs,padding=10)
         preview = ttk.Frame(self.tabs,padding=8)
-        self.tabs.add(select,text=tr('pr2.select'))
-        self.tabs.add(preview,text=tr('pr2.preview'))
+        self.tabs.add(select,text=tr('pu.select'))
+        self.tabs.add(adjust,text=tr('pu.adjust'))
+        self.tabs.add(preview,text=tr('pu.review'))
+        self.tabs.enable_traversal()
+        self.tabs.bind('<<NotebookTabChanged>>',self.stage_controls)
         tools = ttk.Frame(select)
         tools.pack(fill='x',pady=(0,6))
         ttk.Label(tools,text=tr('pr2.search')).pack(side='left')
-        entry = ttk.Entry(tools,textvariable=self.query,width=24)
+        entry = ttk.Entry(tools,textvariable=self.query,width=8)
         entry.pack(side='left',padx=6,fill='x',expand=True)
         self.action(tools,'pr2.whole',lambda:self.apply({'PROJECT'}))
         self.action(tools,'pr2.clear',lambda:self.apply(set()))
         ttk.Label(select,text=tr('pr2.pick'),style='Muted.TLabel').pack(anchor='w',pady=2)
+        selection_footer = ttk.Frame(select)
+        selection_footer.pack(side='bottom',fill='x')
+        self.line(selection_footer,self.scope)
+        self.line(selection_footer,self.basis)
+        row = ttk.Frame(selection_footer)
+        row.pack(fill='x')
+        self.action(row,'pr2.review',self.review_rows)
+        self.action(row,'pr2.save',lambda:self.selection_file(True))
+        self.action(row,'pr2.restore',lambda:self.selection_file(False))
         self.tree = scroll_tree(select,('role',),tr('pr2.name'),[tr('pr2.state')],[235])
         self.tree.bind('<Button-1>',self.tree_click)
         self.tree.bind('<space>',self.toggle_focused)
@@ -105,33 +127,56 @@ class PaymentPlanDialog(tk.Toplevel):
             ttk.Radiobutton(bar,text=tr('pr2.'+m),value=m,variable=self.mode,
                             command=self.draw_preview).pack(side='left')
         ttk.Label(bar,textvariable=self.date).pack(side='right')
+        summary = ttk.Frame(preview)
+        summary.pack(side='bottom',fill='x')
+        for variable in (self.total,self.retained,self.scope,self.basis):
+            self.line(summary,variable)
+        self.line(preview,self.plan_label)
         self.preview = scroll_tree(preview,('percent','money','state'),tr('pr2.name'),
                                    [tr('pr2.percent'),tr('pr2.money'),tr('pr2.status')],[105,140,190])
-        self.line(preview,self.total)
-        self.line(preview,self.retained)
-        self.line(body,self.scope)
-        self.line(body,self.basis)
-        bottom=ttk.Frame(body)
-        bottom.pack(fill='x',pady=(6,0))
-        self.action(bottom,'pr2.review',self.review_rows)
-        self.action(bottom,'pr2.save',lambda:self.selection_file(True))
-        self.action(bottom,'pr2.restore',lambda:self.selection_file(False))
-        export_bar = ttk.Frame(body)
-        export_bar.pack(fill='x', pady=(4, 0))
-        ttk.Label(body,textvariable=self.plan_label,anchor="w").pack(fill="x")
-        self.action(export_bar,"pr4.create",self.create_plan)
-        self.action(export_bar,"pr4.open",self.open_plan)
-        self.action(export_bar,"pr4.original",self.original_plan)
-        self.export_button = ttk.Button(export_bar, text=tr('pr3.export'), command=self.export,
-                                        style='Accent.TButton')
-        self.export_button.pack(side='right', padx=3)
-        ttk.Button(bottom,text=tr('xw.close'),command=self.destroy).pack(side='right')
+
+        ttk.Label(adjust,text=tr('pu.excel'),style='Section.TLabel').pack(anchor='w')
+        ttk.Label(adjust,text=tr('pu.instructions'),wraplength=540,justify='left').pack(anchor='w',pady=(2,8))
+        row = ttk.Frame(adjust)
+        row.pack(fill='x')
+        self.action(row,'pr4.create',self.create_plan)
+        self.action(row,'pr4.open',self.open_plan)
+        ttk.Separator(adjust).pack(fill='x',pady=12)
+        ttk.Label(adjust,text=tr('pu.current'),style='Section.TLabel').pack(anchor='w')
+        self.line(adjust,self.plan_label)
+        row = ttk.Frame(adjust)
+        row.pack(fill='x',pady=4)
+        self.action(row,'pu.use_original',self.review_original)
         self.query.trace_add('write',self.schedule_search)
         self.enable()
 
+    def review_original(self):
+        self.original_plan()
+        self.tabs.select(2)
+
+    def next_stage(self):
+        self.tabs.select(min(2,self.tabs.index('current')+1))
+
+    def previous_stage(self):
+        self.tabs.select(max(0,self.tabs.index('current')-1))
+
+    def stage_controls(self, _event=None):
+        stage = self.tabs.index('current')
+        for button in (self.next_button,self.export_button,self.back_button):
+            button.pack_forget()
+        if stage == 2 or self.export_cancel is not None:
+            self.export_button.pack(side='right')
+        else:
+            self.next_button.configure(text=tr('pu.to_adjust') if stage==0 else tr('pu.to_review'))
+            self.next_button.pack(side='right')
+        if stage:
+            self.back_button.pack(side='right',padx=4)
+
     @staticmethod
     def line(parent,var):
-        ttk.Label(parent,textvariable=var,wraplength=880).pack(anchor='w',pady=2)
+        label = ttk.Label(parent,textvariable=var,justify='left')
+        label.pack(fill='x',pady=1)
+        label.bind('<Configure>',lambda e: label.configure(wraplength=max(120,e.width-4)))
 
     def action(self,parent,key,command,side='left'):
         btn=ttk.Button(parent,text=tr(key),command=command)
@@ -139,6 +184,7 @@ class PaymentPlanDialog(tk.Toplevel):
         self.controls.append(btn)
 
     def enable(self):
+        self.stage_controls()
         if self.export_cancel is not None:
             self.export_button.configure(text=tr('pr3.cancel'))
             self.export_button.state(['!disabled'])

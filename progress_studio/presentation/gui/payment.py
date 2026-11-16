@@ -64,7 +64,7 @@ class PaymentFrame(ttk.Frame):
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-        panel = ttk.Frame(canvas, style="Surface.TFrame", padding=24)
+        panel = ttk.Frame(canvas, style="Surface.TFrame", padding=(8, 6))
         window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
         panel.columnconfigure(0, weight=1)
 
@@ -105,35 +105,60 @@ class PaymentFrame(ttk.Frame):
         container.bind("<Enter>", enter)
         container.bind("<Leave>", leave)
 
-        ttk.Label(
-            panel,
-            text=tr('Payment'),
-            style="Title.TLabel",
-        ).grid(
-            row=0,
-            column=0,
-            sticky="w",
-        )
-        ttk.Label(
-            panel,
-            text=(
-                tr('Prepare Payment Input or derive Payment-Breakdown here. Use Rebuild when you want to regenerate Payment lines.')
-            ),
-            style="Muted.TLabel",
-            wraplength=850,
-        ).grid(
-            row=1,
-            column=0,
-            sticky="w",
-            pady=(6, 16),
-        )
+        def section(row, title):
+            card = ttk.Frame(panel, style="Card.TFrame", padding=(12, 7))
+            card.grid(row=row, column=0, sticky="ew", pady=(0, 4))
+            ttk.Label(card, text=title, style="Section.TLabel").pack(anchor="w")
+            return card
 
-        self._build_workbook_card(panel, 2)
-        self._build_prepare_card(panel, 3)
-        self._build_breakdown_card(panel, 4)
-        self._build_boq_payment_card(panel, 5)
-        ttk.Button(panel, text=tr('pr2.title'), command=self._open_plan_report,
-                   style="Accent.TButton").grid(row=6, column=0, sticky="w", pady=(4, 10))
+        source = section(0, tr('pu.source'))
+        path_bar = ttk.Frame(source)
+        path_bar.pack(fill="x")
+        ttk.Entry(path_bar, textvariable=self.workbook_var).pack(side="left", fill="x", expand=True)
+        ttk.Button(path_bar, text=tr('Browse...'), command=self._browse_workbook).pack(side="left", padx=4)
+        self._status_line(source, self.workbook_status_var)
+
+        inputs = section(1, tr('pu.input'))
+        bar = ttk.Frame(inputs)
+        bar.pack(anchor="w")
+        ttk.Label(bar, text=tr('Payment periods')).pack(side="left")
+        self.period_spinbox = ttk.Spinbox(bar, from_=1, to=120, width=5,
+                                          textvariable=self.periods_var, state="disabled")
+        self.period_spinbox.pack(side="left", padx=5)
+        self.prepare_button = self._work_button(bar, tr('Prepare Payment Input'), self._prepare)
+        self.open_button = self._work_button(bar, tr('Open Result'), self._open_result)
+        self._status_line(inputs, self.period_hint_var)
+        self._status_line(inputs, self.result_var)
+
+        breakdown = section(2, tr('Payment Breakdown'))
+        bar = ttk.Frame(breakdown)
+        bar.pack(anchor="w")
+        self.breakdown_button = self._work_button(bar, tr('Build Payment Breakdown'), self._prepare_breakdown)
+        self.breakdown_open_button = self._work_button(bar, tr('Open Result'), self._open_breakdown_result)
+        self._status_line(breakdown, self.breakdown_result_var)
+
+        boq = section(3, tr('pu.boq'))
+        bar = ttk.Frame(boq)
+        bar.pack(anchor="w")
+        ttk.Button(bar, text=tr('bp4.prepare'), command=self._prepare_boq_requirements).pack(side="left")
+        ttk.Label(bar, text=tr('pu.save_excel')).pack(side="left", padx=8)
+        ttk.Button(bar, text=tr('bp2.0'), command=self._open_boq_payment).pack(side="left")
+
+        report = section(4, tr('pr2.title'))
+        ttk.Button(report, text=tr('pu.open_report'), command=self._open_plan_report,
+                   style="Accent.TButton").pack(anchor="w")
+
+    @staticmethod
+    def _work_button(parent, label, command):
+        button = ttk.Button(parent, text=label, command=command, state="disabled")
+        button.pack(side="left", padx=(0, 4))
+        return button
+
+    @staticmethod
+    def _status_line(parent, variable):
+        label = ttk.Label(parent, textvariable=variable, style="Muted.TLabel")
+        label.pack(fill="x")
+        label.bind("<Configure>", lambda event: label.configure(wraplength=max(120, event.width - 4)))
 
     def _open_plan_report(self):
         from progress_studio.presentation.gui.payment_plan_dialog import PaymentPlanDialog
@@ -143,33 +168,6 @@ class PaymentFrame(ttk.Frame):
             dialog.lift()
             return
         self._payment_plan_dialog = PaymentPlanDialog(self)
-
-    def _build_boq_payment_card(self, parent: ttk.Frame, row: int) -> None:
-        """Present the accepted Prepare -> Save -> Export sequence."""
-        card = ttk.Frame(parent, style="Card.TFrame", padding=16)
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 10))
-        card.columnconfigure(1, weight=1)
-        ttk.Label(card, text="4", style="Section.TLabel").grid(
-            row=0, column=0, sticky="nw", padx=(0, 10)
-        )
-        ttk.Label(card, text="BOQ Payment", style="Section.TLabel").grid(
-            row=0, column=1, sticky="w"
-        )
-        ttk.Label(
-            card,
-            text="Prepare manual BOQ requirements, save the input workbook, then export the report.",
-            style="Muted.TLabel",
-            wraplength=760,
-        ).grid(row=1, column=1, sticky="w", pady=(3, 10))
-        actions = ttk.Frame(card, style="Surface.TFrame")
-        actions.grid(row=2, column=1, sticky="w")
-        ttk.Button(
-            actions, text=tr('bp4.prepare'), command=self._prepare_boq_requirements
-        ).pack(side="left")
-        ttk.Label(actions, text="  Save in Excel  ", style="Muted.TLabel").pack(side="left")
-        ttk.Button(
-            actions, text=tr('bp2.0'), command=self._open_boq_payment
-        ).pack(side="left")
 
     def _prepare_boq_requirements(self):
         from progress_studio.presentation.gui.boq_payment_dialog import BOQPaymentDialog
@@ -182,314 +180,6 @@ class PaymentFrame(ttk.Frame):
             dialog.lift()
             return
         self._boq_payment_dialog = BOQPaymentDialog(self)
-
-    def _build_workbook_card(
-        self,
-        parent: ttk.Frame,
-        row: int,
-    ) -> None:
-        card = ttk.Frame(
-            parent,
-            style="Card.TFrame",
-            padding=16,
-        )
-        card.grid(
-            row=row,
-            column=0,
-            sticky="ew",
-            pady=(0, 10),
-        )
-        card.columnconfigure(1, weight=1)
-
-        ttk.Label(
-            card,
-            text="1",
-            style="Section.TLabel",
-        ).grid(
-            row=0,
-            column=0,
-            sticky="nw",
-            padx=(0, 10),
-        )
-        ttk.Label(
-            card,
-            text=tr('Workbook'),
-            style="Section.TLabel",
-        ).grid(
-            row=0,
-            column=1,
-            sticky="w",
-        )
-        ttk.Label(
-            card,
-            text=(
-                tr('Select the workbook that will receive Payment Input or a derived Payment-Breakdown snapshot.')
-            ),
-            style="Muted.TLabel",
-            wraplength=760,
-        ).grid(
-            row=1,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(3, 8),
-        )
-        ttk.Entry(
-            card,
-            textvariable=self.workbook_var,
-        ).grid(
-            row=2,
-            column=1,
-            sticky="ew",
-        )
-        ttk.Button(
-            card,
-            text=tr('Browse...'),
-            command=self._browse_workbook,
-        ).grid(
-            row=2,
-            column=2,
-            padx=(8, 0),
-        )
-        ttk.Label(
-            card,
-            textvariable=self.workbook_status_var,
-            style="Muted.TLabel",
-            wraplength=760,
-        ).grid(
-            row=3,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(8, 0),
-        )
-
-    def _build_prepare_card(
-        self,
-        parent: ttk.Frame,
-        row: int,
-    ) -> None:
-        card = ttk.Frame(
-            parent,
-            style="Card.TFrame",
-            padding=16,
-        )
-        card.grid(
-            row=row,
-            column=0,
-            sticky="ew",
-            pady=(0, 10),
-        )
-        card.columnconfigure(1, weight=1)
-
-        ttk.Label(
-            card,
-            text="2",
-            style="Section.TLabel",
-        ).grid(
-            row=0,
-            column=0,
-            sticky="nw",
-            padx=(0, 10),
-        )
-        ttk.Label(
-            card,
-            text=tr('Prepare Payment Input'),
-            style="Section.TLabel",
-        ).grid(
-            row=0,
-            column=1,
-            sticky="w",
-        )
-        ttk.Label(
-            card,
-            text=(
-                tr('Existing user percentages are preserved by Activity ID. New Activities receive suggested fake requirements. Payment Date is not an input.')
-            ),
-            style="Muted.TLabel",
-            wraplength=780,
-        ).grid(
-            row=1,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(3, 8),
-        )
-
-        period_row = ttk.Frame(
-            card,
-            style="Surface.TFrame",
-        )
-        period_row.grid(
-            row=2,
-            column=1,
-            columnspan=2,
-            sticky="w",
-        )
-        ttk.Label(
-            period_row,
-            text=tr('Payment periods'),
-            style="Surface.TLabel",
-        ).pack(side="left")
-
-        self.period_spinbox = ttk.Spinbox(
-            period_row,
-            from_=1,
-            to=120,
-            width=7,
-            textvariable=self.periods_var,
-            state="disabled",
-        )
-        self.period_spinbox.pack(
-            side="left",
-            padx=(10, 8),
-        )
-        ttk.Label(
-            period_row,
-            textvariable=self.period_hint_var,
-            style="Muted.TLabel",
-        ).pack(side="left")
-
-        actions = ttk.Frame(
-            card,
-            style="Surface.TFrame",
-        )
-        actions.grid(
-            row=3,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(12, 0),
-        )
-
-        self.prepare_button = ttk.Button(
-            actions,
-            text=tr('Prepare Payment Input'),
-            style="Accent.TButton",
-            command=self._prepare,
-            state="disabled",
-        )
-        self.prepare_button.pack(side="left")
-
-        self.open_button = ttk.Button(
-            actions,
-            text=tr('Open Result'),
-            command=self._open_result,
-            state="disabled",
-        )
-        self.open_button.pack(
-            side="left",
-            padx=(8, 0),
-        )
-
-        ttk.Label(
-            card,
-            textvariable=self.result_var,
-            style="Muted.TLabel",
-            wraplength=760,
-        ).grid(
-            row=4,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(8, 0),
-        )
-
-    def _build_breakdown_card(
-        self,
-        parent: ttk.Frame,
-        row: int,
-    ) -> None:
-        card = ttk.Frame(
-            parent,
-            style="Card.TFrame",
-            padding=16,
-        )
-        card.grid(
-            row=row,
-            column=0,
-            sticky="ew",
-        )
-        card.columnconfigure(1, weight=1)
-
-        ttk.Label(
-            card,
-            text="3",
-            style="Section.TLabel",
-        ).grid(
-            row=0,
-            column=0,
-            sticky="nw",
-            padx=(0, 10),
-        )
-        ttk.Label(
-            card,
-            text=tr('Payment Breakdown'),
-            style="Section.TLabel",
-        ).grid(
-            row=0,
-            column=1,
-            sticky="w",
-        )
-        ttk.Label(
-            card,
-            text=(
-                tr('Derive repeated exact Activity Names from current main. Each source Activity keeps its own progress first; the combined row is Amount-weighted.')
-            ),
-            style="Muted.TLabel",
-            wraplength=780,
-        ).grid(
-            row=1,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(3, 8),
-        )
-
-        actions = ttk.Frame(
-            card,
-            style="Surface.TFrame",
-        )
-        actions.grid(
-            row=2,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(8, 0),
-        )
-
-        self.breakdown_button = ttk.Button(
-            actions,
-            text=tr('Build Payment Breakdown'),
-            style="Accent.TButton",
-            command=self._prepare_breakdown,
-            state="disabled",
-        )
-        self.breakdown_button.pack(side="left")
-
-        self.breakdown_open_button = ttk.Button(
-            actions,
-            text=tr('Open Result'),
-            command=self._open_breakdown_result,
-            state="disabled",
-        )
-        self.breakdown_open_button.pack(
-            side="left",
-            padx=(8, 0),
-        )
-
-        ttk.Label(
-            card,
-            textvariable=self.breakdown_result_var,
-            style="Muted.TLabel",
-            wraplength=760,
-        ).grid(
-            row=3,
-            column=1,
-            columnspan=2,
-            sticky="w",
-            pady=(8, 0),
-        )
 
     def _browse_workbook(self) -> None:
         selected = filedialog.askopenfilename(

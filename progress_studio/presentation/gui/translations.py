@@ -539,3 +539,21 @@ GUIDE.update({
     'pr4.created': ('Edit cumulative percentages in {path}','แก้เปอร์เซ็นต์สะสมใน {path}'),
     'pr3.done': ('Both Word reports are ready in {folder}', 'รายงาน Word ทั้งสองฉบับอยู่ใน {folder}'),
 })
+
+GUIDE.update({
+    'pu.source': ('Source Workbook', 'ไฟล์ Workbook ต้นทาง'),
+    'pu.input': ('Payment Input', 'ข้อมูลแผนการจ่าย'),
+    'pu.boq': ('BOQ Payment', 'งวดงาน BOQ'),
+    'pu.save_excel': ('Save in Excel →', 'บันทึกใน Excel →'),
+    'pu.open_report': ('Open Payment Plan Report…', 'เปิดรายงานแผนการจ่าย…'),
+    'pu.select': ('1   Select work', '1   เลือกงาน'),
+    'pu.adjust': ('2   Adjust plan', '2   ปรับแผน'),
+    'pu.review': ('3   Review & export', '3   ตรวจและส่งออก'),
+    'pu.excel': ('Adjust cumulative requirements in Excel', 'ปรับเปอร์เซ็นต์สะสมใน Excel'),
+    'pu.instructions': ('Create a workbook for your selection, edit the blue percentage cells in Excel and save. Open the saved workbook here to review it.', 'สร้างไฟล์จากงานที่เลือก แก้เปอร์เซ็นต์ในช่องสีฟ้าด้วย Excel แล้วบันทึก เปิดไฟล์ที่บันทึกแล้วที่นี่เพื่อตรวจแผน'),
+    'pu.current': ('Current report basis', 'แผนที่ใช้ในรายงาน'),
+    'pu.use_original': ('Review original plan', 'ตรวจแผนต้นฉบับ'),
+    'pu.to_adjust': ('Continue to adjustment →', 'ไปขั้นปรับแผน →'),
+    'pu.to_review': ('Review plan →', 'ไปตรวจแผน →'),
+    'pu.back': ('Back', 'ย้อนกลับ'),
+})
