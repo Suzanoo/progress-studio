@@ -1,5 +1,6 @@
 """BOQ reports: review sources, select catalog rows, preview and publish."""
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from threading import Event
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
@@ -128,6 +129,11 @@ class BOQWordDialog(tk.Toplevel):
         for key, value in [('pr2.period', False), ('pr2.cumulative', True)]:
             ttk.Radiobutton(bar, text=tr(key), variable=self.cumulative, value=value,
                             command=self.preview).pack(side='left', padx=4)
+        self.row_mode = ttk.Combobox(bar, state='readonly', width=19,
+                                     values=(tr('bpr.active_rows'), tr('bpr.all_rows')))
+        self.row_mode.current(0)
+        self.row_mode.pack(side='left', padx=6)
+        self.row_mode.bind('<<ComboboxSelected>>', lambda _: self.preview())
         ttk.Button(bar, text=tr('pr2.problems'), command=self.diagnostics).pack(side='right')
         self.date_label = ttk.Label(page, wraplength=760)
         self.date_label.pack(anchor='w', pady=(6, 0))
@@ -154,6 +160,7 @@ class BOQWordDialog(tk.Toplevel):
 
     def sync(self):
         busy = self.future is not None
+        self.row_mode.configure(state='disabled' if busy else 'readonly')
         self.back.configure(state='normal' if self.stage and not busy else 'disabled')
         self.exit_button.configure(text=tr('bp2.14' if busy else 'bpr.close'))
         for widget in self.inputs:
@@ -290,11 +297,19 @@ class BOQWordDialog(tk.Toplevel):
     def preview(self):
         index = self.period_box.current()
         session, payment = self.catalog.review.sources[:2]
-        heading = self.plan.period_title(index).replace('Date unavailable', tr('bpr.unavailable'))
+        self.plan = replace(self.plan, active_only=self.row_mode.current() == 0)
+        heading = self.plan.period_title(index)
         self.date_label.configure(text=f'{session[0].stem}  ·  {payment[0].name}  ·  {heading}')
         self.grid_view.delete(*self.grid_view.get_children())
-        for i, values in enumerate(self.plan.lines(index, self.cumulative.get())):
-            self.grid_view.insert('', 'end', values=values, tags=('total',) if i >= len(self.plan.details) else ())
+        page = self.plan.page(index, self.cumulative.get())
+        if not page.details:
+            self.grid_view.insert('', 'end', values=(tr('bpr.no_activity'),))
+        for values in page.details:
+            self.grid_view.insert('', 'end', values=values)
+        for values in page.totals:
+            self.grid_view.insert('', 'end', values=values, tags=('total',))
+        if page.diagnostics:
+            self.grid_view.insert('', 'end', values=(tr('bpr.omitted', count=len(page.diagnostics)),))
         self.basis.configure(text=self.scope.get()+'\n'+tr('pr2.basis',
             selected=display_number(self.plan.total.amount), project=display_number(self.catalog.root.amount),
             coverage=display_number(self.plan.coverage, True)))
@@ -306,6 +321,11 @@ class BOQWordDialog(tk.Toplevel):
         window.transient(self)
         text = ScrolledText(window, width=80, height=20, wrap='word')
         text.pack(fill='both', expand=True)
+        if self.stage == 2 and self.plan is not None:
+            index = self.period_box.current()
+            notes = self.plan.page(index, self.cumulative.get()).diagnostics
+            if notes:
+                text.insert('end', self.plan.period_title(index) + '\n' + '\n'.join(notes) + '\n\n')
         for path, revision in review.sources:
             text.insert('end', f'{path.name}\n{revision}\n\n')
         for issue in review.projection.diagnostics:

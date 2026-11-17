@@ -30,6 +30,7 @@ def render(path, plan, *, cumulative, check_cancel):
                       f'{display_number(plan.catalog.root.amount)}    /    Coverage {display_number(plan.coverage, True)}')
     doc.add_paragraph('Planned amounts use the BOQ source monetary unit. Included detail is counted within its '
                       'selected ancestor. Known contributions can cover part of an incomplete scope.')
+    doc.add_paragraph('Active rows only' if plan.active_only else 'All selected rows', 'Source note')
     if cumulative:
         doc.add_paragraph('A dash marked Still complete carries the preceding exact completion forward. '
                           'The scope register records the corresponding BOQ basis.')
@@ -46,16 +47,32 @@ def render(path, plan, *, cumulative, check_cancel):
         row = detail.row
         role = 'Included in ' + (detail.ancestor.wbs or detail.ancestor.name) if detail.ancestor else 'Counted'
         add_row(register, ((row.wbs + '  ' + row.name).strip(), role, display_number(row.amount)))
+    omissions = []
     for index in range(len(review.projection.periods)):
         check_cancel()
         heading = plan.period_title(index)
         doc.add_page_break()
         doc.add_heading(heading, 1)
+        page = plan.page(index, cumulative)
+        if not page.details:
+            doc.add_paragraph('No payment activity')
+        if page.diagnostics:
+            omissions.append((heading, page.diagnostics))
+            doc.add_paragraph(f'Selected rows with unavailable period amounts: {len(page.diagnostics)}. '
+                              'See source notes at the end.', 'Source note')
         grid = table(doc, ('BOQ work  /  ' + review.projection.periods[index], 'Status', 'Requirement', 'Planned amount'),
                      (7.15, 3.75, 2.85, 3.95))
-        for position, line in enumerate(plan.lines(index, cumulative)):
+        for position, line in enumerate((*page.details, *page.totals)):
             check_cancel()
-            total = position >= len(plan.details)
+            total = position >= len(page.details)
             add_row(grid, line, 'Table total' if total else 'Table text', 'E5F0ED' if total else None,
-                    keep=position in (len(plan.details)-1, len(plan.details)))
+                    keep=position in (len(page.details)-1, len(page.details)))
+    if omissions:
+        doc.add_page_break()
+        doc.add_heading('Source notes — unavailable period amounts', 1)
+        for heading, notes in omissions:
+            doc.add_heading(heading, 2)
+            for note in notes:
+                check_cancel()
+                doc.add_paragraph(note, 'Source note')
     doc.save(path)

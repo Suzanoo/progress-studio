@@ -174,8 +174,8 @@ explanatory. The scope summary counts each distinct leaf once. Save/restore the
 selection as JSON against the exact reviewed source revisions.
 
 Choose **Review plan**. Switch between Period and Cumulative and inspect any
-payment period, the source details and any revision difference. A missing BOQ
-payment date is labelled unavailable. Acknowledge a reviewed revision difference,
+payment period, the source details and any revision difference. Period headings
+show the supplied BOQ payment date, or just the period ID. Acknowledge a reviewed revision difference,
 then export both editable Word documents into a new folder. Both files use the
 same review. Cancellation, stale inputs and existing destination folders require
 a fresh export. Edits to the Word files are local document edits.
@@ -183,8 +183,8 @@ a fresh export. Edits to the Word files are local document edits.
 Complete selected scope requires the accepted BOQ complete values. Known
 contribution uses determinable mapped and manual amounts and the full selected
 basis. Invalid denominators remain unavailable. A manual period after a gap
-may be known even when the cumulative history remains incomplete. Zero and
-negative movement are printed explicitly. The first exact monetary completion
+may be known even when the cumulative history remains incomplete. Signed
+negative movement is printed explicitly. All selected rows also prints confirmed zeros. The first exact monetary completion
 is visible. Repeated exact completion of a detail or complete selected scope
 is marked **Still complete** with a dash in both cumulative value columns.
 A decrease and a subsequent return are visible. A near-complete value which
@@ -194,3 +194,13 @@ completion and the headline equals its full basis in both periods. A partial
 known subtotal cannot trigger suppression. Period reports show
 signed movements without suppression. Use the BOQ Excel trace for underlying
 shares, source positions and diagnostics.
+
+
+In BOQ Word review, **Active rows only** is the default for both documents.
+Each selected group or item appears on a period page when its signed Period
+Planned Amount is known and nonzero before display rounding. The cumulative
+view shows that active row’s cumulative values. Complete and known totals
+still cover the full selection. An empty active list shows **No payment
+activity**. Unknown period amounts are identified in Source details and the
+Word source notes. **All selected rows** restores the full detail table for
+both documents, including the existing repeated-completion display.

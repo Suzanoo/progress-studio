@@ -54,7 +54,7 @@ def test_manual_gap_partial_and_tables(tmp_path):
     assert plan.total.values[2] == (D(250),None,None)
     assert plan.total.values[3] == (D(250),None,D(-30))
     assert plan.known.period == (D(250),D(0),D(-30))
-    output = export_boq_reports(plan,tmp_path,'Reports')
+    output = export_boq_reports(replace(plan,active_only=False),tmp_path,'Reports')
     for path in output.iterdir():
         doc = Document(path)
         assert not doc.settings.element.xpath('.//w:documentProtection')
@@ -122,3 +122,57 @@ def test_pair_safety(tmp_path,monkeypatch,fault):
     assert not list(tmp_path.rglob('*.docx'))
     if fault=='collision':
         assert (tmp_path/'Output'/'keep').read_text()=='existing'
+
+
+def test_active_pages_use_raw_signed_period_amount_for_both_views(tmp_path):
+    projection = branches()
+    plan = catalog(tmp_path, projection).select({'g','a','c'})
+    assert plan.active_only
+    for cumulative in (True, False):
+        first, second, third = (plan.page(i,cumulative) for i in range(3))
+        assert len(first.details) == 3 and len(third.details) == 3
+        assert not second.details and len(second.diagnostics) == 1
+        assert third.details[1][0].endswith('Included in 1')
+        assert third.details[0][-1] == ('180.00' if cumulative else '-20.00')
+        assert third.details[2][-1] == ('Unavailable' if cumulative else '-10.00')
+        assert third.totals[-1][-1] == ('180.00' if cumulative else '-30.00')
+        assert first.totals[0][-1] == '250.00'
+        assert second.totals == replace(plan,active_only=False).page(1,cumulative).totals
+    assert plan.total.amount == 300
+    assert next(iter(replace(plan,active_only=False).page(1,True).details))[2:] == ('—','—')
+
+
+def test_missing_dates_and_no_activity_in_paired_documents(tmp_path):
+    from datetime import date
+    from progress_studio.domain.boq_payment_projection import PeriodSource
+    p = branches()
+    dated = PeriodSource(p.periods[0], 7, date(2026,11,17))
+    cat = catalog(tmp_path, replace(p, period_sources=(dated,)))
+    plan = cat.select({'g','a','c'})
+    assert plan.period_title(0) == p.periods[0]+'  ·  2026-11-17'
+    assert plan.period_title(1) == p.periods[1]
+    original = cat.review.sources[0][0].read_bytes()
+    for active in (True,False):
+        reviewed = replace(plan,active_only=active)
+        files = export_boq_reports(reviewed,tmp_path,str(active))
+        for path in files.iterdir():
+            doc = Document(path)
+            contents = [para.text for para in doc.paragraphs]
+            assert ('No payment activity' in contents) == active
+            assert not any('Date unavailable' in text for text in contents)
+            assert ('Source notes — unavailable period amounts' in contents) == active
+            for i,t in enumerate(doc.tables[1:]):
+                page = reviewed.page(i,'CUMULATIVE' in path.name)
+                assert [tuple(c.text for c in r.cells) for r in t.rows[1:]] == [*page.details,*page.totals]
+    assert cat.review.sources[0][0].read_bytes() == original
+
+
+def test_tiny_movement_and_missing_amount_do_not_use_display_or_known_subtotal(tmp_path):
+    tiny = catalog(tmp_path, run(a=(1,1,1),b=(1,1,1),amount=D('.00001'))).select(['b'])
+    assert tiny.page(0,False).details[0][-1] == '0.00'
+    assert not tiny.page(1,True).details
+    partial = catalog(tmp_path, run(shares=(60,))).select(['b'])
+    assert partial.known.period[0] > 0
+    for cumulative in (True,False):
+        page = partial.page(0,cumulative)
+        assert not page.details and 'PartialMapping' in page.diagnostics[0]

@@ -569,7 +569,14 @@ GUIDE.update({
     'bpr.scope': ('{rows} selected rows  ·  {count} of {all} BOQ items', 'เลือก {rows} แถว  ·  ครอบคลุม {count} จาก {all} รายการ BOQ'),
     'bpr.progress': ('Preparing BOQ reports…', 'กำลังสร้างรายงาน BOQ…'),
     'bpr.revision': ('Review the source revision difference before export.', 'ตรวจความแตกต่างของรุ่นต้นทางก่อนส่งออก'),
-    'bpr.unavailable': ('Payment date unavailable', 'ไม่พบวันที่งวดในต้นทาง'),
     'bpr.file': ('BOQ reporting selection', 'รายการ BOQ ที่เลือก'),
     'bpr.close': ('Close', 'ปิด'),
+})
+
+GUIDE.update({
+    'bpr.active_rows': ('Active rows only', 'เฉพาะงานที่มียอดในงวด'),
+    'bpr.all_rows': ('All selected rows', 'ทุกแถวที่เลือก'),
+    'bpr.no_activity': ('No payment activity', 'ไม่มีรายการจ่ายในงวด'),
+    'bpr.omitted': ('Rows with unavailable period amounts: {count}. See Source details.',
+                    'ไม่ทราบยอดงวดของ {count} แถว ดูรายละเอียดต้นทาง'),
 })

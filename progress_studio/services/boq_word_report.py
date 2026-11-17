@@ -109,6 +109,13 @@ def display_number(value, percent=False):
 
 
 @dataclass(frozen=True)
+class ReportPage:
+    details: tuple
+    totals: tuple
+    diagnostics: tuple
+
+
+@dataclass(frozen=True)
 class SelectedBOQ:
     catalog: BOQReportCatalog
     details: tuple
@@ -117,6 +124,7 @@ class SelectedBOQ:
     complete: tuple
     known: object
     fractions: object
+    active_only: bool = True
 
     @property
     def coverage(self):
@@ -127,7 +135,21 @@ class SelectedBOQ:
         projection = self.catalog.review.projection
         period = projection.periods[index]
         date = next((p.payment_date for p in projection.period_sources if p.period_id == period), None)
-        return period + '  ·  ' + (date.isoformat() if date else 'Date unavailable')
+        return f'{period}  ·  {date.isoformat()}' if date else period
+
+    def page(self, index, cumulative):
+        lines = self.lines(index, cumulative)
+        visible = []
+        diagnostics = []
+        for detail in self.details:
+            line = next(lines)
+            movement = detail.row.values[3][index]
+            if self.active_only and movement is None:
+                known = display_number(detail.known.period[index])
+                diagnostics.append(f'{line[0]} · {detail.row.status} · Known period contribution: {known}')
+            elif not self.active_only or movement != 0:
+                visible.append(line)
+        return ReportPage(tuple(visible), tuple(lines), tuple(diagnostics))
 
     def lines(self, index, cumulative):
         """Shared preview and Word cells. Raw projection and totals stay immutable."""
