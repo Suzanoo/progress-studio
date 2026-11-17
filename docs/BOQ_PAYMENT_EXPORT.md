@@ -162,3 +162,35 @@ BOQ Mapping and Activity Mapping each have an independent B2 selector. Select an
 BOQ Mapping row 7 shows total share and allocated Amount. Partial mapping uses only the saved shares. Activity Mapping row 7 shows only the total Amount, because each share has its own BOQ basis. Missing or invalid monetary bases make affected allocations and their totals unavailable. Where there are no saved relationships the allocation total is zero and the status explains the empty list. Manual BOQ requirements do not create relationships. The lookup ranges include the complete fan-out of the selected identity.
 
 Export a new workbook to obtain the seven-sheet layout. Existing exports retain their saved layout. The Amount diagnostics link opens an appendix outside the normal report print area. Source diagnostics and mapped/manual subtotals can be inspected there without selecting a period.
+
+## BOQ Payment Plan Word reports
+
+In Payment Workspace → BOQ Payment, choose **Word reports…**. Select the saved
+Project Session and Payment Workbook. A compatible BOQ revision is optional.
+Save Excel edits before opening the source. Browse the BOQ tree, or search by
+code or description. Click a row or press Space to toggle selection. Checking a
+group counts every descendant leaf. An explicitly checked child inside it is
+explanatory. The scope summary counts each distinct leaf once. Save/restore the
+selection as JSON against the exact reviewed source revisions.
+
+Choose **Review plan**. Switch between Period and Cumulative and inspect any
+payment period, the source details and any revision difference. A missing BOQ
+payment date is labelled unavailable. Acknowledge a reviewed revision difference,
+then export both editable Word documents into a new folder. Both files use the
+same review. Cancellation, stale inputs and existing destination folders require
+a fresh export. Edits to the Word files are local document edits.
+
+Complete selected scope requires the accepted BOQ complete values. Known
+contribution uses determinable mapped and manual amounts and the full selected
+basis. Invalid denominators remain unavailable. A manual period after a gap
+may be known even when the cumulative history remains incomplete. Zero and
+negative movement are printed explicitly. The first exact monetary completion
+is visible. Repeated exact completion of a detail or complete selected scope
+is marked **Still complete** with a dash in both cumulative value columns.
+A decrease and a subsequent return are visible. A near-complete value which
+would round to 100.00% is displayed as <100%. The known-contribution headline
+uses the same dash only when the scope independently proves repeated exact
+completion and the headline equals its full basis in both periods. A partial
+known subtotal cannot trigger suppression. Period reports show
+signed movements without suppression. Use the BOQ Excel trace for underlying
+shares, source positions and diagnostics.

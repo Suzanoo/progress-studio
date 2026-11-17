@@ -557,3 +557,19 @@ GUIDE.update({
     'pu.to_review': ('Review plan →', 'ไปตรวจแผน →'),
     'pu.back': ('Back', 'ย้อนกลับ'),
 })
+
+GUIDE.update({
+    'bpr.word': ('Word reports…', 'รายงาน Word…'),
+    'bpr.title': ('BOQ Payment Plan Reports', 'รายงานแผนการจ่ายตาม BOQ'),
+    'bpr.sources': ('1   Sources', '1   ต้นทาง'),
+    'bpr.work': ('2   Select BOQ work', '2   เลือกงาน BOQ'),
+    'bpr.review': ('3   Review & export', '3   ตรวจและส่งออก'),
+    'bpr.search': ('Find BOQ code or description', 'ค้นหารหัส BOQ หรือชื่องาน'),
+    'bpr.next': ('Select BOQ work →', 'ไปเลือกงาน BOQ →'),
+    'bpr.scope': ('{rows} selected rows  ·  {count} of {all} BOQ items', 'เลือก {rows} แถว  ·  ครอบคลุม {count} จาก {all} รายการ BOQ'),
+    'bpr.progress': ('Preparing BOQ reports…', 'กำลังสร้างรายงาน BOQ…'),
+    'bpr.revision': ('Review the source revision difference before export.', 'ตรวจความแตกต่างของรุ่นต้นทางก่อนส่งออก'),
+    'bpr.unavailable': ('Payment date unavailable', 'ไม่พบวันที่งวดในต้นทาง'),
+    'bpr.file': ('BOQ reporting selection', 'รายการ BOQ ที่เลือก'),
+    'bpr.close': ('Close', 'ปิด'),
+})

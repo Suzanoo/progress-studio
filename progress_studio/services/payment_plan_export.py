@@ -23,6 +23,19 @@ def export_payment_plans(source, selection, workbook, parent, name, *, cancelled
         source = replace(source, diagnostics=(*source.diagnostics, f"Adjusted plan: {reviewed.path.name} | SHA-256 {reviewed.revision}", *reviewed.issues))
     if not selection.rows or selection.revision != source.revision:
         raise ValueError('Select reporting rows from the current workbook.')
+    def validate_source():
+        if reviewed is not None:
+            reviewed.validate()
+        if hashlib.sha256(Path(workbook).read_bytes()).hexdigest() != source.revision:
+            raise ValueError('The source workbook changed. Reopen it and review the selection.')
+
+    def write(path, cumulative, check):
+        render(path, source, selection, cumulative=cumulative, check_cancel=check)
+
+    return publish_pair(parent, name, 'PAYMENT_PLAN_REPORT', write, validate_source, cancelled, progress)
+
+
+def publish_pair(parent, name, suffix, write, validate_source, cancelled, progress=lambda stage: None):
     if (not name or name != name.strip() or name.endswith('.') or len(name) > 80
             or re.search(r'[<>:"/\\|?*\x00-\x1f]', name)
             or name.split('.')[0].upper() in {'CON','NUL','PRN','AUX', *(f'COM{i}' for i in range(1,10)),
@@ -35,20 +48,17 @@ def export_payment_plans(source, selection, workbook, parent, name, *, cancelled
             raise ExportCancelled()
     def validate():
         check()
-        if reviewed is not None:
-            reviewed.validate()
+        validate_source()
         if os.path.lexists(target):
             raise FileExistsError(f'Choose a new report folder. Already exists: {target}')
-        if hashlib.sha256(Path(workbook).read_bytes()).hexdigest() != source.revision:
-            raise ValueError('The source workbook changed. Reopen it and review the selection.')
     validate()
     stage = Path(mkdtemp(prefix='.payment-plan-', dir=parent))
     try:
         for kind in ('PERIOD', 'CUMULATIVE'):
             progress(kind)
             check()
-            path = stage / f'{name}_{kind}_PAYMENT_PLAN_REPORT.docx'
-            render(path, source, selection, cumulative=kind == 'CUMULATIVE', check_cancel=check)
+            path = stage / f'{name}_{kind}_{suffix}.docx'
+            write(path, kind == 'CUMULATIVE', check)
             with ZipFile(path) as package:
                 if 'word/document.xml' not in package.namelist() or package.testzip() is not None:
                     raise ValueError(f'Invalid generated report: {path.name}')

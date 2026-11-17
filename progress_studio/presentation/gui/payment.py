@@ -144,6 +144,8 @@ class PaymentFrame(ttk.Frame):
         ttk.Label(bar, text=tr('pu.save_excel')).pack(side="left", padx=8)
         ttk.Button(bar, text=tr('bp2.0'), command=self._open_boq_payment).pack(side="left")
 
+        ttk.Button(bar, text=tr('bpr.word'), command=self._open_boq_word).pack(side="left", padx=4)
+
         report = section(4, tr('pr2.title'))
         ttk.Button(report, text=tr('pu.open_report'), command=self._open_plan_report,
                    style="Accent.TButton").pack(anchor="w")
@@ -168,6 +170,14 @@ class PaymentFrame(ttk.Frame):
             dialog.lift()
             return
         self._payment_plan_dialog = PaymentPlanDialog(self)
+
+    def _open_boq_word(self):
+        from progress_studio.presentation.gui.boq_word_dialog import BOQWordDialog
+        dialog = getattr(self, '_boq_word_dialog', None)
+        if dialog is not None and dialog.winfo_exists():
+            dialog.lift()
+            return
+        self._boq_word_dialog = BOQWordDialog(self)
 
     def _prepare_boq_requirements(self):
         from progress_studio.presentation.gui.boq_payment_dialog import BOQPaymentDialog
