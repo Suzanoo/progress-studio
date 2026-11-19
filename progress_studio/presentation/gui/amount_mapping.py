@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from progress_studio.presentation.gui.strings import tr
+from progress_studio.presentation.gui.interaction import local_wheel
 
 from pathlib import Path
 import queue
@@ -39,6 +40,8 @@ class AmountMappingFrame(ttk.Frame):
         self.session_repository = MappingSessionRepository()
         self.export_service = WorkbookExportService()
         self.recent_repository = RecentSessionRepository()
+        self.session_dirty = False
+        self.operation_active = False
         self.session_file: Path | None = None
         self.progress_file: Path | None = None
         self.boq_file: Path | None = None
@@ -70,9 +73,11 @@ class AmountMappingFrame(ttk.Frame):
         self.layout_preferences = self.layout_repository.load()
         self.inputs_collapsed = self.layout_preferences.mapping_inputs_collapsed
         self._build()
+        self._install_tree_input()
+        self.body.bind("<Configure>", self._fit_panes, add="+")
         self.after_idle(self._restore_mapping_sash)
         self.bind("<Destroy>", self._on_destroy, add="+")
-        self.after_idle(self._bind_shortcuts)
+        # Shell owns application accelerators; tree-local bindings are installed below.
 
     def _build(self) -> None:
         inputs_header = ttk.Frame(self)
@@ -125,15 +130,17 @@ class AmountMappingFrame(ttk.Frame):
 
         activity_header = ttk.Frame(left)
         activity_header.pack(fill="x")
-        ttk.Label(activity_header, text=tr('Progress Activities'), font=("Segoe UI", 10, "bold")).pack(side="left")
+        ttk.Label(left, text=tr('Progress Activities'), style='Section.TLabel').pack(fill='x', before=activity_header)
 
         # Keep the high-frequency commands visible and group the rest in
         # compact menus.  This remains usable when the Progress pane is made
         # narrow instead of allowing a long fixed button row to be clipped.
-        ttk.Button(activity_header, text=tr('Add WBS'), command=self._add_supplemental_wbs).pack(side="left", padx=(8, 0))
-        ttk.Button(activity_header, text=tr('Add Activity'), command=self._add_supplemental_activity).pack(side="left", padx=(4, 0))
-        ttk.Button(activity_header, text=tr('Edit'), command=self._edit_progress_node).pack(side="left", padx=(4, 0))
-        ttk.Button(activity_header, text=tr('Delete'), command=self._delete_progress_node).pack(side="left", padx=(4, 0))
+        structure = ttk.Menubutton(activity_header, text=tr('ux.structure'))
+        structure_menu = tk.Menu(structure, tearoff=False)
+        for label, command in (("Add WBS", self._add_supplemental_wbs), ("Add Activity", self._add_supplemental_activity), ("Edit", self._edit_progress_node), ("Delete", self._delete_progress_node)):
+            structure_menu.add_command(label=tr(label), command=command)
+        structure.configure(menu=structure_menu)
+        structure.pack(side="left", padx=4)
 
         arrange_button = ttk.Menubutton(activity_header, text=tr('Arrange'))
         arrange_menu = tk.Menu(arrange_button, tearoff=False)
@@ -147,16 +154,16 @@ class AmountMappingFrame(ttk.Frame):
         arrange_menu.add_command(label=tr('Undo tree edit'), command=self._undo_tree_edit)
         arrange_menu.add_command(label=tr('Redo tree edit'), command=self._redo_tree_edit)
         arrange_button.configure(menu=arrange_menu)
-        arrange_button.pack(side="left", padx=(6, 0))
+        structure_menu.add_cascade(label=tr("Arrange"), menu=arrange_menu)
 
         tree_view_button = ttk.Menubutton(activity_header, text=tr('Tree View'))
         tree_view_menu = tk.Menu(tree_view_button, tearoff=False)
         tree_view_menu.add_command(label=tr('Expand all'), command=self._expand_all_wbs)
         tree_view_menu.add_command(label=tr('Collapse all'), command=self._collapse_all_wbs)
         tree_view_button.configure(menu=tree_view_menu)
-        tree_view_button.pack(side="right")
+        structure_menu.add_cascade(label=tr("Tree View"), menu=tree_view_menu)
         self.activity_empty_label = ttk.Label(left, textvariable=self.activity_empty_var, style="Empty.TLabel", anchor="center")
-        self.activity_empty_label.pack(fill="x", pady=(12, 4))
+        self.activity_empty_label.pack(fill="x")
         self._build_search(left, self.activity_filter, self._apply_activity_filter)
         self.activity_tree = self._tree(
             left,
@@ -176,24 +183,27 @@ class AmountMappingFrame(ttk.Frame):
         ttk.Label(boq_header, text=tr('BOQ Items'), font=("Segoe UI", 10, "bold")).pack(side="left")
         ttk.Button(boq_header, text=tr('boq_update.title'), command=self._update_boq).pack(side="right")
         self.boq_empty_label = ttk.Label(right, textvariable=self.boq_empty_var, style="Empty.TLabel", anchor="center")
-        self.boq_empty_label.pack(fill="x", pady=(12, 4))
+        self.boq_empty_label.pack(fill="x")
         filter_row = ttk.Frame(right)
         filter_row.pack(fill="x", pady=(4, 4))
         ttk.Label(filter_row, text=tr('WBS-2')).pack(side="left")
-        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=24, values=("All",))
+        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=12, values=("All",))
         self.boq_wbs2_combo.pack(side="left", padx=(5, 8))
         self.boq_wbs2_combo.bind("<<ComboboxSelected>>", self._on_wbs2_filter)
         ttk.Label(filter_row, text=tr('WBS-3')).pack(side="left")
-        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=28, values=("All",))
+        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=12, values=("All",))
         self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
         self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
         selection_row = ttk.Frame(right)
         selection_row.pack(fill="x", pady=(0, 4))
-        ttk.Button(selection_row, text=tr('Select page'), command=self._select_boq_page).pack(side="left")
-        ttk.Button(selection_row, text=tr('Select all filtered'), command=self._select_all_filtered_boq).pack(side="left", padx=(4, 0))
-        ttk.Button(selection_row, text=tr('Clear selection'), command=self._clear_boq_selection).pack(side="left", padx=(4, 0))
-        ttk.Label(selection_row, textvariable=self.boq_selection_var, foreground=PALETTE.muted).pack(side="right")
+        selection_menu_button = ttk.Menubutton(selection_row, text=tr('Select page'))
+        selection_menu = tk.Menu(selection_menu_button, tearoff=False)
+        for label, command in [('Select page', self._select_boq_page), ('Select all filtered', self._select_all_filtered_boq), ('Clear selection', self._clear_boq_selection)]:
+            selection_menu.add_command(label=tr(label), command=command)
+        selection_menu_button.configure(menu=selection_menu)
+        selection_menu_button.pack(side='left')
+        ttk.Label(selection_row, textvariable=self.boq_selection_var, foreground=PALETTE.muted).pack(side='left', padx=4)
         self.boq_tree = self._tree(
             right,
             (
@@ -208,7 +218,7 @@ class AmountMappingFrame(ttk.Frame):
         )
         self.boq_tree.bind("<Button-1>", self._boq_click)
         mapping_detail = ttk.Frame(right, padding=(0, 4, 0, 0))
-        mapping_detail.pack(fill="x")
+        mapping_detail.pack(side="bottom", fill="x", before=right.winfo_children()[0])
         ttk.Label(mapping_detail, text=tr('Mapped activities'), font=("Segoe UI", 9, "bold")).pack(side="left")
         ttk.Label(
             mapping_detail,
@@ -219,7 +229,10 @@ class AmountMappingFrame(ttk.Frame):
         self._build_pager(right, self.boq_page_var, self._boq_prev, self._boq_next)
 
         actions = ttk.Frame(self)
-        actions.pack(fill="x", pady=(6, 0))
+        actions.pack(side="bottom", fill="x", pady=(6, 0), before=self.body)
+        self.allocation_var = tk.StringVar()
+        self.allocation_context = ttk.Label(self, textvariable=self.allocation_var, style="Section.TLabel")
+        self.allocation_context.pack(side="bottom", fill="x", after=actions)
         ttk.Label(actions, text=tr('Share')).pack(side="left")
         share_entry = ttk.Entry(actions, textvariable=self.share_var, width=8, justify="right")
         share_entry.pack(side="left", padx=(5, 2))
@@ -232,10 +245,12 @@ class AmountMappingFrame(ttk.Frame):
             actions,
             text=tr('Share applies to every selected BOQ item.'),
             foreground=PALETTE.muted,
-        ).pack(side="left", padx=(12, 0))
+        ).pack(side="bottom", anchor="w")
 
         self.mapping_status_bar = ttk.Frame(self, style="StatusBar.TFrame", padding=(8, 4))
-        self.mapping_status_bar.pack(fill="x", pady=(6, 0))
+        self.mapping_status_bar.pack(side="bottom", fill="x", pady=(6, 0), before=actions)
+        ttk.Button(self.mapping_status_bar, text=tr('ux.retry_save'), command=self._autosave_session).pack(side="right")
+        ttk.Button(self.mapping_status_bar, text=tr('Save As...'), command=self.save_project_as).pack(side="right")
         ttk.Label(self.mapping_status_bar, textvariable=self.operation_status_var, style="StatusReady.TLabel").pack(side="left")
         ttk.Label(self.mapping_status_bar, textvariable=self.session_status_var, style="Status.TLabel").pack(side="left", padx=(12, 0))
         ttk.Label(self.mapping_status_bar, textvariable=self.summary_var, style="Status.TLabel").pack(side="right")
@@ -262,6 +277,8 @@ class AmountMappingFrame(ttk.Frame):
         self._load_recent_session()
 
     def save_project(self) -> None:
+        if self.operation_active:
+            return
         if self.session_file and self.session_file.suffix == ".progressstudio":
             try:
                 self._write_session(self.session_file, show_message=False)
@@ -300,28 +317,10 @@ class AmountMappingFrame(ttk.Frame):
             return
         self._export(edited_workbook=Path(selected))
 
-    def _bind_shortcuts(self) -> None:
-        top = self.winfo_toplevel()
-        for sequence in ("<Control-o>", "<Command-o>"):
-            top.bind(sequence, lambda _event: self._browse_progress(), add="+")
-        for sequence in ("<Control-Shift-O>", "<Command-Shift-O>"):
-            top.bind(sequence, lambda _event: self._browse_boq(), add="+")
-        for sequence in ("<Control-s>", "<Command-s>"):
-            top.bind(sequence, lambda _event: self._save_session(), add="+")
-        for sequence in ("<Control-z>", "<Command-z>"):
-            top.bind(sequence, lambda _event: self._undo(), add="+")
-        for sequence in ("<Control-f>", "<Command-f>"):
-            top.bind(sequence, self._focus_search, add="+")
-        top.bind("<Alt-Up>", lambda _event: self._move_progress_node(-1), add="+")
-        top.bind("<Alt-Down>", lambda _event: self._move_progress_node(1), add="+")
-        top.bind("<Alt-Right>", lambda _event: self._indent_progress_node(), add="+")
-        top.bind("<Alt-Left>", lambda _event: self._outdent_progress_node(), add="+")
-        top.bind("<Delete>", self._keyboard_unmap, add="+")
-        top.bind("<BackSpace>", self._keyboard_unmap, add="+")
-
     def _focus_search(self, _event=None) -> str:
-        self.activity_search_entry.focus_set()
-        self.activity_search_entry.selection_range(0, "end")
+        entry = self.boq_search_entry if _event is not None and _event.widget is self.boq_tree else self.activity_search_entry
+        entry.focus_set()
+        entry.selection_range(0, "end")
         return "break"
 
     def _keyboard_unmap(self, event) -> str | None:
@@ -333,9 +332,13 @@ class AmountMappingFrame(ttk.Frame):
 
     def _notify(self, message: str, kind: str = "success") -> None:
         message = tr(message)
+        prior = getattr(self, '_toast', None)
+        if prior is not None and prior.winfo_exists():
+            prior.destroy()
         self.operation_status_var.set(message)
         top = self.winfo_toplevel()
         toast = tk.Toplevel(top)
+        self._toast = toast
         toast.overrideredirect(True)
         toast.attributes("-topmost", True)
         background = PALETTE.success if kind == "success" else PALETTE.warning
@@ -363,6 +366,7 @@ class AmountMappingFrame(ttk.Frame):
 
     def _restore_mapping_sash(self) -> None:
         if self.layout_preferences.mapping_sash is None:
+            self.body.sashpos(0, self.body.winfo_width() // 2)
             return
         try:
             self.body.sashpos(0, self.layout_preferences.mapping_sash)
@@ -402,16 +406,16 @@ class AmountMappingFrame(ttk.Frame):
         elif variable is self.boq_filter:
             self.boq_search_entry = entry
         entry.bind("<Return>", lambda _event: command())
-        ttk.Button(row, text=tr('Search'), command=command).pack(side="left", padx=(6, 0))
-        ttk.Button(row, text=tr('Clear'), command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text=tr('Search'), width=5, command=command).pack(side="left", padx=(6, 0))
+        ttk.Button(row, text=tr('Clear'), width=4, command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
 
     @staticmethod
     def _build_pager(parent, variable: tk.StringVar, previous, next_) -> None:
         row = ttk.Frame(parent)
-        row.pack(fill="x", pady=(5, 0))
+        row.pack(side="bottom", fill="x", pady=(5, 0), before=parent.winfo_children()[0])
         ttk.Label(row, textvariable=variable).pack(side="left")
-        ttk.Button(row, text=tr('Previous'), command=previous).pack(side="right")
-        ttk.Button(row, text=tr('Next'), command=next_).pack(side="right", padx=(0, 5))
+        ttk.Button(row, text="‹", width=2, command=previous).pack(side="right")
+        ttk.Button(row, text="›", width=2, command=next_).pack(side="right", padx=(0, 5))
 
     @staticmethod
     def _tree(parent, columns, headings, widths):
@@ -421,29 +425,194 @@ class AmountMappingFrame(ttk.Frame):
         frame.columnconfigure(0, weight=1)
         tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="none")
         y = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=y.set)
+        x = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=y.set, xscrollcommand=x.set)
         for name, heading, width in zip(columns, headings, widths):
             tree.heading(name, text=tr(heading))
-            tree.column(name, width=width, minwidth=35, stretch=name not in {"check", "amount", "allocated", "remaining", "status", "mapped"})
+            tree.column(name, width=width, minwidth=35, stretch=False)
         tree.grid(row=0, column=0, sticky="nsew")
         y.grid(row=0, column=1, sticky="ns")
+        x.grid(row=1, column=0, sticky="ew")
 
-        # Scroll only the table currently under the pointer. This keeps the
-        # Activity and BOQ panes independent on Windows and macOS.
-        def on_mousewheel(event):
-            delta = -1 if event.delta > 0 else 1
-            tree.yview_scroll(delta * 3, "units")
-            return "break"
-
-        tree.bind("<Enter>", lambda _event: tree.bind_all("<MouseWheel>", on_mousewheel))
-        tree.bind("<Leave>", lambda _event: tree.unbind_all("<MouseWheel>"))
+        local_wheel(tree)
         return tree
+
+    def _fit_panes(self, _event=None):
+        # Clamp only geometry, never command eligibility. Font-scaled 2-pane bounds.
+        dimensions = (self.winfo_width(), self.winfo_height())
+        if dimensions != getattr(self, '_last_dimensions', None):
+            self._last_dimensions = dimensions
+            rowheight = int(ttk.Style(self).lookup('Treeview', 'rowheight') or 27)
+            if self.store.activities_by_id and self.store.boq_by_id and self.boq_tree.winfo_height() < rowheight * 4:
+                self._set_inputs_collapsed(True, persist=False)
+        width = self.body.winfo_width()
+        if width < 4:
+            return
+        margin = min(width // 3, 280)
+        try:
+            current = self.body.sashpos(0)
+            self.body.sashpos(0, max(margin, min(width - margin, current)))
+        except tk.TclError:
+            pass
+
+    def _install_tree_input(self):
+        for tree in (self.activity_tree, self.boq_tree):
+            tree._mapping_tree = True
+            tree.configure(takefocus=True)
+            tree.tag_configure('keyboard_focus', background=PALETTE.selection)
+            tree.bind('<space>', self._key_select)
+            tree.bind('<Control-space>', self._key_select)
+            tree.bind('<Shift-Up>', lambda e: self._key_range(e, -1))
+            tree.bind('<Shift-Down>', lambda e: self._key_range(e, 1))
+            tree.bind('<Control-c>', self._copy_selection)
+            tree.bind('<Control-f>', self._focus_search)
+            tree.bind('<Control-a>', self._key_select_page)
+            tree.bind('<Right>', self._key_expand)
+            tree.bind('<Left>', self._key_expand)
+            tree.bind('<Button-3>', self._tree_menu)
+            tree.bind('<Shift-F10>', self._tree_menu)
+            tree.bind('<FocusIn>', self._ensure_tree_focus)
+            tree.bind('<KeyRelease>', self._paint_focus, add='+')
+            tree.bind('<ButtonRelease-1>', self._paint_focus, add='+')
+        for sequence, command in (('<Alt-Up>', lambda: self._move_progress_node(-1)), ('<Alt-Down>', lambda: self._move_progress_node(1)), ('<Alt-Right>', self._indent_progress_node), ('<Alt-Left>', self._outdent_progress_node)):
+            self.activity_tree.bind(sequence, lambda e, cmd=command: self._tree_command(cmd))
+        self.body.configure(takefocus=True)
+        self.body.bind('<Left>', lambda e: self._resize_sash(-20))
+        self.body.bind('<Right>', lambda e: self._resize_sash(20))
+
+    def _resize_sash(self, delta):
+        self.body.sashpos(0, self.body.sashpos(0) + delta)
+        self._fit_panes()
+        return 'break'
+
+    def _tree_command(self, command):
+        if not getattr(self, 'operation_active', False):
+            command()
+        return 'break'
+
+    def _ensure_tree_focus(self, event):
+        tree = event.widget
+        if not tree.focus() and tree.get_children():
+            tree.focus(tree.get_children()[0])
+        self._paint_focus(event)
+
+    def _paint_focus(self, event):
+        tree = event.widget
+        old = getattr(tree, '_focus_row', '')
+        for key in (old, tree.focus()):
+            if key and tree.exists(key):
+                tags = [v for v in tree.item(key, 'tags') if v != 'keyboard_focus']
+                if key == tree.focus():
+                    tags.append('keyboard_focus')
+                tree.item(key, tags=tags)
+        tree._focus_row = tree.focus()
+
+    def _key_select(self, event):
+        if getattr(self, 'operation_active', False):
+            return 'break'
+        tree, key = event.widget, event.widget.focus()
+        if tree is self.activity_tree:
+            if key in self.store.activities_by_id:
+                self.store.toggle_activity(key)
+                self._render_activities()
+                self._update_boq_selection_status()
+            elif key in self._wbs_header_paths:
+                self.store.select_wbs(self._wbs_header_paths[key])
+                self.store.selected_activity_ids.clear()
+                self._render_activities()
+                self._update_boq_selection_status()
+        elif key in self.store.boq_by_id:
+            self.store.toggle_boq(key, additive=True)
+            self._render_boq()
+        self._paint_focus(event)
+        return 'break'
+
+    def _key_select_page(self, event):
+        if event.widget is self.boq_tree and not getattr(self, 'operation_active', False):
+            self._select_boq_page()
+        return 'break'
+
+    def _key_range(self, event, step):
+        tree = event.widget
+        if tree is not self.boq_tree or getattr(self, 'operation_active', False):
+            return 'break'
+        ids = self.store._filtered_boq_ids()
+        key = tree.focus()
+        if key not in ids:
+            return 'break'
+        target = ids[max(0, min(len(ids)-1, ids.index(key)+step))]
+        if self.store.boq_selection_anchor is None:
+            self.store.boq_selection_anchor = key
+        self.store.select_boq_range(target)
+        self.store.boq_page = ids.index(target) // self.store.boq_page_size + 1
+        self._render_boq()
+        tree.focus(target)
+        tree.see(target)
+        self._paint_focus(event)
+        return 'break'
+
+    def _key_expand(self, event):
+        tree, key = event.widget, event.widget.focus()
+        if getattr(self, 'operation_active', False):
+            return 'break'
+        if tree is self.activity_tree and key in self._wbs_header_paths:
+            path = self._wbs_header_paths[key]
+            path_key = self.store.wbs_path_key(path)
+            opened = path_key not in self.store.collapsed_wbs_paths
+            if opened != (event.keysym == 'Right'):
+                self.store.toggle_wbs(path_key)
+                self._render_activities()
+            return 'break'
+        # BOQ uses native hierarchy; default class bindings expand/collapse it.
+
+    def _copy_selection(self, event):
+        if event.widget is self.activity_tree:
+            keys = [k for k in self.store.activity_order if k in self.store.selected_activity_ids]
+            if not keys and event.widget.focus() in self.store.activities_by_id:
+                keys = [event.widget.focus()]
+            lines = ['\t'.join((k, self.store.activities_by_id[k].description)) for k in keys]
+        else:
+            keys = [k for k in self.store.boq_order if k in self.store.selected_boq_ids]
+            if not keys and event.widget.focus() in self.store.boq_by_id:
+                keys = [event.widget.focus()]
+            lines = ['\t'.join((k, self.store.boq_by_id[k].description, str(self.store.boq_by_id[k].amount))) for k in keys]
+        if lines:
+            self.clipboard_clear()
+            self.clipboard_append('\n'.join(lines))
+            self.operation_status_var.set(tr('ux.copied', count=len(lines)))
+        return 'break'
+
+    def _tree_menu(self, event):
+        tree = event.widget
+        tree.focus_set()
+        menu = tk.Menu(tree, tearoff=False)
+        menu.add_command(label=tr('ux.copy_selected'), command=lambda: self._copy_selection(event))
+        if tree is self.boq_tree:
+            menu.add_command(label=tr('Select page'), command=self._select_boq_page)
+            menu.add_command(label=tr('Select all filtered'), command=self._select_all_filtered_boq)
+        menu.add_command(label=tr('Map'), command=self._map)
+        menu.add_command(label=tr('Unmap'), command=self._unmap)
+        if tree is self.activity_tree:
+            menu.add_command(label=tr('Edit'), command=self._edit_progress_node)
+            menu.add_command(label=tr('Delete'), command=self._delete_progress_node)
+        try:
+            menu.tk_popup(event.x_root or tree.winfo_rootx(), event.y_root or tree.winfo_rooty())
+        finally:
+            menu.grab_release()
+            menu.destroy()
+        return 'break'
+
+    def _confirm_replace(self) -> bool:
+        return not self.session_dirty or messagebox.askyesno(
+            tr('Amount Mapping'), tr('ux.replace_unsaved'), parent=self)
 
     def _detach_session(self) -> None:
         self.session_file = None
         self.session_status_var.set(tr('Session: not saved'))
 
     def _browse_progress(self) -> None:
+        if self.operation_active:
+            return
         selected = filedialog.askopenfilename(
             title=tr('Select Progress workbook'),
             filetypes=[("Excel workbook", "*.xlsx"), ("All files", "*.*")],
@@ -452,6 +621,8 @@ class AmountMappingFrame(ttk.Frame):
             self.set_progress_workbook(Path(selected))
 
     def set_progress_workbook(self, path: Path) -> None:
+        if self.operation_active or not self._confirm_replace():
+            return
         self.progress_file = Path(path)
         self._detach_session()
         try:
@@ -476,11 +647,15 @@ class AmountMappingFrame(ttk.Frame):
             self._busy(False)
 
     def _browse_boq(self) -> None:
+        if self.operation_active:
+            return
         selected = filedialog.askopenfilename(
             title=tr('Select BOQ workbook'),
             filetypes=[("Excel workbook", "*.xlsx"), ("All files", "*.*")],
         )
         if not selected:
+            return
+        if not self._confirm_replace():
             return
         candidate = Path(selected)
         self._detach_session()
@@ -513,6 +688,8 @@ class AmountMappingFrame(ttk.Frame):
             self._busy(False)
 
     def _load_selected_boq_sheet(self) -> None:
+        if self.operation_active or not self._confirm_replace():
+            return
         if not self.boq_file:
             messagebox.showwarning(tr('Amount Mapping'), tr('Load a BOQ workbook first.'))
             return
@@ -538,6 +715,8 @@ class AmountMappingFrame(ttk.Frame):
             self._busy(False)
 
     def _update_boq(self) -> None:
+        if self.operation_active:
+            return
         if not (self.session_file and self.progress_file and self.boq_file and self.boq_sheet):
             messagebox.showinfo(tr('boq_update.title'), tr('boq_update.open_first'))
             return
@@ -565,6 +744,7 @@ class AmountMappingFrame(ttk.Frame):
             self._boq_fingerprint = preview.updated.boq
             self._boq_snapshot = preview.updated.boq_snapshot
             committed = True
+            self.session_dirty = False
             self.boq_path_var.set(str(preview.candidate_path))
             self._refresh_boq_filter_values()
             self._render_boq()
@@ -638,6 +818,8 @@ class AmountMappingFrame(ttk.Frame):
         return row.wbs_path if row else ()
 
     def _add_supplemental_wbs(self) -> None:
+        if self.operation_active:
+            return
         if not self.store.activities_by_id:
             messagebox.showwarning(tr('Progress tree'), tr('Load a Progress workbook first.'))
             return
@@ -651,12 +833,14 @@ class AmountMappingFrame(ttk.Frame):
         try:
             self.store.add_supplemental_wbs(parent_path=parent_path, code=code, name=name)
             self._render_activities()
-            self._autosave_session()
-            self._notify("WBS created. It is selected for the next sub-WBS or Activity.")
+            if self._autosave_session():
+                self._notify("WBS created. It is selected for the next sub-WBS or Activity.")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _add_supplemental_activity(self) -> None:
+        if self.operation_active:
+            return
         if not self.store.activities_by_id:
             messagebox.showwarning(tr('Progress tree'), tr('Load a Progress workbook first.'))
             return
@@ -683,12 +867,14 @@ class AmountMappingFrame(ttk.Frame):
             self.store.collapsed_wbs_paths.discard(self.store.wbs_path_key(parent_path))
             self._render_activities()
             self._update_summary()
-            self._autosave_session()
-            self._notify("Activity created")
+            if self._autosave_session():
+                self._notify("Activity created")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _edit_progress_node(self) -> None:
+        if self.operation_active:
+            return
         node = self.store.selected_working_node()
         if node is None:
             messagebox.showwarning(tr('Progress tree'), tr('Select a WBS or Activity to edit.'))
@@ -706,12 +892,14 @@ class AmountMappingFrame(ttk.Frame):
             self._render_activities()
             self._render_boq()
             self._update_summary()
-            self._autosave_session()
-            self._notify("Progress tree updated")
+            if self._autosave_session():
+                self._notify("Progress tree updated")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _delete_progress_node(self) -> None:
+        if self.operation_active:
+            return
         node = self.store.selected_working_node()
         if node is None:
             messagebox.showwarning(tr('Progress tree'), tr('Select a WBS or Activity to delete.'))
@@ -727,45 +915,53 @@ class AmountMappingFrame(ttk.Frame):
             self._render_activities()
             self._render_boq()
             self._update_summary()
-            self._autosave_session()
-            self._notify("Progress node deleted")
+            if self._autosave_session():
+                self._notify("Progress node deleted")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _move_progress_node(self, offset: int) -> None:
+        if self.operation_active:
+            return
         try:
             if not self.store.move_selected_node(offset):
                 self._notify("Node is already at the edge of its group")
                 return
             self._render_activities()
-            self._autosave_session()
-            self._notify("Progress node reordered")
+            if self._autosave_session():
+                self._notify("Progress node reordered")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _indent_progress_node(self) -> None:
+        if self.operation_active:
+            return
         try:
             self.store.indent_selected_node()
             self._render_activities()
             self._render_boq()
             self._update_summary()
-            self._autosave_session()
-            self._notify("Progress node indented")
+            if self._autosave_session():
+                self._notify("Progress node indented")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _outdent_progress_node(self) -> None:
+        if self.operation_active:
+            return
         try:
             self.store.outdent_selected_node()
             self._render_activities()
             self._render_boq()
             self._update_summary()
-            self._autosave_session()
-            self._notify("Progress node outdented")
+            if self._autosave_session():
+                self._notify("Progress node outdented")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _reparent_progress_node(self) -> None:
+        if self.operation_active:
+            return
         node = self.store.selected_working_node()
         if node is None:
             messagebox.showwarning(tr('Progress tree'), tr('Select a WBS or Activity to move.'))
@@ -809,30 +1005,34 @@ class AmountMappingFrame(ttk.Frame):
         try:
             self.store.reparent_selected_node(selected[0])
             self._render_activities()
-            self._autosave_session()
-            self._notify("Progress node moved")
+            if self._autosave_session():
+                self._notify("Progress node moved")
         except ValueError as exc:
             messagebox.showerror(tr('Progress tree'), tr("error.details", error=str(exc)))
 
     def _undo_tree_edit(self) -> None:
+        if self.operation_active:
+            return
         if not self.store.undo_tree_edit():
             self._notify("Nothing to undo in the progress tree")
             return
         self._render_activities()
         self._render_boq()
         self._update_summary()
-        self._autosave_session()
-        self._notify("Tree edit undone")
+        if self._autosave_session():
+            self._notify("Tree edit undone")
 
     def _redo_tree_edit(self) -> None:
+        if self.operation_active:
+            return
         if not self.store.redo_tree_edit():
             self._notify("Nothing to redo in the progress tree")
             return
         self._render_activities()
         self._render_boq()
         self._update_summary()
-        self._autosave_session()
-        self._notify("Tree edit redone")
+        if self._autosave_session():
+            self._notify("Tree edit redone")
 
     def _apply_activity_filter(self) -> None:
         self.store.activity_query = self.activity_filter.get()
@@ -851,6 +1051,8 @@ class AmountMappingFrame(ttk.Frame):
         therefore appear below their selected parent instead of being appended
         after the workbook-derived flat activity list.
         """
+        focused = self.activity_tree.focus()
+        position = self.activity_tree.yview()
         self.activity_tree.delete(*self.activity_tree.get_children())
         self._wbs_header_paths.clear()
         page = self.store.activity_page_data()
@@ -937,6 +1139,11 @@ class AmountMappingFrame(ttk.Frame):
             tr('Rows {value1}-{value2} of {value3} | Page {value4}/{value5}', value1=page.start, value2=page.end, value3=page.total, value4=page.number, value5=page.pages)
         )
 
+        if focused and self.activity_tree.exists(focused):
+            self.activity_tree.focus(focused)
+        if position:
+            self.activity_tree.yview_moveto(position[0])
+
     def _boq_values(self, key: str) -> tuple[str, ...]:
         row = self.store.boq_by_id[key]
         return (
@@ -953,13 +1160,45 @@ class AmountMappingFrame(ttk.Frame):
         )
 
     def _render_boq(self) -> None:
-        self.boq_tree.delete(*self.boq_tree.get_children())
+        tree = self.boq_tree
+        focused, position = tree.focus(), tree.yview()
+        closed = {key for key in getattr(self, '_boq_groups', ()) if tree.exists(key) and not tree.item(key, 'open')}
+        tree.delete(*tree.get_children())
+        tree.configure(show='tree headings', displaycolumns=('check', 'description', 'amount', 'remaining', 'mapped'))
+        tree.heading('#0', text=tr('ux.hierarchy'))
+        tree.column('#0', width=150, minwidth=75, stretch=False)
+        self._boq_groups = set()
         page = self.store.boq_page_data()
+        import hashlib
         for key in page.ids:
-            self.boq_tree.insert("", "end", iid=key, values=self._boq_values(key))
-        self.boq_empty_var.set("" if page.total else tr("No matching BOQ items" if self.boq_sheet else "No BOQ worksheet loaded"))
+            row = self.store.boq_by_id[key]
+            parent, path = '', []
+            for value in (row.wbs2, row.wbs3, row.wbs4):
+                if not value:
+                    continue
+                path.append(value)
+                group = '__group__' + hashlib.sha256(repr(tuple(path)).encode('utf-8')).hexdigest()
+                if not tree.exists(group):
+                    tree.insert(parent, 'end', iid=group, text=value, open=group not in closed)
+                    self._boq_groups.add(group)
+                parent = group
+            tree.insert(parent, 'end', iid=key, text=key, values=self._boq_values(key))
+        if focused and tree.exists(focused):
+            tree.focus(focused)
+        if position:
+            tree.yview_moveto(position[0])
+        self.boq_empty_var.set('' if page.total else tr('No matching BOQ items' if self.boq_sheet else 'No BOQ worksheet loaded'))
         self.boq_page_var.set(tr('Rows {value1}-{value2} of {value3} | Page {value4}/{value5}', value1=page.start, value2=page.end, value3=page.total, value4=page.number, value5=page.pages))
         self._update_boq_selection_status()
+        self._show_empty_labels()
+
+    def _show_empty_labels(self):
+        for label, variable in ((self.activity_empty_label, self.activity_empty_var), (self.boq_empty_label, self.boq_empty_var)):
+            if variable.get():
+                if not label.winfo_manager():
+                    label.pack(fill='x', after=label.master.winfo_children()[0])
+            else:
+                label.pack_forget()
 
     def _refresh_changed_rows(self, change) -> None:
         """Update visible rows only; the memory store remains the source of truth."""
@@ -980,6 +1219,11 @@ class AmountMappingFrame(ttk.Frame):
         if self.activity_tree.identify_region(event.x, event.y) != "cell":
             return None
         item = self.activity_tree.identify_row(event.y)
+        if item:
+            self.activity_tree.focus(item)
+            self.activity_tree.focus_set()
+        if getattr(self, 'operation_active', False):
+            return 'break'
         if item in self._wbs_header_paths:
             path = self._wbs_header_paths[item]
             self.store.select_wbs(path)
@@ -995,14 +1239,17 @@ class AmountMappingFrame(ttk.Frame):
             for activity_id in previous | self.store.selected_activity_ids:
                 if self.activity_tree.exists(activity_id):
                     self.activity_tree.set(activity_id, "check", "☑" if activity_id in self.store.selected_activity_ids else "☐")
+        self._update_boq_selection_status()
         return "break"
 
     def _boq_click(self, event) -> str | None:
         if self.boq_tree.identify_region(event.x, event.y) != "cell" or self.boq_tree.identify_column(event.x) != "#1":
             return None
         item = self.boq_tree.identify_row(event.y)
-        if not item:
+        if not item or item not in self.store.boq_by_id or getattr(self, 'operation_active', False):
             return "break"
+        self.boq_tree.focus(item)
+        self.boq_tree.focus_set()
         full_mapping = self.store.mapped_to_text(item)
         self.boq_mapping_detail_var.set(full_mapping or tr("Not mapped"))
         previous = set(self.store.selected_boq_ids)
@@ -1019,19 +1266,29 @@ class AmountMappingFrame(ttk.Frame):
         return "break"
 
     def _update_boq_selection_status(self) -> None:
+        selected = ', '.join(sorted(self.store.selected_activity_ids)) or '—'
+        visible = set(self.store.boq_page_data().ids)
+        hidden = len(self.store.selected_boq_ids - visible)
+        self.allocation_var.set(tr('ux.allocation_context', activity=selected, count=len(self.store.selected_boq_ids), hidden=hidden))
         self.boq_selection_var.set(
             tr('Selected {value1:,} items | {value2:,.2f}', value1=len(self.store.selected_boq_ids), value2=self.store.selected_boq_amount)
         )
 
     def _select_boq_page(self) -> None:
+        if self.operation_active:
+            return
         self.store.select_boq_page()
         self._render_boq()
 
     def _select_all_filtered_boq(self) -> None:
+        if self.operation_active:
+            return
         self.store.select_all_filtered_boq()
         self._render_boq()
 
     def _clear_boq_selection(self) -> None:
+        if self.operation_active:
+            return
         self.store.clear_boq_selection()
         self._render_boq()
 
@@ -1070,37 +1327,45 @@ class AmountMappingFrame(ttk.Frame):
         )
 
     def _map(self) -> None:
+        if getattr(self, "operation_active", False):
+            return
         try:
             if not self._confirm_batch_mapping("Map"):
                 return
             change = self.store.map_selected(self.share_var.get())
             self._refresh_changed_rows(change)
-            self._autosave_session()
-            self._notify("Mapping saved")
+            if self._autosave_session():
+                self._notify("Mapping saved")
         except ValueError as exc:
             messagebox.showwarning(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
     def _unmap(self) -> None:
+        if getattr(self, "operation_active", False):
+            return
         try:
             if not self._confirm_batch_mapping("Unmap"):
                 return
             change = self.store.unmap_selected()
             self._refresh_changed_rows(change)
-            self._autosave_session()
-            self._notify("Mapping removed")
+            if self._autosave_session():
+                self._notify("Mapping removed")
         except ValueError as exc:
             messagebox.showwarning(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
     def _undo(self) -> None:
+        if getattr(self, "operation_active", False):
+            return
         change = self.store.undo()
         if change is None:
             messagebox.showinfo(tr('Amount Mapping'), tr('Nothing to undo.'))
             return
         self._refresh_changed_rows(change)
-        self._autosave_session()
-        self._notify("Undo complete")
+        if self._autosave_session():
+            self._notify("Undo complete")
 
     def _clear_all(self) -> None:
+        if getattr(self, "operation_active", False):
+            return
         if not messagebox.askyesno(
             tr('Amount Mapping'),
             tr('Clear every mapping? You can use Undo immediately after this command.'),
@@ -1164,20 +1429,26 @@ class AmountMappingFrame(ttk.Frame):
         session = self._session_data()
         saved = self.session_repository.save(path, session)
         self.session_file = saved
-        self.recent_repository.remember(saved)
+        self.session_dirty = False
+        try:
+            self.recent_repository.remember(saved)
+        except OSError:
+            self.operation_status_var.set(tr('ux.recent_unavailable'))
         self.session_status_var.set(tr('Project: {value1} (saved)', value1=saved.name))
         if show_message:
             messagebox.showinfo(tr('Amount Mapping'), tr('Project saved:\n{value1}', value1=saved))
         return saved
 
     def _save_session(self) -> None:
+        if self.operation_active:
+            return
         initial = self.session_file or self._default_session_path()
         if initial is None:
             messagebox.showwarning(tr('Amount Mapping'), tr('Load a Progress workbook first.'))
             return
         selected = filedialog.asksaveasfilename(
             title=tr('Save Progress Studio project'),
-            defaultextension=".json",
+            defaultextension=".progressstudio",
             initialfile=initial.name,
             initialdir=str(initial.parent),
             filetypes=[("Progress Studio project", "*.progressstudio")],
@@ -1189,18 +1460,28 @@ class AmountMappingFrame(ttk.Frame):
         except Exception as exc:
             messagebox.showerror(tr('Amount Mapping'), tr("error.details", error=str(exc)))
 
-    def _autosave_session(self) -> None:
+    def _autosave_session(self) -> bool:
+        if self.operation_active:
+            return False
+        self.session_dirty = True
+        self.operation_status_var.set(tr('ux.mapping_unsaved'))
+        prior = getattr(self, '_toast', None)
+        if prior is not None and prior.winfo_exists():
+            prior.destroy()
         if self.session_file is None:
             self.session_file = self._default_session_path()
         if self.session_file is None:
             self.session_status_var.set(tr('Project: waiting for both workbooks'))
-            return
+            return False
         try:
             self._write_session(self.session_file, show_message=False)
             self.session_status_var.set(tr('Auto-saved'))
+            self.operation_status_var.set(tr('Ready'))
+            return True
         except Exception as exc:
             self.session_status_var.set(tr('Project: auto-save failed'))
             messagebox.showerror(tr('Amount Mapping'), tr('Auto-save failed:\n{value1}', value1=exc))
+            return False
 
     def _choose_recent_session(self, paths: list[Path]) -> Path | None:
         dialog = tk.Toplevel(self)
@@ -1230,6 +1511,8 @@ class AmountMappingFrame(ttk.Frame):
         return selected[0] if selected else None
 
     def _load_recent_session(self) -> None:
+        if self.operation_active:
+            return
         paths = self.recent_repository.list()
         if not paths:
             messagebox.showinfo(tr('Amount Mapping'), tr('No recent projects were found.'))
@@ -1239,6 +1522,8 @@ class AmountMappingFrame(ttk.Frame):
             self._restore_session(selected)
 
     def _load_session(self) -> None:
+        if self.operation_active:
+            return
         selected = filedialog.askopenfilename(
             title=tr('Open Progress Studio project'),
             filetypes=[("Progress Studio project", "*.progressstudio"), ("All files", "*.*")],
@@ -1276,6 +1561,8 @@ class AmountMappingFrame(ttk.Frame):
             return self.session_repository.validate_workbook(saved, Path(selected))
 
     def _restore_session(self, session_path: Path) -> None:
+        if self.operation_active or not self._confirm_replace():
+            return
         try:
             self._busy(True)
             session = self.session_repository.load(session_path)
@@ -1315,6 +1602,7 @@ class AmountMappingFrame(ttk.Frame):
             self.boq_sheet_combo.configure(values=sheet_names, state="readonly")
             self.boq_sheet_var.set(session.boq_sheet)
             self.load_sheet_button.configure(state="normal")
+            self.session_dirty = False
             self.session_file = Path(session_path).resolve()
             self.recent_repository.remember(self.session_file)
             self.session_status_var.set(tr('Project: {value1} (loaded)', value1=self.session_file.name))
@@ -1330,6 +1618,8 @@ class AmountMappingFrame(ttk.Frame):
             self._busy(False)
 
     def _export(self, edited_workbook: Path | None = None) -> None:
+        if getattr(self, "operation_active", False):
+            return
         if not self.progress_file:
             messagebox.showwarning(tr('Amount Mapping'), tr('Load a Progress workbook first.'))
             return
@@ -1394,6 +1684,7 @@ class AmountMappingFrame(ttk.Frame):
             name="progress-studio-workbook-export",
             daemon=True,
         )
+        self._export_worker = worker
         worker.start()
 
         def poll_events() -> None:

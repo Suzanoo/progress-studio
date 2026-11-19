@@ -86,7 +86,7 @@ def configure_styles(root: tk.Misc) -> None:
     style.configure("Card.TFrame", background=p.surface, relief="solid", borderwidth=1)
     style.configure("Card.TLabel", background=p.surface, foreground=p.text)
     style.configure("Accent.TButton", font=(FONT_UI, 9, "bold"), padding=(14, 7))
-    style.map("Accent.TButton", background=[("active", p.primary_dark), ("!disabled", p.primary)], foreground=[("!disabled", p.text)])
+    style.map("Accent.TButton", background=[("active", p.primary_dark), ("!disabled", p.primary)], foreground=[("!disabled", "#FFFFFF")])
     style.configure("Sidebar.TButton", anchor="w", padding=(14, 10), font=(FONT_UI, 9), background=p.sidebar, foreground=p.sidebar_text, borderwidth=0)
     style.map("Sidebar.TButton", background=[("active", p.sidebar_hover)])
     style.configure("SidebarActive.TButton", anchor="w", padding=(14, 10), font=(FONT_UI, 10, "bold"), background=p.primary, foreground=p.text, borderwidth=0)

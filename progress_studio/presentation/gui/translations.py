@@ -580,3 +580,44 @@ GUIDE.update({
     'bpr.omitted': ('Rows with unavailable period amounts: {count}. See Source details.',
                     'ไม่ทราบยอดงวดของ {count} แถว ดูรายละเอียดต้นทาง'),
 })
+
+# UX-1 Fieldwork desktop: text stays at the presentation boundary.
+GUIDE.update({
+    'ux.check_source': ('Check source', 'ตรวจสอบไฟล์'),
+    'ux.source_changed': ('Source changed. Check this workbook before continuing.', 'ไฟล์เปลี่ยนแล้ว กรุณาตรวจสอบก่อนทำงานต่อ'),
+    'ux.close_unsaved': ('Mapping changes are not saved. Close and discard these in-memory changes?', 'การจับคู่ยังไม่ได้บันทึก ต้องการปิดและทิ้งการเปลี่ยนแปลงในหน่วยความจำหรือไม่?'),
+    'ux.structure': ('Structure', 'โครงสร้าง'),
+    'ux.hierarchy': ('BOQ WBS / Item', 'WBS / รายการ BOQ'),
+    'ux.retry_save': ('Retry save', 'บันทึกอีกครั้ง'),
+    'ux.copied': ('Copied {count} selected rows', 'คัดลอก {count} รายการแล้ว'),
+    'ux.copy_selected': ('Copy selected rows', 'คัดลอกรายการที่เลือก'),
+    'ux.ev': ('Earned Value', 'Earned Value'),
+    'ux.ev_help': ('Generate or refresh EV using an explicit monetary source.', 'สร้างหรืออัปเดต EV โดยเลือกแหล่งมูลค่าให้ชัดเจน'),
+    'ux.xml_help': ('Review workbook Amounts and export a separate P6 XML.', 'ตรวจสอบ Amount แล้วส่งออก P6 XML เป็นไฟล์ใหม่'),
+    'ux.create_output': ('Creates a Progress workbook. Payment and EV are separate tasks.', 'สร้าง Workbook ความก้าวหน้า งาน Payment และ EV ทำแยกต่างหาก'),
+    'ux.creating': ('Creating workbook. Wait for the completed output.', 'กำลังสร้าง Workbook โปรดรอไฟล์ผลลัพธ์'),
+    'ux.create_ready': ('Ready: {path}\nNext: edit Actual progress in Excel, press F9 and Save.', 'พร้อมใช้งาน: {path}\nขั้นต่อไป: กรอกผลงานจริงใน Excel กด F9 แล้วบันทึก'),
+    'ux.create_failed': ('Creation failed. Your inputs remain available; review the error and retry.', 'สร้างไม่สำเร็จ ข้อมูลที่เลือกยังอยู่ กรุณาตรวจสอบข้อผิดพลาดแล้วลองอีกครั้ง'),
+})
+
+GUIDE.update({
+    'ux.allocation_context': ('Activity: {activity} | BOQ: {count} selected ({hidden} off page)', 'กิจกรรม: {activity} | BOQ: เลือก {count} รายการ ({hidden} นอกหน้า)'),
+})
+
+GUIDE.update({
+    'ux.cut': ('Cut', 'ตัด'),
+    'ux.copy': ('Copy', 'คัดลอก'),
+    'ux.paste': ('Paste', 'วาง'),
+    'ux.select_all': ('Select all', 'เลือกทั้งหมด'),
+    'ux.guide.mapping': ('Mapping keyboard', 'แป้นพิมพ์ใน Mapping'),
+    'ux.guide.mapping_help': ('Tab moves focus. Arrows navigate; Space checks the focused leaf. Ctrl+Space adds/removes BOQ checks; Shift+Up/Down selects a range. Ctrl+A selects the current BOQ page; use the selection menu for all filtered items. Ctrl+C copies checked rows. Delete unmaps only with a Mapping Tree focused. Structure edits have separate Undo/Redo. Drag the divider or focus it and use Left/Right. F11 enters Focus Mapping; Escape exits. Inputs can be folded to give the Trees more height.', 'Tab ย้ายโฟกัส ลูกศรเลื่อนแถว Space เลือกรายการ Ctrl+Space เพิ่ม/เอา BOQ ออกจากการเลือก Shift+ขึ้น/ลง เลือกช่วง Ctrl+A เลือก BOQ หน้าปัจจุบัน เมนูเลือกใช้เลือกทั้งหมดที่กรอง Ctrl+C คัดลอก Delete ยกเลิก Mapping เมื่อโฟกัสอยู่ที่ Tree เท่านั้น การแก้โครงสร้างมี Undo/Redo แยก ลากตัวแบ่งหรือโฟกัสแล้วกดซ้าย/ขวา F11 เข้า Focus Mapping และ Escape ออก พับส่วนไฟล์ต้นทางเพื่อเพิ่มพื้นที่ Tree'),
+    'ux.guide.sources': ('Each task owns its sources', 'แต่ละงานเลือกไฟล์ต้นทางของตนเอง'),
+    'ux.guide.sources_help': ('Create uses schedule XML. Mapping uses Progress and BOQ. Payment and Rebuild use the workbook selected in that workspace. BOQ reports review their own saved sources; they do not save unsaved Mapping. Changing Payment source text requires Check source again. A failed Mapping save leaves changes in memory: Retry save or Save As before closing.', 'Create ใช้ XML ส่วน Mapping ใช้ Progress กับ BOQ Payment และ Rebuild ใช้ไฟล์ที่เลือกในหน้านั้น รายงาน BOQ ตรวจสอบไฟล์ที่บันทึกแล้วและไม่บันทึก Mapping ที่ค้างไว้ เมื่อแก้ชื่อไฟล์ Payment ให้ตรวจสอบไฟล์อีกครั้ง หากบันทึก Mapping ไม่สำเร็จ ข้อมูลยังอยู่ในหน่วยความจำ ให้ลองบันทึกใหม่หรือ Save As ก่อนปิด'),
+})
+
+GUIDE.update({
+    'ux.replace_unsaved': ('Mapping changes have not been saved. Replace this workspace and discard those changes? Choose No to Retry save or Save As first.', 'การเปลี่ยนแปลง Mapping ยังไม่ได้บันทึก ต้องการแทนที่ข้อมูลและทิ้งการเปลี่ยนแปลงหรือไม่ เลือก No เพื่อลองบันทึกใหม่หรือ Save As ก่อน'),
+    'ux.recent_unavailable': ('Project saved; recent-project history could not be updated.', 'บันทึก Project แล้ว แต่ปรับปรุงประวัติรายการล่าสุดไม่ได้'),
+})
+
+GUIDE.update({'ux.mapping_unsaved': ('Changes in memory — not saved', 'ข้อมูลเปลี่ยนในหน่วยความจำ — ยังไม่ได้บันทึก')})

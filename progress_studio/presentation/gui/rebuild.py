@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from progress_studio.presentation.gui.strings import tr
+from progress_studio.presentation.gui.interaction import scroll_content
 
 import os
 import sys
@@ -104,34 +105,7 @@ class RebuildFrame(ttk.Frame):
         panel.bind("<Configure>", _sync_scroll_region)
         canvas.bind("<Configure>", _sync_panel_width)
 
-        def _on_mousewheel(event) -> str:
-            # Windows/macOS report MouseWheel; Linux/X11 uses Button-4/5.
-            if getattr(event, "num", None) == 4:
-                units = -3
-            elif getattr(event, "num", None) == 5:
-                units = 3
-            else:
-                delta = getattr(event, "delta", 0)
-                if delta == 0:
-                    return "break"
-                units = -1 if delta > 0 else 1
-            canvas.yview_scroll(units, "units")
-            return "break"
-
-        def _enable_mousewheel(_event=None) -> None:
-            canvas.bind_all("<MouseWheel>", _on_mousewheel)
-            canvas.bind_all("<Button-4>", _on_mousewheel)
-            canvas.bind_all("<Button-5>", _on_mousewheel)
-
-        def _disable_mousewheel(_event=None) -> None:
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-
-        canvas.bind("<Enter>", _enable_mousewheel)
-        canvas.bind("<Leave>", _disable_mousewheel)
-        panel.bind("<Enter>", _enable_mousewheel)
-        panel.bind("<Leave>", _disable_mousewheel)
+        scroll_content(canvas, panel)
 
         ttk.Label(panel, text=tr('Rebuild Workbook'), style="Title.TLabel").grid(
             row=0, column=0, sticky="w"

@@ -37,7 +37,7 @@ def test_finish1_welcome_is_workflow_first_and_create_is_clean() -> None:
     assert 'self._show_workspace("home")' in source
     from progress_studio.presentation.gui.quick_guide import HOME_CARDS
     from progress_studio.presentation.gui.strings import tr
-    assert [card[2] for card in HOME_CARDS] == ["import", "rebuild", "mapping", "payment"]
+    assert [card[2] for card in HOME_CARDS] == ["import", "rebuild", "mapping", "payment", "ev", "xml"]
     assert tr("home.optional", locale="en") == "Optional"
     assert "build_home" in source
 

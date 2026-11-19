@@ -3,10 +3,12 @@ from tkinter import ttk
 import tkinter as tk
 
 from .strings import tr
+from .interaction import scroll_content
+from .theme import PALETTE
 
 
 def page(parent):
-    canvas = tk.Canvas(parent, highlightthickness=0, background="#FAF9F6")
+    canvas = tk.Canvas(parent, highlightthickness=0, background=PALETTE.canvas)
     scroll = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=scroll.set)
     scroll.pack(side="right", fill="y")
@@ -15,6 +17,7 @@ def page(parent):
     item = canvas.create_window((0, 0), window=body, anchor="nw")
     body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
     canvas.bind("<Configure>", lambda e: canvas.itemconfigure(item, width=e.width))
+    scroll_content(canvas, body)
     return body
 
 
@@ -30,6 +33,8 @@ HOME_CARDS = (
     ("home.rebuild", "home.rebuild_help", "rebuild"),
     ("home.mapping", "home.mapping_help", "mapping"),
     ("home.payment", "home.payment_help", "payment"),
+    ("ux.ev", "ux.ev_help", "ev"),
+    ("xw.title", "ux.xml_help", "xml"),
 )
 
 
@@ -44,8 +49,10 @@ def build_home(parent, navigate):
     cards.pack(fill="both", expand=True)
     for col in (0, 1):
         cards.columnconfigure(col, weight=1, uniform="home")
+    tiles = []
     for index, (title, description, target) in enumerate(HOME_CARDS):
         card = ttk.Frame(cards, style="Card.TFrame", padding=18)
+        tiles.append(card)
         card.grid(row=index // 2, column=index % 2, sticky="nsew", padx=5, pady=5)
         label(card, title, "WorkspaceTitle.TLabel")
         if index > 1:
@@ -54,6 +61,12 @@ def build_home(parent, navigate):
         ttk.Button(card, text=tr(title if index < 2 else "Open"),
                    style="Accent.TButton" if index == 0 else "TButton",
                    command=lambda key=target: navigate(key)).pack(fill="x", pady=(8, 0))
+    def reflow(event):
+        columns = 2 if event.width >= 620 else 1
+        for index, card in enumerate(tiles):
+            card.grid_configure(row=index // columns, column=index % columns)
+        cards.columnconfigure(1, weight=1 if columns == 2 else 0)
+    cards.bind('<Configure>', reflow)
 
 
 def build_help(parent, navigate):
@@ -72,6 +85,10 @@ def build_help(parent, navigate):
             ttk.Label(step, text=str(index) + ("  →" if index < 3 else ""), style="Section.TLabel").pack(anchor="w")
             label(step, f"guide.{flow}.{index}", "Section.TLabel")
             label(step, f"guide.{flow}.{index}.help")
+    label(body, 'ux.guide.mapping', 'Section.TLabel')
+    label(body, 'ux.guide.mapping_help')
+    label(body, 'ux.guide.sources', 'Section.TLabel')
+    label(body, 'ux.guide.sources_help')
     label(body, "guide.rebuild_note")
     label(body, "guide.optional", "Section.TLabel")
     label(body, "guide.ev_note")

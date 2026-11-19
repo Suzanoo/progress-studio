@@ -9,6 +9,7 @@ This index separates **using the application**, **understanding features**, and 
 | Topic | Document |
 | --- | --- |
 | Create, update, and rebuild workbooks | [User workflow](USER_WORKFLOW.md) |
+| UX-1 desktop controls and source safety | [UX-1 desktop experience](UX1_DESKTOP_EXPERIENCE.md) |
 | Desktop navigation and ENG/THA | [V1.1 product experience](V1_1_PRODUCT_EXPERIENCE.md) |
 | Weekly/Monthly and compact presentation | [Weekly Compact](WEEKLY_COMPACT.md) |
 | Payment Input and Breakdown | [Payment Input](PAYMENT_INPUT.md) · [Payment Breakdown](PAYMENT_BREAKDOWN.md) |

@@ -39,7 +39,8 @@ def test_manual_creation_starts_worker_without_xml_field_preview(tmp_path, monke
         weight_basis_var=Mock(get=lambda:'amount'),amount_initialization_var=Mock(get=lambda:'manual_placeholder'),
         amount_field=None,cutoff_var=Mock(get=lambda:'5 - Friday'),distribution_var=Mock(get=lambda:'flat'),
         progress_var=Mock(),status_var=Mock(),step_var=Mock(),run_button=Mock(),
-        open_file_button=Mock(),open_folder_button=Mock(),log=Mock(),_run_worker=Mock())
+        open_file_button=Mock(),open_folder_button=Mock(),log=Mock(),_run_worker=Mock(),
+        _set_create_inputs=Mock(),create_result_var=Mock())
     ProgressStudioDesktopApp._start(form)
     errors.assert_not_called();thread.start.assert_called_once()
     options=factory.call_args.kwargs['args'][0]

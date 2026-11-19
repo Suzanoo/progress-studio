@@ -42,3 +42,7 @@ The accepted BP-4 workflow is **Prepare BOQ Requirements → BOQ Requirement Inp
 ## Historical evidence
 
 Historical accepted test counts are retained in [Changelog](../CHANGELOG.md) and feature contracts. They are **not** a claim of a current full-regression run. The [pre-production roadmap](history/PRE_PRODUCTION_ROADMAP.md) is archival and does not authorize old milestones.
+
+## Retained cancellation
+
+MS-3 Planning Overview / Mini Gantt remains cancelled; UX-1 does not revive it.

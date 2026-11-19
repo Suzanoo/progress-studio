@@ -269,7 +269,7 @@ def test_shell_routes_finance_and_prevents_close_during_work(monkeypatch):
         workspace_frames={"finance": frame}, current_workspace="home",
         WORKSPACES=ProgressStudioDesktopApp.WORKSPACES,
         workspace_title_var=Mock(), sidebar_buttons={"finance": Mock()}, command_bar=Mock(),
-        finance_workspace=SimpleNamespace(busy=True), _save_layout_preferences=Mock(), destroy=Mock(),
+        finance_workspace=SimpleNamespace(busy=True), winfo_children=lambda: [], _save_layout_preferences=Mock(), destroy=Mock(),
     )
     ProgressStudioDesktopApp._show_workspace(shell, "finance")
     frame.tkraise.assert_called_once()

@@ -23,7 +23,7 @@ def test_review_update_transaction(tmp_path,monkeypatch,action):
         return action!='cancel'
     monkeypatch.setattr(ui,'review_boq_update',review)
     if action=='failure':monkeypatch.setattr(c.repo,'save',Mock(side_effect=OSError('disk full')))
-    frame=SimpleNamespace(session_file=c.project,progress_file=c.progress,boq_file=c.old,
+    frame=SimpleNamespace(operation_active=False,session_file=c.project,progress_file=c.progress,boq_file=c.old,
                           boq_sheet='Project',session_repository=c.repo,store=c.store,
                           _session_data=lambda:c.session,boq_path_var=Mock(),session_status_var=Mock(),
                           _busy=Mock(),_refresh_boq_filter_values=Mock(),_render_boq=Mock(),
@@ -47,7 +47,7 @@ def test_review_update_transaction(tmp_path,monkeypatch,action):
 def test_cancel_file_picker_does_not_build_or_save_project(monkeypatch):
     monkeypatch.setattr(ui.messagebox,'showinfo',Mock())
     monkeypatch.setattr(ui.filedialog,'askopenfilename',lambda **k:'')
-    frame=SimpleNamespace(session_file='a',progress_file='b',boq_file='c',boq_sheet='Project',
+    frame=SimpleNamespace(operation_active=False,session_file='a',progress_file='b',boq_file='c',boq_sheet='Project',
                           _session_data=Mock(side_effect=AssertionError('must not run')))
     ui.AmountMappingFrame._update_boq(frame)
     frame._session_data.assert_not_called()

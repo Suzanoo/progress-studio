@@ -110,7 +110,9 @@ contract.
 
 ## 4. V1.1 navigation and help
 
-Home shows Create/Rebuild as primary actions and Mapping/Payment as optional.
+Home shows Create/Rebuild as primary actions, with Mapping, Payment, Earned Value
+and P6 XML Amount export as independent tasks. See [UX-1 desktop controls](UX1_DESKTOP_EXPERIENCE.md)
+for keyboard behavior, source checks, save recovery and constrained-window use.
 Home's View guide and the persistent Help entry open the same first-time/cycle guide.
 Select ENG or THA at the top right. The saved preference applies on the next launch;
 current work is not restarted. Workbook formulas, sheet names and identities stay unchanged.

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from progress_studio.presentation.gui.strings import tr
+from progress_studio.presentation.gui.interaction import scroll_content
 
 import os
+import queue
 import sys
 import threading
 import tkinter as tk
@@ -52,7 +54,11 @@ class PaymentFrame(ttk.Frame):
         self._breakdown_output_path: Path | None = None
         self._worker: threading.Thread | None = None
 
+        self._events = queue.Queue()
+        self._busy = False
         self._build_ui()
+        self.workbook_var.trace_add("write", self._path_changed)
+        self.after(60, self._poll_results)
 
     def _build_ui(self) -> None:
         # Scroll the complete Payment workspace, including the BOQ Payment card.
@@ -77,33 +83,7 @@ class PaymentFrame(ttk.Frame):
         panel.bind("<Configure>", update_region)
         canvas.bind("<Configure>", update_width)
 
-        def wheel(event):
-            if not canvas.winfo_exists():
-                return
-            if getattr(event, "num", None) == 4:
-                step = -1
-            elif getattr(event, "num", None) == 5:
-                step = 1
-            else:
-                delta = getattr(event, "delta", 0)
-                if not delta:
-                    return
-                step = -1 if delta > 0 else 1
-            canvas.yview_scroll(step, "units")
-            return "break"
-
-        def enter(_event):
-            canvas.bind_all("<MouseWheel>", wheel)
-            canvas.bind_all("<Button-4>", wheel)
-            canvas.bind_all("<Button-5>", wheel)
-
-        def leave(_event):
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-
-        container.bind("<Enter>", enter)
-        container.bind("<Leave>", leave)
+        scroll_content(canvas, panel)
 
         def section(row, title):
             card = ttk.Frame(panel, style="Card.TFrame", padding=(12, 7))
@@ -114,8 +94,13 @@ class PaymentFrame(ttk.Frame):
         source = section(0, tr('pu.source'))
         path_bar = ttk.Frame(source)
         path_bar.pack(fill="x")
-        ttk.Entry(path_bar, textvariable=self.workbook_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(path_bar, text=tr('Browse...'), command=self._browse_workbook).pack(side="left", padx=4)
+        self.source_entry = ttk.Entry(path_bar, textvariable=self.workbook_var)
+        self.source_entry.pack(side="left", fill="x", expand=True)
+        self.source_entry.bind("<Return>", lambda _e: self._check_source())
+        self.check_button = ttk.Button(path_bar, text=tr("ux.check_source"), command=self._check_source)
+        self.check_button.pack(side="left")
+        self.browse_button = ttk.Button(path_bar, text=tr('Browse...'), command=self._browse_workbook)
+        self.browse_button.pack(side="left", padx=4)
         self._status_line(source, self.workbook_status_var)
 
         inputs = section(1, tr('pu.input'))
@@ -125,6 +110,8 @@ class PaymentFrame(ttk.Frame):
         self.period_spinbox = ttk.Spinbox(bar, from_=1, to=120, width=5,
                                           textvariable=self.periods_var, state="disabled")
         self.period_spinbox.pack(side="left", padx=5)
+        bar = ttk.Frame(inputs)
+        bar.pack(anchor='w', pady=4)
         self.prepare_button = self._work_button(bar, tr('Prepare Payment Input'), self._prepare)
         self.open_button = self._work_button(bar, tr('Open Result'), self._open_result)
         self._status_line(inputs, self.period_hint_var)
@@ -140,11 +127,11 @@ class PaymentFrame(ttk.Frame):
         boq = section(3, tr('pu.boq'))
         bar = ttk.Frame(boq)
         bar.pack(anchor="w")
-        ttk.Button(bar, text=tr('bp4.prepare'), command=self._prepare_boq_requirements).pack(side="left")
-        ttk.Label(bar, text=tr('pu.save_excel')).pack(side="left", padx=8)
-        ttk.Button(bar, text=tr('bp2.0'), command=self._open_boq_payment).pack(side="left")
+        ttk.Button(bar, text=tr('bp4.prepare'), command=self._prepare_boq_requirements).pack(anchor='w', pady=2)
+        ttk.Label(bar, text=tr('pu.save_excel')).pack(anchor='w', padx=8)
+        ttk.Button(bar, text=tr('bp2.0'), command=self._open_boq_payment).pack(anchor='w', pady=2)
 
-        ttk.Button(bar, text=tr('bpr.word'), command=self._open_boq_word).pack(side="left", padx=4)
+        ttk.Button(bar, text=tr('bpr.word'), command=self._open_boq_word).pack(anchor='w', pady=2)
 
         report = section(4, tr('pr2.title'))
         ttk.Button(report, text=tr('pu.open_report'), command=self._open_plan_report,
@@ -191,7 +178,48 @@ class PaymentFrame(ttk.Frame):
             return
         self._boq_payment_dialog = BOQPaymentDialog(self)
 
+    def _path_changed(self, *_):
+        self._validated_workbook = None
+        for button in (self.prepare_button, self.breakdown_button):
+            button.configure(state="disabled")
+        self.period_spinbox.configure(state="disabled")
+        self.workbook_status_var.set(tr('ux.source_changed'))
+
+    def _check_source(self):
+        if not self._busy and self.workbook_var.get().strip():
+            self._validate(Path(self.workbook_var.get().strip()))
+
+    def _execution_source(self):
+        if self._busy:
+            return None
+        displayed = self.workbook_var.get().strip()
+        if not displayed or self._validated_workbook != Path(displayed):
+            self._path_changed()
+            return None
+        return self._validated_workbook
+
+    def _set_busy(self, busy):
+        self._busy = busy
+        for widget in (self.source_entry, self.browse_button, self.check_button):
+            widget.configure(state="disabled" if busy else "normal")
+        ready = self._validated_workbook is not None and not busy
+        for widget in (self.prepare_button, self.breakdown_button, self.period_spinbox):
+            widget.configure(state="normal" if ready else "disabled")
+
+    def _poll_results(self):
+        try:
+            while True:
+                callback, args = self._events.get_nowait()
+                self._set_busy(False)
+                callback(*args)
+        except queue.Empty:
+            pass
+        if self.winfo_exists():
+            self.after(60, self._poll_results)
+
     def _browse_workbook(self) -> None:
+        if self._busy:
+            return
         selected = filedialog.askopenfilename(
             title=tr('Select Progress Studio workbook'),
             filetypes=[
@@ -206,6 +234,8 @@ class PaymentFrame(ttk.Frame):
         self._validate(Path(selected))
 
     def _validate(self, source: Path) -> None:
+        if self._busy:
+            return
         self._validated_workbook = None
         self._output_path = None
         self._breakdown_output_path = None
@@ -218,7 +248,7 @@ class PaymentFrame(ttk.Frame):
 
         try:
             result = self.service.validate_workbook(source)
-        except PaymentWorkbookError as exc:
+        except (PaymentWorkbookError, OSError, ValueError) as exc:
             self.workbook_status_var.set(tr('Not ready — {value1}', value1=exc))
             return
 
@@ -256,7 +286,7 @@ class PaymentFrame(ttk.Frame):
         self.breakdown_button.configure(state="normal")
 
     def _prepare(self) -> None:
-        source = self._validated_workbook
+        source = self._execution_source()
         if source is None:
             messagebox.showwarning(
                 tr('Payment'),
@@ -298,12 +328,17 @@ class PaymentFrame(ttk.Frame):
         self.open_button.configure(state="disabled")
         self.result_var.set(tr('Preparing Payment Input...'))
 
+        self._set_busy(True)
         self._worker = threading.Thread(
             target=self._prepare_worker,
             args=(source, Path(output), periods),
             daemon=True,
         )
-        self._worker.start()
+        try:
+            self._worker.start()
+        except Exception as exc:
+            self._set_busy(False)
+            self._failed(exc)
 
     def _prepare_worker(
         self,
@@ -318,16 +353,10 @@ class PaymentFrame(ttk.Frame):
                 periods,
             )
         except Exception as exc:
-            self.after(
-                0,
-                lambda: self._failed(exc),
-            )
+            self._events.put((self._failed, (exc,)))
             return
 
-        self.after(
-            0,
-            lambda: self._done(output, stats),
-        )
+        self._events.put((self._done, (output, stats)))
 
     def _done(
         self,
@@ -338,11 +367,11 @@ class PaymentFrame(ttk.Frame):
         self.result_var.set(
             tr('Created {value1} • {value2} periods • {value3:,} activities • {value4:,} preserved', value1=output.name, value2=stats['periods'], value3=stats['activities'], value4=stats['preserved'])
         )
-        self.prepare_button.configure(state="normal")
+        self._set_busy(False)
         self.open_button.configure(state="normal")
 
     def _failed(self, error: Exception) -> None:
-        self.prepare_button.configure(state="normal")
+        self._set_busy(False)
         self.result_var.set(
             tr('Payment Input preparation failed.')
         )
@@ -352,7 +381,7 @@ class PaymentFrame(ttk.Frame):
         )
 
     def _prepare_breakdown(self) -> None:
-        source = self._validated_workbook
+        source = self._execution_source()
         if source is None:
             messagebox.showwarning(
                 tr('Payment'),
@@ -380,12 +409,17 @@ class PaymentFrame(ttk.Frame):
             tr('Building Payment Breakdown...')
         )
 
+        self._set_busy(True)
         self._worker = threading.Thread(
             target=self._prepare_breakdown_worker,
             args=(source, Path(output)),
             daemon=True,
         )
-        self._worker.start()
+        try:
+            self._worker.start()
+        except Exception as exc:
+            self._set_busy(False)
+            self._breakdown_failed(exc)
 
     def _prepare_breakdown_worker(
         self,
@@ -398,19 +432,10 @@ class PaymentFrame(ttk.Frame):
                 output,
             )
         except Exception as exc:
-            self.after(
-                0,
-                lambda: self._breakdown_failed(exc),
-            )
+            self._events.put((self._breakdown_failed, (exc,)))
             return
 
-        self.after(
-            0,
-            lambda: self._breakdown_done(
-                output,
-                snapshot,
-            ),
-        )
+        self._events.put((self._breakdown_done, (output, snapshot)))
 
     def _breakdown_done(
         self,
@@ -421,14 +446,14 @@ class PaymentFrame(ttk.Frame):
         self.breakdown_result_var.set(
             tr('Created {value1} • {value2:,} derived activities • {value3:,} eligible source activities • {value4:,} skipped', value1=output.name, value2=len(snapshot.activities), value3=snapshot.eligible_source_count, value4=len(snapshot.skipped_activity_ids))
         )
-        self.breakdown_button.configure(state="normal")
+        self._set_busy(False)
         self.breakdown_open_button.configure(state="normal")
 
     def _breakdown_failed(
         self,
         error: Exception,
     ) -> None:
-        self.breakdown_button.configure(state="normal")
+        self._set_busy(False)
         self.breakdown_result_var.set(
             tr('Payment Breakdown build failed.')
         )

@@ -84,7 +84,7 @@ def test_navigation_and_home_help_routes():
         "home", "import", "mapping", "payment", "rebuild", "settings", "help")
     registered={row[0] for row in ProgressStudioDesktopApp.WORKSPACES}
     assert {"finance", "ai"} <= registered
-    assert [row[2] for row in quick_guide.HOME_CARDS] == ["import","rebuild","mapping","payment"]
+    assert [row[2] for row in quick_guide.HOME_CARDS] == ["import","rebuild","mapping","payment","ev","xml"]
     assert 'navigate("help")' in inspect.getsource(quick_guide.build_home)
     assert 'self._show_workspace("help")' in inspect.getsource(ProgressStudioDesktopApp._build_menu)
     menu=inspect.getsource(ProgressStudioDesktopApp._build_menu)
