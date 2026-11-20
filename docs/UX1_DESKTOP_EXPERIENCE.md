@@ -62,7 +62,7 @@ or Tree and do not remove another workspace's bindings.
 ## Persistence and operation feedback
 
 Mapping save failure leaves in-memory changes marked unsaved, shows the error,
-and suppresses the saved-success notification. Use Retry save or Save As.
+and suppresses the saved-success notification. Use Mapping > Save to retry, or File > Save As (Ctrl+Shift+S).
 Closing or replacing a dirty Mapping workspace requires an explicit discard
 choice. Project save remains the existing atomic repository operation. Failure
 to update recent-project history does not falsely invalidate a completed save.
@@ -85,9 +85,34 @@ actions and blue selection. Existing S-curve branding is retained. Home, Create,
 Payment, Rebuild, Settings and Help use scoped scrolling; focus reveals controls
 when reached with Tab. Create's Activity Log is expandable; its result includes
 an explicit next step. Payment's independent report actions remain independent
-and are arranged vertically to remain reachable in a narrow workspace.
+and use a horizontal workflow row, with scrolling and focus reveal in narrow windows.
 
 Existing XML, BOQ and report dialogs retain their review, diagnostics, cancellation
 and output-publication services and inherit shared styling/native text controls.
 Workbook formulas, templates, source-reconciliation rules and monetary sources
 are not changed by this desktop work.
+
+## UX-2 refinement
+
+The persistent top Mapping toolbar is removed. The native Mapping menu contains
+Open, Save and Export Mapped Workbook; existing File/keyboard commands remain.
+The single action bar below the Trees is Share %, Map, Unmap, Undo, Clear all.
+By explicit PO decision for UX-2, **Clear all clears checked Activity/BOQ rows
+only**, including off-page checks; it does not clear allocations or Undo history.
+The previous destructive operation remains in the Tree context menu as
+**Clear all mappings…**, with the same confirmation, persistence and Undo.
+
+Workbook Inputs occupies one compact collapsible header, including Update BOQ
+Amounts. BOQ WBS-2/3/4 filters use actual stored hierarchy fields. Changing a
+parent resets descendant filters, preserving checked leaf identities. WBS-4 is
+unavailable when no matching child level exists. Long values are stored intact.
+Filters use wider dropdowns in one row. If the pane is narrow, a horizontal
+scrollbar appears; Tab reveals each focused control. Trees remain independently
+scrollable. No width-dependent Mapping action restriction is introduced.
+
+The Payment BOQ workflow is horizontal. Save in Excel remains informational
+guidance, not an executable application command. Prepare, Excel export and Word
+reports retain independent handlers and eligibility. Scroll/Tab reveal provides
+access on narrower windows; the row does not impose a new workflow dependency.
+Small monochrome Pillow/Tk command images have strong owner references and
+text-only fallback. Native menus retain text for Windows reliability.

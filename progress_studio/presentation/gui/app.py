@@ -141,7 +141,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         self.main_frame = main
 
         self._build_header(main)
-        self._build_command_bar(main)
 
         self.workspace_host = ttk.Frame(main, style="App.TFrame", padding=(10, 8, 10, 6))
         self.workspace_host.grid(row=2, column=0, sticky="nsew")
@@ -177,6 +176,13 @@ class ProgressStudioDesktopApp(tk.Tk):
         file_menu.add_separator()
         file_menu.add_command(label=tr('Exit'), command=self._close_application)
         menu.add_cascade(label=tr('File'), menu=file_menu)
+
+        self.mapping_menu = tk.Menu(menu, tearoff=False)
+        self.mapping_menu.add_command(label=tr('ux2.open'), command=self._defer_mapping('open_project'), accelerator='Ctrl+O')
+        self.mapping_menu.add_command(label=tr('Save'), command=self._defer_mapping('save_project'), accelerator='Ctrl+S')
+        self.mapping_menu.add_command(label=tr('ux2.export'), command=self._defer_mapping('export_workbook'))
+        menu.add_cascade(label=tr('Mapping'), menu=self.mapping_menu)
+
 
         edit_menu = tk.Menu(menu, tearoff=False)
         edit_menu.add_command(label=tr('Undo'), command=self._defer_mapping("undo_mapping"), accelerator="Ctrl+Z")
@@ -225,24 +231,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         selector = ttk.Combobox(self.topbar, textvariable=self.language_var, values=("ENG", "THA"), state="readonly", width=6)
         selector.pack(side="right")
         selector.bind("<<ComboboxSelected>>", self._language_changed)
-
-    def _build_command_bar(self, main: ttk.Frame) -> None:
-        self.command_bar = ttk.Frame(main, style="CommandBar.TFrame", padding=(10, 6))
-        self.command_bar.grid(row=1, column=0, sticky="ew", padx=10, pady=(8, 0))
-        commands = (
-            ("Open", "open_project"), ("Save", "save_project"), ("Save As", "save_project_as"),
-            ("Undo", "undo_mapping"), ("Map", "map_selection"), ("Unmap", "unmap_selection"),
-        )
-        for index, (label, method) in enumerate(commands):
-            if index in (3, 4):
-                ttk.Separator(self.command_bar, orient="vertical").pack(side="left", fill="y", padx=8)
-            style = "Accent.TButton" if label == "Map" else "TButton"
-            ttk.Button(self.command_bar, text=tr(label), style=style, command=self._defer_mapping(method)).pack(side="left", padx=(0, 4))
-        ttk.Button(
-            self.command_bar,
-            text=tr('Export Mapped Workbook'),
-            command=self._defer_mapping("export_workbook"),
-        ).pack(side="right")
 
     def _new_workspace(self, key: str) -> ttk.Frame:
         frame = ttk.Frame(self.workspace_host, style="Card.TFrame", padding=10)
@@ -356,7 +344,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         for name, button in self.sidebar_buttons.items():
             button.configure(style="SidebarActive.TButton" if name == key else "Sidebar.TButton")
         # Mapping commands belong only to the Mapping workspace.
-        self.command_bar.grid() if key == "mapping" else self.command_bar.grid_remove()
 
     def _defer_mapping(self, method_name: str):
         def command() -> None:
@@ -462,7 +449,6 @@ class ProgressStudioDesktopApp(tk.Tk):
         self._show_workspace("mapping")
         self._set_sidebar_collapsed(True, persist=False)
         self.topbar.grid_remove()
-        self.command_bar.grid_remove()
         self.status_bar.grid_remove()
 
     def _exit_focus_mapping(self) -> None:
@@ -470,7 +456,6 @@ class ProgressStudioDesktopApp(tk.Tk):
             return
         self.focus_mapping = False
         self.topbar.grid()
-        self.command_bar.grid()
         self.status_bar.grid()
         self._set_sidebar_collapsed(getattr(self, "_focus_restore", False), persist=False)
 

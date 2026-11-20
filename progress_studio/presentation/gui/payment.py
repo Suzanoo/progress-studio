@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from progress_studio.presentation.gui.strings import tr
-from progress_studio.presentation.gui.interaction import scroll_content
+from progress_studio.presentation.gui.interaction import scroll_content, horizontal_strip
+from progress_studio.presentation.gui.command_icons import icon_options
 
 import os
 import queue
@@ -125,13 +126,15 @@ class PaymentFrame(ttk.Frame):
         self._status_line(breakdown, self.breakdown_result_var)
 
         boq = section(3, tr('pu.boq'))
-        bar = ttk.Frame(boq)
-        bar.pack(anchor="w")
-        ttk.Button(bar, text=tr('bp4.prepare'), command=self._prepare_boq_requirements).pack(anchor='w', pady=2)
-        ttk.Label(bar, text=tr('pu.save_excel')).pack(anchor='w', padx=8)
-        ttk.Button(bar, text=tr('bp2.0'), command=self._open_boq_payment).pack(anchor='w', pady=2)
-
-        ttk.Button(bar, text=tr('bpr.word'), command=self._open_boq_word).pack(anchor='w', pady=2)
+        bar = horizontal_strip(boq)
+        self.boq_workflow = bar
+        ttk.Button(bar, text=tr('bp4.prepare'), command=self._prepare_boq_requirements,
+                   **icon_options(bar, 'sheet')).pack(side='left', padx=(0, 6))
+        ttk.Label(bar, text=tr('pu.save_excel')).pack(side='left', padx=(0, 10))
+        ttk.Button(bar, text=tr('bp2.0'), command=self._open_boq_payment,
+                   **icon_options(bar, 'sheet')).pack(side='left', padx=(0, 6))
+        ttk.Button(bar, text=tr('bpr.word'), command=self._open_boq_word,
+                   **icon_options(bar, 'document')).pack(side='left')
 
         report = section(4, tr('pr2.title'))
         ttk.Button(report, text=tr('pu.open_report'), command=self._open_plan_report,

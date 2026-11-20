@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from progress_studio.presentation.gui.strings import tr
-from progress_studio.presentation.gui.interaction import local_wheel
+from progress_studio.presentation.gui.interaction import local_wheel, horizontal_strip
+from progress_studio.presentation.gui.command_icons import icon_options
 
 from pathlib import Path
 import queue
@@ -56,8 +57,9 @@ class AmountMappingFrame(ttk.Frame):
         self.input_status_var = tk.StringVar(value=tr('Load both workbooks to begin mapping.'))
         self.activity_filter = tk.StringVar()
         self.boq_filter = tk.StringVar()
-        self.boq_wbs2_filter = tk.StringVar(value="All")
-        self.boq_wbs3_filter = tk.StringVar(value="All")
+        self.boq_wbs2_filter = tk.StringVar(value=tr("All"))
+        self.boq_wbs3_filter = tk.StringVar(value=tr("All"))
+        self.boq_wbs4_filter = tk.StringVar(value=tr("All"))
         self.summary_var = tk.StringVar(value=tr('Mapped 0.00 / 0.00 | Remaining 0.00 | Items 0/0'))
         self.share_var = tk.StringVar(value="100")
         self.activity_page_var = tk.StringVar(value=tr('Rows 0-0 of 0'))
@@ -82,6 +84,7 @@ class AmountMappingFrame(ttk.Frame):
     def _build(self) -> None:
         inputs_header = ttk.Frame(self)
         inputs_header.pack(fill="x", pady=(0, 4))
+        ttk.Button(inputs_header, text=tr('boq_update.title'), command=self._update_boq, **icon_options(inputs_header, "refresh")).pack(side="right", padx=(8, 0))
         self.inputs_toggle_button = ttk.Button(
             inputs_header, command=self._toggle_inputs, width=3
         )
@@ -90,7 +93,7 @@ class AmountMappingFrame(ttk.Frame):
             side="left", padx=(6, 0)
         )
         ttk.Label(inputs_header, textvariable=self.input_status_var, foreground=PALETTE.muted).pack(
-            side="right"
+            side="left", fill="x", expand=True, padx=8
         )
 
         self.inputs_frame = ttk.LabelFrame(self, text=tr('Mapping Inputs'), padding=8)
@@ -181,19 +184,20 @@ class AmountMappingFrame(ttk.Frame):
         boq_header = ttk.Frame(right)
         boq_header.pack(fill="x")
         ttk.Label(boq_header, text=tr('BOQ Items'), font=("Segoe UI", 10, "bold")).pack(side="left")
-        ttk.Button(boq_header, text=tr('boq_update.title'), command=self._update_boq).pack(side="right")
         self.boq_empty_label = ttk.Label(right, textvariable=self.boq_empty_var, style="Empty.TLabel", anchor="center")
         self.boq_empty_label.pack(fill="x")
-        filter_row = ttk.Frame(right)
-        filter_row.pack(fill="x", pady=(4, 4))
-        ttk.Label(filter_row, text=tr('WBS-2')).pack(side="left")
-        self.boq_wbs2_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs2_filter, state="readonly", width=12, values=("All",))
-        self.boq_wbs2_combo.pack(side="left", padx=(5, 8))
-        self.boq_wbs2_combo.bind("<<ComboboxSelected>>", self._on_wbs2_filter)
-        ttk.Label(filter_row, text=tr('WBS-3')).pack(side="left")
-        self.boq_wbs3_combo = ttk.Combobox(filter_row, textvariable=self.boq_wbs3_filter, state="readonly", width=12, values=("All",))
-        self.boq_wbs3_combo.pack(side="left", padx=(5, 0))
-        self.boq_wbs3_combo.bind("<<ComboboxSelected>>", self._on_wbs3_filter)
+        filter_row = horizontal_strip(right)
+        self.boq_filter_row = filter_row
+        for column, (level, variable, callback) in enumerate((
+            (2, self.boq_wbs2_filter, self._on_wbs2_filter),
+            (3, self.boq_wbs3_filter, self._on_wbs3_filter),
+            (4, self.boq_wbs4_filter, self._on_wbs4_filter),
+        )):
+            ttk.Label(filter_row, text=f'WBS-{level}').grid(row=0, column=column*2, padx=(0 if column == 0 else 8, 4))
+            combo = ttk.Combobox(filter_row, textvariable=variable, state='readonly', width=22, values=(tr('All'),))
+            combo.grid(row=0, column=column*2+1, sticky='ew')
+            combo.bind('<<ComboboxSelected>>', callback)
+            setattr(self, f'boq_wbs{level}_combo', combo)
         self._build_search(right, self.boq_filter, self._apply_boq_filter)
         selection_row = ttk.Frame(right)
         selection_row.pack(fill="x", pady=(0, 4))
@@ -228,29 +232,26 @@ class AmountMappingFrame(ttk.Frame):
         ).pack(side="left", fill="x", expand=True, padx=(8, 0))
         self._build_pager(right, self.boq_page_var, self._boq_prev, self._boq_next)
 
-        actions = ttk.Frame(self)
-        actions.pack(side="bottom", fill="x", pady=(6, 0), before=self.body)
+        actions = ttk.Frame(self, padding=(4, 4))
+        self.mapping_actions = actions
+        actions.pack(side='bottom', fill='x', pady=(4, 0), before=self.body)
         self.allocation_var = tk.StringVar()
-        self.allocation_context = ttk.Label(self, textvariable=self.allocation_var, style="Section.TLabel")
-        self.allocation_context.pack(side="bottom", fill="x", after=actions)
-        ttk.Label(actions, text=tr('Share')).pack(side="left")
-        share_entry = ttk.Entry(actions, textvariable=self.share_var, width=8, justify="right")
-        share_entry.pack(side="left", padx=(5, 2))
-        ttk.Label(actions, text="%").pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text=tr('Map'), command=self._map).pack(side="left")
-        ttk.Button(actions, text=tr('Undo'), command=self._undo).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text=tr('Unmap'), command=self._unmap).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text=tr('Clear all'), command=self._clear_all).pack(side="left", padx=(6, 0))
-        ttk.Label(
-            actions,
-            text=tr('Share applies to every selected BOQ item.'),
-            foreground=PALETTE.muted,
-        ).pack(side="bottom", anchor="w")
+        self.allocation_context = ttk.Label(self, textvariable=self.allocation_var, style='Status.TLabel')
+        self.allocation_context.pack(side='bottom', fill='x', after=actions)
+        ttk.Label(actions, text=tr('Share')).pack(side='left')
+        ttk.Entry(actions, textvariable=self.share_var, width=5, justify='right').pack(side='left', padx=(4, 2))
+        ttk.Label(actions, text='%').pack(side='left', padx=(0, 6))
+        self.mapping_action_buttons = []
+        for label, command, icon in [('Map', self._map, 'map'), ('Unmap', self._unmap, 'unmap'),
+                                     ('Undo', self._undo, 'undo'), ('Clear all', self._clear_checked, 'clear')]:
+            button = ttk.Button(actions, text=tr(label), command=command,
+                                style='Accent.TButton' if label == 'Map' else 'TButton',
+                                padding=(6, 5), width=0, **icon_options(actions, icon, light=label == 'Map'))
+            button.pack(side='left', padx=(0, 4))
+            self.mapping_action_buttons.append(button)
 
         self.mapping_status_bar = ttk.Frame(self, style="StatusBar.TFrame", padding=(8, 4))
         self.mapping_status_bar.pack(side="bottom", fill="x", pady=(6, 0), before=actions)
-        ttk.Button(self.mapping_status_bar, text=tr('ux.retry_save'), command=self._autosave_session).pack(side="right")
-        ttk.Button(self.mapping_status_bar, text=tr('Save As...'), command=self.save_project_as).pack(side="right")
         ttk.Label(self.mapping_status_bar, textvariable=self.operation_status_var, style="StatusReady.TLabel").pack(side="left")
         ttk.Label(self.mapping_status_bar, textvariable=self.session_status_var, style="Status.TLabel").pack(side="left", padx=(12, 0))
         ttk.Label(self.mapping_status_bar, textvariable=self.summary_var, style="Status.TLabel").pack(side="right")
@@ -406,8 +407,8 @@ class AmountMappingFrame(ttk.Frame):
         elif variable is self.boq_filter:
             self.boq_search_entry = entry
         entry.bind("<Return>", lambda _event: command())
-        ttk.Button(row, text=tr('Search'), width=5, command=command).pack(side="left", padx=(6, 0))
-        ttk.Button(row, text=tr('Clear'), width=4, command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text=tr('Search'), width=7, command=command).pack(side="left", padx=(6, 0))
+        ttk.Button(row, text=tr('Clear'), width=6, command=lambda: (variable.set(""), command())).pack(side="left", padx=(4, 0))
 
     @staticmethod
     def _build_pager(parent, variable: tk.StringVar, previous, next_) -> None:
@@ -592,6 +593,8 @@ class AmountMappingFrame(ttk.Frame):
             menu.add_command(label=tr('Select all filtered'), command=self._select_all_filtered_boq)
         menu.add_command(label=tr('Map'), command=self._map)
         menu.add_command(label=tr('Unmap'), command=self._unmap)
+        menu.add_separator()
+        menu.add_command(label=tr('ux2.clear_mappings'), command=self._clear_all)
         if tree is self.activity_tree:
             menu.add_command(label=tr('Edit'), command=self._edit_progress_node)
             menu.add_command(label=tr('Delete'), command=self._delete_progress_node)
@@ -787,26 +790,38 @@ class AmountMappingFrame(ttk.Frame):
 
 
     def _refresh_boq_filter_values(self) -> None:
-        wbs2_values = ("All",) + self.store.boq_wbs2_values()
-        self.boq_wbs2_combo.configure(values=wbs2_values)
-        self.boq_wbs2_filter.set("All")
-        wbs3_values = ("All",) + self.store.boq_wbs3_values()
-        self.boq_wbs3_combo.configure(values=wbs3_values)
-        self.boq_wbs3_filter.set("All")
+        self.boq_wbs2_combo.configure(values=(tr('All'),) + self.store.boq_wbs2_values())
+        self.boq_wbs2_filter.set(tr('All'))
+        self.store.boq_wbs2 = ''
+        self._reset_child_filters(2)
+
+    def _reset_child_filters(self, level):
+        if level == 2:
+            self.store.boq_wbs3 = ''
+            self.boq_wbs3_filter.set(tr('All'))
+            self.boq_wbs3_combo.configure(values=(tr('All'),) + self.store.boq_wbs3_values(self.store.boq_wbs2))
+        self.store.boq_wbs4 = ''
+        self.boq_wbs4_filter.set(tr('All'))
+        values = self.store.boq_wbs4_values(self.store.boq_wbs2, self.store.boq_wbs3)
+        self.boq_wbs4_combo.configure(values=(tr('All'),) + values, state='readonly' if values else 'disabled')
 
     def _on_wbs2_filter(self, _event=None) -> None:
-        selected = self.boq_wbs2_filter.get()
-        self.store.boq_wbs2 = "" if selected == "All" else selected
-        values = ("All",) + self.store.boq_wbs3_values(self.store.boq_wbs2)
-        self.boq_wbs3_combo.configure(values=values)
-        self.boq_wbs3_filter.set("All")
-        self.store.boq_wbs3 = ""
+        value = self.boq_wbs2_filter.get()
+        self.store.boq_wbs2 = '' if value == tr('All') else value
+        self._reset_child_filters(2)
         self.store.boq_page = 1
         self._render_boq()
 
     def _on_wbs3_filter(self, _event=None) -> None:
-        selected = self.boq_wbs3_filter.get()
-        self.store.boq_wbs3 = "" if selected == "All" else selected
+        value = self.boq_wbs3_filter.get()
+        self.store.boq_wbs3 = '' if value == tr('All') else value
+        self._reset_child_filters(3)
+        self.store.boq_page = 1
+        self._render_boq()
+
+    def _on_wbs4_filter(self, _event=None) -> None:
+        value = self.boq_wbs4_filter.get()
+        self.store.boq_wbs4 = '' if value == tr('All') else value
         self.store.boq_page = 1
         self._render_boq()
 
@@ -1362,6 +1377,15 @@ class AmountMappingFrame(ttk.Frame):
         self._refresh_changed_rows(change)
         if self._autosave_session():
             self._notify("Undo complete")
+
+    def _clear_checked(self) -> None:
+        """PO UX-2 decision: clear checks only; retain allocations and Undo history."""
+        if self.operation_active:
+            return
+        self.store.selected_activity_ids.clear()
+        self.store.clear_boq_selection()
+        self._render_activities()
+        self._render_boq()
 
     def _clear_all(self) -> None:
         if getattr(self, "operation_active", False):

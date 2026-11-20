@@ -268,13 +268,12 @@ def test_shell_routes_finance_and_prevents_close_during_work(monkeypatch):
     shell = SimpleNamespace(
         workspace_frames={"finance": frame}, current_workspace="home",
         WORKSPACES=ProgressStudioDesktopApp.WORKSPACES,
-        workspace_title_var=Mock(), sidebar_buttons={"finance": Mock()}, command_bar=Mock(),
+        workspace_title_var=Mock(), sidebar_buttons={"finance": Mock()},
         finance_workspace=SimpleNamespace(busy=True), winfo_children=lambda: [], _save_layout_preferences=Mock(), destroy=Mock(),
     )
     ProgressStudioDesktopApp._show_workspace(shell, "finance")
     frame.tkraise.assert_called_once()
     assert shell.current_workspace == "finance"
-    shell.command_bar.grid_remove.assert_called_once()
     warning = Mock()
     monkeypatch.setattr(finance.messagebox, "showwarning", warning)
     ProgressStudioDesktopApp._close_application(shell)

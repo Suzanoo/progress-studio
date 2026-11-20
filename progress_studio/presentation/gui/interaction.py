@@ -124,3 +124,59 @@ def scroll_content(canvas, body):
             for sequence in ('<MouseWheel>', '<Button-4>', '<Button-5>', '<FocusIn>'):
                 canvas.unbind_class(tag, sequence)
     canvas.bind('<Destroy>', cleanup, add='+')
+
+
+def horizontal_strip(parent):
+    """One ordered row; show a scrollbar only when its natural width overflows.
+
+    Focus reveal keeps every command reachable by Tab on narrow/high-DPI windows.
+    The owner packs/grids controls into the returned body, never into the canvas.
+    """
+    from tkinter import ttk
+    host = ttk.Frame(parent)
+    host.pack(fill='x', pady=2)
+    canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0,
+                       background=ttk.Style(parent).lookup('TFrame', 'background'))
+    canvas.pack(fill='x')
+    scroll = ttk.Scrollbar(host, orient='horizontal', command=canvas.xview)
+    canvas.configure(xscrollcommand=scroll.set)
+    body = ttk.Frame(canvas)
+    item = canvas.create_window(0, 0, window=body, anchor='nw')
+    body._strip_canvas = canvas
+    tag = 'UXHorizontal' + str(canvas)
+
+    def reveal(event):
+        if event.widget is body:
+            return
+        x = event.widget.winfo_rootx() - body.winfo_rootx()
+        left = canvas.canvasx(0)
+        width = max(1, body.winfo_width())
+        end = x + event.widget.winfo_width()
+        if x < left:
+            canvas.xview_moveto(x / width)
+        elif end > left + canvas.winfo_width():
+            canvas.xview_moveto((end - canvas.winfo_width()) / width)
+
+    def attach(widget):
+        if tag not in widget.bindtags():
+            widget.bindtags((widget.bindtags()[0], tag, *widget.bindtags()[1:]))
+        for child in widget.winfo_children():
+            attach(child)
+
+    def sync(_event=None):
+        width = max(body.winfo_reqwidth(), canvas.winfo_width())
+        canvas.itemconfigure(item, width=width)
+        canvas.configure(height=body.winfo_reqheight(), scrollregion=(0, 0, width, body.winfo_reqheight()))
+        if width > canvas.winfo_width() + 1:
+            if not scroll.winfo_manager():
+                scroll.pack(fill='x')
+        else:
+            scroll.pack_forget()
+            canvas.xview_moveto(0)
+        attach(body)
+
+    canvas.bind_class(tag, '<FocusIn>', reveal)
+    canvas.bind('<Configure>', sync)
+    body.bind('<Configure>', sync)
+    canvas.bind('<Destroy>', lambda e: canvas.unbind_class(tag, '<FocusIn>') if e.widget is canvas else None)
+    return body

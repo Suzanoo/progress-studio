@@ -48,6 +48,7 @@ class MappingStore:
         self.boq_query = ""
         self.boq_wbs2 = ""
         self.boq_wbs3 = ""
+        self.boq_wbs4 = ""
         self._boq_ids_by_wbs2: dict[str, list[str]] = {}
         self._boq_ids_by_wbs23: dict[tuple[str, str], list[str]] = {}
         self.boq_selection_anchor: str | None = None
@@ -462,6 +463,7 @@ class MappingStore:
             self._boq_ids_by_wbs23.setdefault((row.wbs2, row.wbs3), []).append(row.key)
         self.boq_wbs2 = ""
         self.boq_wbs3 = ""
+        self.boq_wbs4 = ""
         self.allocations.clear()
         self.selected_boq_ids.clear()
         self.boq_selection_anchor = None
@@ -539,6 +541,11 @@ class MappingStore:
             values = {row.wbs3 for row in self.boq_by_id.values() if row.wbs3}
         return tuple(sorted(values))
 
+    def boq_wbs4_values(self, wbs2: str = "", wbs3: str = "") -> tuple[str, ...]:
+        return tuple(sorted({row.wbs4 for row in self.boq_by_id.values()
+                             if row.wbs4 and (not wbs2 or row.wbs2 == wbs2)
+                             and (not wbs3 or row.wbs3 == wbs3)}))
+
     def _filtered_boq_ids(self) -> list[str]:
         query = self.boq_query.strip().lower()
         if self.boq_wbs2 and self.boq_wbs3:
@@ -549,6 +556,8 @@ class MappingStore:
             candidates = [key for key in self.boq_order if self.boq_by_id[key].wbs3 == self.boq_wbs3]
         else:
             candidates = self.boq_order
+        if self.boq_wbs4:
+            candidates = [key for key in candidates if self.boq_by_id[key].wbs4 == self.boq_wbs4]
         if not query:
             return list(candidates)
         return [key for key in candidates if query in self.boq_by_id[key].search_text]

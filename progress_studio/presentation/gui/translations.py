@@ -612,12 +612,18 @@ GUIDE.update({
     'ux.guide.mapping': ('Mapping keyboard', 'แป้นพิมพ์ใน Mapping'),
     'ux.guide.mapping_help': ('Tab moves focus. Arrows navigate; Space checks the focused leaf. Ctrl+Space adds/removes BOQ checks; Shift+Up/Down selects a range. Ctrl+A selects the current BOQ page; use the selection menu for all filtered items. Ctrl+C copies checked rows. Delete unmaps only with a Mapping Tree focused. Structure edits have separate Undo/Redo. Drag the divider or focus it and use Left/Right. F11 enters Focus Mapping; Escape exits. Inputs can be folded to give the Trees more height.', 'Tab ย้ายโฟกัส ลูกศรเลื่อนแถว Space เลือกรายการ Ctrl+Space เพิ่ม/เอา BOQ ออกจากการเลือก Shift+ขึ้น/ลง เลือกช่วง Ctrl+A เลือก BOQ หน้าปัจจุบัน เมนูเลือกใช้เลือกทั้งหมดที่กรอง Ctrl+C คัดลอก Delete ยกเลิก Mapping เมื่อโฟกัสอยู่ที่ Tree เท่านั้น การแก้โครงสร้างมี Undo/Redo แยก ลากตัวแบ่งหรือโฟกัสแล้วกดซ้าย/ขวา F11 เข้า Focus Mapping และ Escape ออก พับส่วนไฟล์ต้นทางเพื่อเพิ่มพื้นที่ Tree'),
     'ux.guide.sources': ('Each task owns its sources', 'แต่ละงานเลือกไฟล์ต้นทางของตนเอง'),
-    'ux.guide.sources_help': ('Create uses schedule XML. Mapping uses Progress and BOQ. Payment and Rebuild use the workbook selected in that workspace. BOQ reports review their own saved sources; they do not save unsaved Mapping. Changing Payment source text requires Check source again. A failed Mapping save leaves changes in memory: Retry save or Save As before closing.', 'Create ใช้ XML ส่วน Mapping ใช้ Progress กับ BOQ Payment และ Rebuild ใช้ไฟล์ที่เลือกในหน้านั้น รายงาน BOQ ตรวจสอบไฟล์ที่บันทึกแล้วและไม่บันทึก Mapping ที่ค้างไว้ เมื่อแก้ชื่อไฟล์ Payment ให้ตรวจสอบไฟล์อีกครั้ง หากบันทึก Mapping ไม่สำเร็จ ข้อมูลยังอยู่ในหน่วยความจำ ให้ลองบันทึกใหม่หรือ Save As ก่อนปิด'),
+    'ux.guide.sources_help': ('Create uses schedule XML. Mapping uses Progress and BOQ. Payment and Rebuild use the workbook selected in that workspace. BOQ reports review their own saved sources; they do not save unsaved Mapping. Changing Payment source text requires Check source again. A failed Mapping save leaves changes in memory: use Mapping > Save to retry, or File > Save As before closing.', 'Create ใช้ XML ส่วน Mapping ใช้ Progress กับ BOQ Payment และ Rebuild ใช้ไฟล์ที่เลือกในหน้านั้น รายงาน BOQ ตรวจสอบไฟล์ที่บันทึกแล้วและไม่บันทึก Mapping ที่ค้างไว้ เมื่อแก้ชื่อไฟล์ Payment ให้ตรวจสอบไฟล์อีกครั้ง หากบันทึก Mapping ไม่สำเร็จ ข้อมูลยังอยู่ในหน่วยความจำ ใช้เมนู Mapping > บันทึก เพื่อลองใหม่ หรือ File > บันทึกเป็น ก่อนปิด'),
 })
 
 GUIDE.update({
-    'ux.replace_unsaved': ('Mapping changes have not been saved. Replace this workspace and discard those changes? Choose No to Retry save or Save As first.', 'การเปลี่ยนแปลง Mapping ยังไม่ได้บันทึก ต้องการแทนที่ข้อมูลและทิ้งการเปลี่ยนแปลงหรือไม่ เลือก No เพื่อลองบันทึกใหม่หรือ Save As ก่อน'),
+    'ux.replace_unsaved': ('Mapping changes have not been saved. Replace this workspace and discard those changes? Choose No, then use Mapping > Save to retry or File > Save As first.', 'การเปลี่ยนแปลง Mapping ยังไม่ได้บันทึก ต้องการแทนที่ข้อมูลและทิ้งการเปลี่ยนแปลงหรือไม่ เลือก No แล้วใช้เมนู Mapping > บันทึก เพื่อลองใหม่ หรือ File > บันทึกเป็น ก่อน'),
     'ux.recent_unavailable': ('Project saved; recent-project history could not be updated.', 'บันทึก Project แล้ว แต่ปรับปรุงประวัติรายการล่าสุดไม่ได้'),
 })
 
 GUIDE.update({'ux.mapping_unsaved': ('Changes in memory — not saved', 'ข้อมูลเปลี่ยนในหน่วยความจำ — ยังไม่ได้บันทึก')})
+
+GUIDE.update({
+    'ux2.open': ('Open…', 'เปิด…'),
+    'ux2.export': ('Export Mapped Workbook…', 'ส่งออก Workbook ที่จับคู่แล้ว…'),
+    'ux2.clear_mappings': ('Clear all mappings…', 'ล้าง Mapping ทั้งหมด…'),
+})
